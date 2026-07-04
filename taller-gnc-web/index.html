@@ -959,7 +959,23 @@ window.storage = {
   // copiar y pegar esa pantalla (recién vimos una captura), esto puede
   // necesitar un ajuste fino la primera vez que alguien lo use de verdad.
   function parseEnargasText(text) {
-    const out = { ...parseAgentText(text), rawText: text };
+    // OJO: no reusamos los campos nombre/dni/domicilio/provincia/ciudad de
+    // parseAgentText acá — el "Detalle de la operación" del SIC también
+    // muestra Domicilio/Provincia/Ciudad del PEC y del Taller, y esos
+    // patrones genéricos terminaban aplicándole esa dirección al cliente
+    // (que es el dueño del auto, no el PEC ni el taller). Solo tomamos lo
+    // que es inequívocamente del vehículo: patente, marca, modelo, uso.
+    const generic = parseAgentText(text);
+    const out = {
+      fecha_oblea: null, fecha_crpc: null, anio: null,
+      nombre: null, dni: null, domicilio: null, provincia: null, ciudad: null, tipo_vehiculo: null,
+      patente: generic.patente, marca: generic.marca, modelo: generic.modelo, uso: generic.uso,
+      found: [], rawText: text,
+    };
+    if (out.patente) out.found.push(`Patente: ${out.patente}`);
+    if (out.marca) out.found.push(`Marca: ${out.marca}`);
+    if (out.modelo) out.found.push(`Modelo: ${out.modelo}`);
+    if (out.uso) out.found.push(`Uso: ${out.uso}`);
 
     const mVenc = text.match(/fecha\s*vencimiento[:\s]*\n?\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})/i);
     if (mVenc) {
@@ -988,10 +1004,27 @@ window.storage = {
       const finMatch = patronFin ? resto.match(patronFin) : null;
       return finMatch ? resto.slice(0, finMatch.index) : resto.slice(0, 300);
     }
+    // El SIC pega la etiqueta y el valor de cada celda de la tabla sin
+    // ningún separador (ej: "Código HomologaciónTT01Número de
+    // Serie156824OperaciónSin Cambios", todo seguido) — así que en vez de
+    // buscar un valor "suelto" con límites de palabra, recortamos el texto
+    // entre una etiqueta y la siguiente.
+    function entre(bloque, etiquetaInicio, etiquetaFin) {
+      const mIni = bloque.match(etiquetaInicio);
+      if (!mIni) return '';
+      const desde = mIni.index + mIni[0].length;
+      const resto = bloque.slice(desde);
+      const mFin = etiquetaFin ? resto.match(etiquetaFin) : null;
+      return (mFin ? resto.slice(0, mFin.index) : resto).trim();
+    }
     function codigoYSerie(bloque) {
-      const mCod = bloque.match(/\b([A-Z]{2}\d{2,3})\b/);
-      const mSerie = bloque.match(/\b(\d{4,10})\b/);
-      return { codigo: mCod ? mCod[1] : '', serie: mSerie ? mSerie[1] : '' };
+      let codigo = entre(bloque, /c[oó]digo\s*homologaci[oó]n/i, /n[uú]mero\s*de\s*serie/i);
+      let serie = entre(bloque, /n[uú]mero\s*de\s*serie/i, /operaci[oó]n/i);
+      // Si no hay etiquetas (formato distinto, con espacios normales),
+      // probamos el modo anterior como respaldo.
+      if (!codigo) { const m = bloque.match(/\b([A-Z]{2}\d{2,3})\b/); if (m) codigo = m[1]; }
+      if (!serie) { const m = bloque.match(/\b(\d{4,10})\b/); if (m) serie = m[1]; }
+      return { codigo, serie };
     }
 
     const regBloque = seccion(/datos\s*(?:del\s*)?regulador/i, /datos\s*(?:del\s*)?cilindro/i);
@@ -1001,6 +1034,8 @@ window.storage = {
     const regulador = codigoYSerie(regBloque);
     const cilindro = codigoYSerie(cilBloque);
     const valvula = codigoYSerie(valBloque);
+    const crpcMaterial = entre(cilBloque, /(?<!fecha\s)crpc/i, /fecha\s*crpc/i);
+    if (crpcMaterial) cilindro.crpc = crpcMaterial;
 
     // En la tabla del SIC los encabezados ("Fecha Fab.", "Fecha CRPC") van
     // en una fila y los valores en la siguiente, lejos uno del otro — así
@@ -1960,16 +1995,19 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
       const url = 'https://www.enargas.gob.ar/secciones/gas-natural-comprimido/consulta-dominio.php';
       const patente = btnBuscarEnargas.getAttribute('data-patente');
       const hint = root.querySelector('#enargas-copy-hint');
-      // window.open (en vez de un <a target="_blank">) para que abra en una
-      // pestaña/ventana nueva de verdad incluso instalado como app en el
-      // celular, donde un link común a veces navega en la misma ventana.
-      window.open(url, '_blank', 'noopener');
+      // Copiar ANTES de abrir la pestaña nueva: en cuanto se abre la otra
+      // ventana esta página puede perder el foco, y navigator.clipboard
+      // exige que el documento esté enfocado o falla en silencio.
       if (patente && navigator.clipboard && navigator.clipboard.writeText) {
         try {
           await navigator.clipboard.writeText(patente);
           if (hint) { hint.style.display = 'block'; hint.textContent = `Copiamos "${patente}" al portapapeles — pegala (mantené apretado y "Pegar") en el campo Dominio de esa página.`; }
-        } catch (e) { /* el navegador no dejó copiar, no pasa nada */ }
+        } catch (e) { console.error('No se pudo copiar la patente', e); }
       }
+      // window.open (en vez de un <a target="_blank">) para que abra en una
+      // pestaña/ventana nueva de verdad incluso instalado como app en el
+      // celular, donde un link común a veces navega en la misma ventana.
+      window.open(url, '_blank', 'noopener');
     });
 
     const btnToggleEnargas = root.querySelector('#btn-toggle-enargas-paste');
