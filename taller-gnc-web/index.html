@@ -219,6 +219,16 @@ window.storage = {
 
 #gnc-app .hidden { display: none !important; }
 #gnc-app .loading { text-align: center; padding: 40px; color: var(--text-muted); font-family: var(--mono); font-size: 12px; }
+
+/* ACTIVATION SCREEN */
+#gnc-app .activation-wrap { max-width: 420px; padding-top: 80px; }
+#gnc-app .activation-panel #activation-input { width: 100%; margin-bottom: 4px; }
+#gnc-app .activation-hint { font-size: 13px; color: var(--text-muted); margin: 0 0 16px; line-height: 1.5; }
+#gnc-app .license-link {
+  font-family: var(--mono); font-size: 11px; color: var(--text-muted);
+  text-decoration: underline; cursor: pointer; background: none; border: none; padding: 0;
+}
+#gnc-app .license-link:hover { color: var(--flame); }
 </style>
 
 <script>
@@ -227,6 +237,7 @@ window.storage = {
   const WARN_DAYS = 5;
   const STORAGE_KEY = 'gnc_clientes_v2';
   const TALLER_KEY = 'gnc_taller_nombre_v1';
+  const LICENSE_KEY = 'gnc_license_code';
 
   let clientes = [];
   let tallerNombre = 'Mi Taller GNC';
@@ -235,6 +246,40 @@ window.storage = {
   let ready = false;
 
   root.innerHTML = '<div class="loading">Cargando datos del taller...</div>';
+
+  function showActivationScreen() {
+    root.innerHTML = `
+      <div class="wrap activation-wrap">
+        <div class="panel activation-panel">
+          <h2>Activar Taller GNC</h2>
+          <p class="activation-hint">Ingresá el código de licencia que te dieron para habilitar la lectura de fotos con IA.</p>
+          <form id="activation-form">
+            <input type="text" id="activation-input" placeholder="Ej: GNC-0001" autocomplete="off">
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Activar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+    const form = root.querySelector('#activation-form');
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = root.querySelector('#activation-input');
+      const code = input.value.trim();
+      if (!code) return;
+      localStorage.setItem(LICENSE_KEY, code);
+      boot();
+    });
+  }
+
+  function boot() {
+    if (!localStorage.getItem(LICENSE_KEY)) {
+      showActivationScreen();
+    } else {
+      loadData();
+    }
+  }
 
   function fmtDate(iso) {
     if (!iso) return '—';
@@ -776,9 +821,14 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 1000,
-          messages: [{ role: 'user', content }]
+          messages: [{ role: 'user', content }],
+          license: localStorage.getItem(LICENSE_KEY)
         })
       });
+
+      if (response.status === 403) {
+        throw new Error('El código de licencia no es válido. Tocá "Cambiar código de licencia" arriba para corregirlo.');
+      }
 
       const data = await response.json();
 
@@ -833,6 +883,7 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
           <div class="brand">
             <span class="tag">GNC</span>
             <input class="taller-name-input" id="taller-input" value="${escapeHtml(tallerNombre)}">
+            <button type="button" class="license-link" id="btn-change-license">Cambiar código de licencia</button>
           </div>
           <div class="gauge-box">
             ${gaugeSVG(counts)}
@@ -867,6 +918,16 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
       tallerInput.addEventListener('change', (e) => {
         tallerNombre = e.target.value.trim() || 'Mi Taller GNC';
         saveTaller();
+      });
+    }
+
+    const btnChangeLicense = root.querySelector('#btn-change-license');
+    if (btnChangeLicense) {
+      btnChangeLicense.addEventListener('click', () => {
+        if (confirm('¿Cambiar el código de licencia? Vas a tener que ingresar un código nuevo para poder usar la lectura de fotos con IA de nuevo. Los clientes y fotos guardados no se van a borrar.')) {
+          localStorage.removeItem(LICENSE_KEY);
+          boot();
+        }
       });
     }
     const searchInput = root.querySelector('#search-input');
@@ -997,7 +1058,7 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
     });
   }
 
-  loadData();
+  boot();
 })();
 </script>
 

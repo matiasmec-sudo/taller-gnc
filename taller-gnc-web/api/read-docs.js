@@ -13,6 +13,14 @@ export default async function handler(req, res) {
     });
   }
 
+  // Cada llamada acá gasta crédito de la API de Anthropic, así que solo se
+  // procesan pedidos que traigan un código de licencia válido.
+  const validCodes = (process.env.LICENSE_CODES || '').split(',').map(c => c.trim()).filter(Boolean);
+  const { license, ...anthropicBody } = req.body || {};
+  if (!validCodes.includes(license)) {
+    return res.status(403).json({ error: 'Código de licencia no válido.' });
+  }
+
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -21,7 +29,7 @@ export default async function handler(req, res) {
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify(req.body)
+      body: JSON.stringify(anthropicBody)
     });
 
     const data = await response.json();
