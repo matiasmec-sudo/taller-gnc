@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mi Taller GNC</title>
+<meta name="theme-color" content="#0F1620">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  html, body { margin:0; padding:0; background:#0F1620; }
+</style>
+</head>
+<body>
+<script>
+// Reemplazo de window.storage (que solo existe dentro de Claude.ai) por una
+// version basada en localStorage del navegador, para que la app funcione
+// de forma totalmente independiente. Misma interfaz (get/set/delete/list),
+// asi que el resto del codigo no necesita cambios.
+window.storage = {
+  async get(key) {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return null;
+    return { key, value: raw, shared: false };
+  },
+  async set(key, value) {
+    localStorage.setItem(key, value);
+    return { key, value, shared: false };
+  },
+  async delete(key) {
+    const existed = localStorage.getItem(key) !== null;
+    localStorage.removeItem(key);
+    return existed ? { key, deleted: true, shared: false } : null;
+  },
+  async list(prefix) {
+    const keys = Object.keys(localStorage).filter(k => !prefix || k.startsWith(prefix));
+    return { keys, prefix, shared: false };
+  }
+};
+</script>
+<div id="gnc-app"></div>
+<style>
+#gnc-app {
+  --bg: #0F1620;
+  --surface: #182230;
+  --surface-alt: #1F2C3C;
+  --line: #2B3A4C;
+  --flame: #3FA9F5;
+  --flame-dim: #2C7BB5;
+  --warn: #F2A93B;
+  --danger: #E3543A;
+  --ok: #4FB477;
+  --text: #E9F1F6;
+  --text-muted: #8CA0AC;
+  --mono: 'IBM Plex Mono', 'Courier New', monospace;
+  --sans: 'IBM Plex Sans', -apple-system, sans-serif;
+  --display: 'Oswald', 'Arial Narrow', sans-serif;
+
+  font-family: var(--sans);
+  color: var(--text);
+  background: var(--bg);
+  min-height: 100vh;
+  padding: 0;
+  box-sizing: border-box;
+}
+#gnc-app *, #gnc-app *::before, #gnc-app *::after { box-sizing: border-box; }
+
+#gnc-app .wrap { max-width: 980px; margin: 0 auto; padding: 24px 20px 60px; }
+
+/* HEADER */
+#gnc-app .topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 28px;
+}
+#gnc-app .brand { display: flex; align-items: baseline; gap: 10px; }
+#gnc-app .brand .tag {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
+  color: var(--flame); border: 1px solid var(--flame-dim);
+  padding: 3px 7px; border-radius: 3px; text-transform: uppercase;
+}
+#gnc-app h1 {
+  font-family: var(--display); font-weight: 600; font-size: 26px;
+  letter-spacing: 0.5px; margin: 0; text-transform: uppercase;
+}
+#gnc-app .taller-name-input {
+  background: transparent; border: none; border-bottom: 1px dashed var(--line);
+  color: var(--text); font-family: var(--display); font-size: 26px;
+  text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 0;
+  width: 260px; outline: none;
+}
+#gnc-app .taller-name-input:focus { border-bottom-color: var(--flame); }
+
+/* GAUGE */
+#gnc-app .gauge-box {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 22px; display: flex; align-items: center; gap: 18px;
+}
+#gnc-app .gauge-svg { width: 100px; height: 62px; flex-shrink: 0; }
+#gnc-app .gauge-legend { display: flex; flex-direction: column; gap: 4px; font-family: var(--mono); font-size: 12px; }
+#gnc-app .gauge-legend div { display: flex; align-items: center; gap: 6px; }
+#gnc-app .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+/* CONTROLS */
+#gnc-app .controls {
+  display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; align-items: center;
+}
+#gnc-app input[type="text"], #gnc-app input[type="tel"], #gnc-app input[type="date"],
+#gnc-app input[type="month"], #gnc-app select, #gnc-app textarea {
+  background: var(--surface); border: 1px solid var(--line); color: var(--text);
+  border-radius: 6px; padding: 9px 11px; font-family: var(--sans); font-size: 14px;
+  outline: none;
+}
+#gnc-app textarea { width: 100%; resize: vertical; min-height: 90px; font-family: var(--mono); font-size: 12.5px; }
+#gnc-app input:focus, #gnc-app select:focus, #gnc-app textarea:focus { border-color: var(--flame); }
+#gnc-app .search-input { flex: 1; min-width: 180px; }
+#gnc-app .btn {
+  font-family: var(--sans); font-weight: 600; font-size: 13px; letter-spacing: 0.3px;
+  border-radius: 6px; padding: 10px 16px; border: 1px solid transparent; cursor: pointer;
+  transition: transform .08s ease, filter .12s ease;
+}
+#gnc-app .btn:active { transform: scale(0.97); }
+#gnc-app .btn-primary { background: var(--flame); color: #05202F; }
+#gnc-app .btn-primary:hover { filter: brightness(1.08); }
+#gnc-app .btn-ghost { background: transparent; border-color: var(--line); color: var(--text-muted); }
+#gnc-app .btn-ghost:hover { color: var(--text); border-color: var(--flame-dim); }
+#gnc-app .btn-wa { background: #1F3A2E; color: #7EE0A8; border-color: #2C5942; font-size: 12px; padding: 7px 10px; }
+#gnc-app .btn-wa:hover { filter: brightness(1.15); }
+#gnc-app .btn-danger-outline { background: transparent; color: var(--danger); border-color: #5A2C22; font-size: 12px; padding: 7px 10px; }
+#gnc-app .btn-agent { background: var(--surface-alt); color: var(--flame); border-color: var(--flame-dim); font-size: 12px; padding: 7px 10px; }
+#gnc-app .btn-agent:hover { filter: brightness(1.2); }
+#gnc-app .btn-sm { font-size: 12px; padding: 7px 10px; }
+
+/* FORM PANEL */
+#gnc-app .panel {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 20px; margin-bottom: 20px;
+}
+#gnc-app .panel h2 {
+  font-family: var(--display); font-size: 16px; text-transform: uppercase;
+  letter-spacing: 1px; margin: 0 0 14px; color: var(--flame);
+}
+#gnc-app .panel h3 {
+  font-family: var(--display); font-size: 13px; text-transform: uppercase;
+  letter-spacing: 1px; margin: 18px 0 10px; color: var(--text-muted);
+  border-top: 1px dashed var(--line); padding-top: 14px;
+}
+#gnc-app .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+#gnc-app .form-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text-muted); font-family: var(--mono); }
+#gnc-app .form-actions { display: flex; gap: 10px; margin-top: 16px; }
+@media (max-width: 640px) { #gnc-app .form-grid { grid-template-columns: 1fr; } }
+
+/* AGENT PASTE BOX */
+#gnc-app .agent-box {
+  background: var(--surface-alt); border: 1px dashed var(--flame-dim); border-radius: 8px;
+  padding: 14px; margin-top: 14px;
+}
+#gnc-app .agent-box label { display: block; font-family: var(--mono); font-size: 11px; color: var(--flame); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+#gnc-app .agent-hint { font-size: 11.5px; color: var(--text-muted); margin-top: 8px; line-height: 1.5; }
+#gnc-app .agent-result { font-family: var(--mono); font-size: 12px; margin-top: 10px; padding: 10px; border-radius: 6px; background: rgba(63,169,245,0.08); border: 1px solid var(--flame-dim); }
+#gnc-app .agent-result.err { background: rgba(227,84,58,0.1); border-color: #5A2C22; color: var(--danger); }
+
+/* SCAN BOX (fotos DNI / Cedula) */
+#gnc-app .scan-box {
+  background: var(--surface-alt); border: 1px dashed var(--flame-dim); border-radius: 8px;
+  padding: 16px; margin-bottom: 18px;
+}
+#gnc-app .scan-box h3 { margin: 0 0 4px; border: none; padding: 0; }
+#gnc-app .scan-sub { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; }
+#gnc-app .scan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 640px) { #gnc-app .scan-grid { grid-template-columns: 1fr; } }
+#gnc-app .scan-slot { display: flex; flex-direction: column; gap: 6px; }
+#gnc-app .scan-slot label { font-family: var(--mono); font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+#gnc-app .scan-slot input[type="file"] {
+  font-size: 11px; color: var(--text-muted); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 6px; padding: 8px; width: 100%;
+}
+#gnc-app .scan-thumb { width: 100%; height: 70px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); display: none; }
+#gnc-app .scan-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+#gnc-app .scan-status { font-family: var(--mono); font-size: 12px; color: var(--text-muted); }
+#gnc-app .scan-status.ok { color: var(--ok); }
+#gnc-app .scan-status.err { color: var(--danger); }
+#gnc-app .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+/* LIST */
+#gnc-app .empty {
+  text-align: center; padding: 50px 20px; color: var(--text-muted);
+  border: 1px dashed var(--line); border-radius: 10px; font-family: var(--mono); font-size: 13px;
+}
+#gnc-app .client-card {
+  background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--line);
+  border-radius: 8px; padding: 16px 18px; margin-bottom: 12px;
+}
+#gnc-app .client-card.st-danger { border-left-color: var(--danger); }
+#gnc-app .client-card.st-warn { border-left-color: var(--warn); }
+#gnc-app .client-card.st-ok { border-left-color: var(--ok); }
+#gnc-app .client-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+#gnc-app .client-name { font-family: var(--display); font-size: 18px; text-transform: uppercase; letter-spacing: 0.4px; }
+#gnc-app .client-meta { font-family: var(--mono); font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+#gnc-app .client-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+#gnc-app .docs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+@media (max-width: 640px) { #gnc-app .docs { grid-template-columns: 1fr; } }
+#gnc-app .doc-row {
+  background: var(--surface-alt); border-radius: 6px; padding: 10px 12px;
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+#gnc-app .doc-label { font-family: var(--mono); font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+#gnc-app .doc-date { font-family: var(--mono); font-size: 13px; }
+#gnc-app .doc-sub { font-family: var(--mono); font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+#gnc-app .badge {
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+  padding: 2px 7px; border-radius: 20px; font-weight: 600;
+}
+#gnc-app .badge-danger { background: rgba(227,84,58,0.18); color: var(--danger); }
+#gnc-app .badge-warn { background: rgba(242,169,59,0.18); color: var(--warn); }
+#gnc-app .badge-ok { background: rgba(79,180,119,0.18); color: var(--ok); }
+
+#gnc-app .hidden { display: none !important; }
+#gnc-app .loading { text-align: center; padding: 40px; color: var(--text-muted); font-family: var(--mono); font-size: 12px; }
+</style>
+
+<script>
+(function(){
+  const root = document.getElementById('gnc-app');
+  const WARN_DAYS = 5;
+  const STORAGE_KEY = 'gnc_clientes_v2';
+  const TALLER_KEY = 'gnc_taller_nombre_v1';
+
+  let clientes = [];
+  let tallerNombre = 'Mi Taller GNC';
+  let editingId = null;
+  let agentBoxOpenFor = null;
+  let ready = false;
+
+  root.innerHTML = '<div class="loading">Cargando datos del taller...</div>';
+
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    const [y,m,d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  function fmtMonthYear(ym) {
+    if (!ym) return '—';
+    const [y,m] = ym.split('-');
+    return `${m}/${y}`;
+  }
+
+  function daysUntil(iso) {
+    if (!iso) return null;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const target = new Date(iso + 'T00:00:00');
+    return Math.round((target - today) / 86400000);
+  }
+
+  function statusOf(iso) {
+    const d = daysUntil(iso);
+    if (d === null) return { level: 'none', label: 'Sin fecha', days: null };
+    if (d < 0) return { level: 'danger', label: `Vencido hace ${Math.abs(d)}d`, days: d };
+    if (d <= WARN_DAYS) return { level: 'warn', label: d === 0 ? 'Vence hoy' : `Vence en ${d}d`, days: d };
+    return { level: 'ok', label: `Vence en ${d}d`, days: d };
+  }
+
+  // Deriva el vencimiento de la Prueba Hidráulica (CRPC) a partir de la fecha
+  // de revisión (mes/año) + la periodicidad del cilindro (3 o 5 años).
+  // Se aproxima al primer día del mes de vencimiento, ya que ENARGAS solo
+  // informa mes/año, no el día exacto.
+  function phVencimientoISO(fecha_crpc, tipo_cilindro) {
+    if (!fecha_crpc) return null;
+    const [y, m] = fecha_crpc.split('-').map(Number);
+    const years = tipo_cilindro === '3' ? 3 : 5;
+    const vencY = y + years;
+    return `${vencY}-${String(m).padStart(2,'0')}-01`;
+  }
+
+  function worstStatus(cliente) {
+    const a = statusOf(cliente.fecha_oblea);
+    const phIso = phVencimientoISO(cliente.fecha_crpc, cliente.tipo_cilindro);
+    const b = statusOf(phIso);
+    const order = { danger: 0, warn: 1, ok: 2, none: 3 };
+    return order[a.level] <= order[b.level] ? a : b;
+  }
+
+  function cleanPhone(p) { return (p || '').replace(/\D/g, ''); }
+
+  function waLink(cliente, tipo) {
+    const phone = cleanPhone(cliente.telefono);
+    let doc, fecha, status;
+    if (tipo === 'oblea') {
+      doc = 'Oblea';
+      fecha = fmtDate(cliente.fecha_oblea);
+      status = statusOf(cliente.fecha_oblea);
+    } else {
+      doc = 'revisión periódica del cilindro (Prueba Hidráulica / CRPC)';
+      const phIso = phVencimientoISO(cliente.fecha_crpc, cliente.tipo_cilindro);
+      fecha = phIso ? fmtMonthYear(cliente.fecha_crpc ? `${phIso.slice(0,4)}-${phIso.slice(5,7)}` : '') : '—';
+      status = statusOf(phIso);
+    }
+    const venceTexto = status.days !== null && status.days < 0 ? `venció (${fecha})` : `vence (${fecha})`;
+    const msg = `Hola ${cliente.nombre}! Te escribimos de ${tallerNombre} para recordarte que la ${doc} de tu vehículo (patente ${cliente.patente || 's/d'}) ${venceTexto}. Te esperamos para renovarla. Cualquier consulta, escribinos por acá. Saludos!`;
+    return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  }
+
+  async function loadData() {
+    try {
+      const res = await window.storage.get(STORAGE_KEY, false);
+      clientes = res ? JSON.parse(res.value) : [];
+    } catch (e) { clientes = []; }
+    try {
+      const res2 = await window.storage.get(TALLER_KEY, false);
+      tallerNombre = res2 ? JSON.parse(res2.value) : 'Mi Taller GNC';
+    } catch (e) { tallerNombre = 'Mi Taller GNC'; }
+    ready = true;
+    render();
+  }
+
+  async function saveClientes() {
+    try { await window.storage.set(STORAGE_KEY, JSON.stringify(clientes), false); }
+    catch (e) { console.error('Error guardando clientes', e); }
+  }
+
+  async function saveTaller() {
+    try { await window.storage.set(TALLER_KEY, JSON.stringify(tallerNombre), false); }
+    catch (e) { console.error('Error guardando nombre del taller', e); }
+  }
+
+  function gaugeSVG(counts) {
+    const total = counts.danger + counts.warn + counts.ok || 1;
+    const segs = [
+      { val: counts.danger, color: 'var(--danger)' },
+      { val: counts.warn, color: 'var(--warn)' },
+      { val: counts.ok, color: 'var(--ok)' }
+    ];
+    const cx = 50, cy = 55, r = 42;
+    let startAngle = 180;
+    let arcs = '';
+    segs.forEach(s => {
+      const sweep = (s.val / total) * 180;
+      const endAngle = startAngle - sweep;
+      const toRad = a => (a * Math.PI) / 180;
+      const x1 = cx + r * Math.cos(toRad(startAngle));
+      const y1 = cy - r * Math.sin(toRad(startAngle));
+      const x2 = cx + r * Math.cos(toRad(endAngle));
+      const y2 = cy - r * Math.sin(toRad(endAngle));
+      const largeArc = sweep > 180 ? 1 : 0;
+      if (s.val > 0) {
+        arcs += `<path d="M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 0 ${x2} ${y2}" stroke="${s.color}" stroke-width="10" fill="none" stroke-linecap="butt"/>`;
+      }
+      startAngle = endAngle;
+    });
+    return `<svg class="gauge-svg" viewBox="0 0 100 62" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 8 55 A 42 42 0 0 1 92 55" stroke="var(--line)" stroke-width="10" fill="none"/>
+      ${arcs}
+      <text x="50" y="50" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="16" fill="var(--text)">${counts.danger + counts.warn}</text>
+      <text x="50" y="60" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="7" fill="var(--text-muted)">A REVISAR</text>
+    </svg>`;
+  }
+
+  function computeCounts() {
+    const counts = { danger: 0, warn: 0, ok: 0 };
+    clientes.forEach(c => {
+      const s = worstStatus(c);
+      if (s.level === 'danger') counts.danger++;
+      else if (s.level === 'warn') counts.warn++;
+      else counts.ok++;
+    });
+    return counts;
+  }
+
+  function sortedFiltered(query) {
+    let list = clientes.slice();
+    if (query) {
+      const q = query.toLowerCase();
+      list = list.filter(c =>
+        (c.nombre || '').toLowerCase().includes(q) ||
+        (c.patente || '').toLowerCase().includes(q)
+      );
+    }
+    const order = { danger: 0, warn: 1, ok: 2, none: 3 };
+    list.sort((a, b) => {
+      const sa = worstStatus(a), sb = worstStatus(b);
+      if (order[sa.level] !== order[sb.level]) return order[sa.level] - order[sb.level];
+      const da = sa.days === null ? 9999 : sa.days;
+      const db = sb.days === null ? 9999 : sb.days;
+      return da - db;
+    });
+    return list;
+  }
+
+  function escapeHtml(str) {
+    return (str || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  function docRowOblea(cliente) {
+    const s = statusOf(cliente.fecha_oblea);
+    const badgeClass = s.level === 'danger' ? 'badge-danger' : s.level === 'warn' ? 'badge-warn' : s.level === 'ok' ? 'badge-ok' : '';
+    const waBtn = (s.level === 'danger' || s.level === 'warn') && cleanPhone(cliente.telefono)
+      ? `<a class="btn btn-wa" target="_blank" rel="noopener" href="${waLink(cliente, 'oblea')}">Avisar por WhatsApp</a>`
+      : '';
+    return `<div class="doc-row">
+      <div>
+        <div class="doc-label">Oblea</div>
+        <div class="doc-date">${fmtDate(cliente.fecha_oblea)} ${cliente.fecha_oblea ? `<span class="badge ${badgeClass}">${s.label}</span>` : ''}</div>
+      </div>
+      ${waBtn}
+    </div>`;
+  }
+
+  function docRowPH(cliente) {
+    const phIso = phVencimientoISO(cliente.fecha_crpc, cliente.tipo_cilindro);
+    const s = statusOf(phIso);
+    const badgeClass = s.level === 'danger' ? 'badge-danger' : s.level === 'warn' ? 'badge-warn' : s.level === 'ok' ? 'badge-ok' : '';
+    const vencMY = phIso ? `${phIso.slice(5,7)}/${phIso.slice(0,4)}` : '—';
+    const waBtn = (s.level === 'danger' || s.level === 'warn') && cleanPhone(cliente.telefono)
+      ? `<a class="btn btn-wa" target="_blank" rel="noopener" href="${waLink(cliente, 'prueba')}">Avisar por WhatsApp</a>`
+      : '';
+    const sub = cliente.fecha_crpc
+      ? `Últ. CRPC: ${fmtMonthYear(cliente.fecha_crpc)} · cada ${cliente.tipo_cilindro === '3' ? '3' : '5'} años`
+      : 'Sin dato de CRPC';
+    return `<div class="doc-row">
+      <div>
+        <div class="doc-label">Prueba Hidráulica (CRPC)</div>
+        <div class="doc-date">${vencMY} ${phIso ? `<span class="badge ${badgeClass}">${s.label}</span>` : ''}</div>
+        <div class="doc-sub">${sub}</div>
+      </div>
+      ${waBtn}
+    </div>`;
+  }
+
+  function clientCard(c) {
+    const s = worstStatus(c);
+    const cls = s.level === 'danger' ? 'st-danger' : s.level === 'warn' ? 'st-warn' : 'st-ok';
+    const agentOpen = agentBoxOpenFor === c.id;
+    return `<div class="client-card ${cls}">
+      <div class="client-top">
+        <div>
+          <div class="client-name">${escapeHtml(c.nombre)}</div>
+          <div class="client-meta">Patente ${escapeHtml(c.patente || 's/d')} ${(c.marca || c.modelo) ? '· ' + escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) : ''} ${c.telefono ? '· ' + escapeHtml(c.telefono) : ''}</div>
+        </div>
+        <div class="client-actions">
+          <button class="btn btn-agent" data-agent="${c.id}">${agentOpen ? 'Cerrar' : 'Pegar resultado del agente'}</button>
+          <button class="btn btn-ghost" data-edit="${c.id}">Editar</button>
+          <button class="btn btn-danger-outline" data-delete="${c.id}">Eliminar</button>
+        </div>
+      </div>
+      <div class="docs">
+        ${docRowOblea(c)}
+        ${docRowPH(c)}
+      </div>
+      ${agentOpen ? agentBox(c) : ''}
+    </div>`;
+  }
+
+  function agentBox(c) {
+    return `<div class="agent-box">
+      <label>Pegá acá el texto que te devolvió el agente (Claude en Chrome)</label>
+      <textarea id="agent-text-${c.id}" placeholder="Ej: Fecha de vencimiento: 01/04/2027 ... Fecha CRPC: 4/24 ..."></textarea>
+      <div class="form-actions">
+        <button class="btn btn-primary btn-sm" data-apply-agent="${c.id}">Aplicar y guardar</button>
+      </div>
+      <div class="agent-hint">Busco automáticamente "Fecha de vencimiento" (Oblea, dd/mm/aaaa) y "Fecha CRPC" (mm/aa). El tipo de cilindro (3 o 5 años) lo definís vos en "Editar" si todavía no lo cargaste — por defecto se asume 5 años.</div>
+      <div id="agent-result-${c.id}"></div>
+    </div>`;
+  }
+
+  function parseAgentText(text) {
+    const out = {
+      fecha_oblea: null, fecha_crpc: null,
+      nombre: null, dni: null, domicilio: null, provincia: null, ciudad: null,
+      patente: null, marca: null, modelo: null, tipo_vehiculo: null, uso: null,
+      found: []
+    };
+
+    // Fecha de vencimiento de la Oblea: dd/mm/aaaa (o aa)
+    const mVenc = text.match(/fecha\s*de\s*vencimiento[^\d]{0,15}(\d{1,2})\/(\d{1,2})\/(\d{2,4})/i);
+    if (mVenc) {
+      let [, d, m, y] = mVenc;
+      if (y.length === 2) y = '20' + y;
+      out.fecha_oblea = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+      out.found.push(`Vencimiento Oblea: ${d}/${m}/${y}`);
+    }
+
+    // Fecha CRPC: m/aa o mm/aaaa
+    const mCrpc = text.match(/crpc[^\d]{0,15}(\d{1,2})\/(\d{2,4})/i);
+    if (mCrpc) {
+      let [, m, y] = mCrpc;
+      if (y.length === 2) y = '20' + y;
+      out.fecha_crpc = `${y}-${m.padStart(2,'0')}`;
+      out.found.push(`Fecha CRPC: ${m}/${y}`);
+    }
+
+    // Nombre: el DNI trae "Apellido" y "Nombre" como campos separados.
+    // Los combinamos en un nombre completo; si viene como "Nombre y apellido"
+    // en una sola línea, usamos eso directamente.
+    const mApellido = text.match(/apellido[:\s]+([^\n,;]{2,40})/i);
+    const apellido = mApellido ? mApellido[1].trim() : null;
+    const mNombreLine = text.match(/nombre(?:\s*y\s*apellido)?[:\s]+([^\n,;]{2,60})/i);
+    if (mNombreLine) {
+      const esCombinado = /nombre\s*y\s*apellido/i.test(mNombreLine[0]);
+      if (esCombinado || !apellido) {
+        out.nombre = mNombreLine[1].trim();
+      } else {
+        out.nombre = `${mNombreLine[1].trim()} ${apellido}`.trim();
+      }
+      out.found.push(`Nombre: ${out.nombre}`);
+    } else if (apellido) {
+      out.nombre = apellido;
+      out.found.push(`Nombre: ${out.nombre}`);
+    }
+
+    // DNI (numero de documento) - acepta "DNI", "Documento", "N° de Documento"
+    const mDni = text.match(/(?:dni|n[°º]?\s*de\s*documento|documento)[:\s]+([\d.]{6,12})/i);
+    if (mDni) { out.dni = mDni[1].replace(/\./g,''); out.found.push(`DNI: ${out.dni}`); }
+
+    // Domicilio
+    const mDom = text.match(/domicilio[:\s]+([^\n,;]{3,80})/i);
+    if (mDom) { out.domicilio = mDom[1].trim(); out.found.push(`Domicilio: ${out.domicilio}`); }
+
+    // Provincia
+    const mProv = text.match(/provincia[:\s]+([^\n,;]{3,40})/i);
+    if (mProv) { out.provincia = mProv[1].trim(); out.found.push(`Provincia: ${out.provincia}`); }
+
+    // Ciudad / Localidad
+    const mCiudad = text.match(/(?:ciudad|localidad)[:\s]+([^\n,;]{3,40})/i);
+    if (mCiudad) { out.ciudad = mCiudad[1].trim(); out.found.push(`Ciudad: ${out.ciudad}`); }
+
+    // Patente / Dominio
+    const mPatente = text.match(/(?:patente|dominio)[:\s]+([A-Za-z0-9\s-]{5,10})/i);
+    if (mPatente) { out.patente = mPatente[1].replace(/\s|-/g,'').toUpperCase(); out.found.push(`Patente: ${out.patente}`); }
+
+    // Marca
+    const mMarca = text.match(/marca[:\s]+([^\n,;]{2,40})/i);
+    if (mMarca) { out.marca = mMarca[1].trim(); out.found.push(`Marca: ${out.marca}`); }
+
+    // Modelo
+    const mModelo = text.match(/modelo[:\s]+([^\n,;]{1,40})/i);
+    if (mModelo) { out.modelo = mModelo[1].trim(); out.found.push(`Modelo: ${out.modelo}`); }
+
+    // Tipo (de vehiculo)
+    const mTipo = text.match(/tipo(?:\s*de\s*veh[ií]culo)?[:\s]+([^\n,;]{2,30})/i);
+    if (mTipo) { out.tipo_vehiculo = mTipo[1].trim(); out.found.push(`Tipo: ${out.tipo_vehiculo}`); }
+
+    // Uso
+    const mUso = text.match(/uso[:\s]+([^\n,;]{2,30})/i);
+    if (mUso) { out.uso = mUso[1].trim(); out.found.push(`Uso: ${out.uso}`); }
+
+    return out;
+  }
+
+  function scanBox() {
+    const slots = [
+      { key: 'foto1', label: 'Foto 1 — Documentos (lado A)' },
+      { key: 'foto2', label: 'Foto 2 — Documentos (lado B)' },
+    ];
+    return `<div class="scan-box" id="scan-box">
+      <h3 style="margin-top:0; border-top:none; padding-top:0;">Fotos del cliente</h3>
+      <p class="scan-sub">Poné el DNI, la Cédula Verde y la Tarjeta de GNC juntos sobre una mesa y sacá una sola foto con todo (Foto 1). Después dalos vuelta y sacá otra (Foto 2). Con eso alcanza. Las dos fotos quedan guardadas junto con el cliente, y la IA lee de ahí el DNI y la Cédula Verde para completar el formulario solo (la Tarjeta de GNC no se lee, solo queda de respaldo).</p>
+      <div class="scan-grid" style="grid-template-columns: repeat(2, 1fr);">
+        ${slots.map(s => `
+        <div class="scan-slot">
+          <label>${s.label}</label>
+          <input type="file" accept="image/*" id="scan-${s.key}">
+          <img class="scan-thumb" id="thumb-${s.key}" style="display:${scanFiles[s.key] ? 'block' : 'none'}; height:130px;" src="${scanFiles[s.key] || ''}">
+          ${scanFiles[s.key] ? `<button type="button" class="btn btn-ghost btn-sm" data-remove-photo="${s.key}">Quitar foto</button>` : ''}
+        </div>`).join('')}
+      </div>
+      <div class="scan-actions">
+        <button class="btn btn-agent btn-sm" id="btn-scan" ${(scanFiles['foto1'] || scanFiles['foto2']) ? '' : 'disabled'}>Leer datos con IA</button>
+        <span class="scan-status" id="scan-status"></span>
+      </div>
+      <div class="agent-box" style="margin-top:14px;">
+        <label>¿No funcionó automático? Mandame las dos fotos acá en el chat y pedime que te lea los datos, y pegá mi respuesta acá:</label>
+        <textarea id="scan-fallback-text" placeholder="Ej: Apellido: Ponce. Nombre: Cintia Noemi. N° de Documento: 33266064. Domicilio: Perez Bulnes 3752. Provincia: Buenos Aires. Ciudad: Mar del Plata. Patente: AB123CD. Marca: Chevrolet. Modelo: Corsa. Tipo: Automóvil. Uso: Particular."></textarea>
+        <div class="form-actions">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-apply-scan-fallback">Aplicar al formulario</button>
+        </div>
+        <div id="scan-fallback-result"></div>
+      </div>
+    </div>`;
+  }
+
+  function formPanel(existing) {
+    const c = existing || {
+      nombre:'', dni:'', domicilio:'', provincia:'', ciudad:'', telefono:'',
+      patente:'', marca:'', modelo:'', tipo_vehiculo:'', uso:'',
+      fecha_oblea:'', fecha_crpc:'', tipo_cilindro:'5'
+    };
+    return `<div class="panel" id="form-panel">
+      <h2>${existing ? 'Editar cliente' : 'Nuevo cliente'}</h2>
+      ${scanBox()}
+      <h3 style="margin-top:0;">Datos personales</h3>
+      <div class="form-grid">
+        <label>Nombre y apellido
+          <input type="text" id="f-nombre" value="${escapeHtml(c.nombre)}" placeholder="Ej: Juan Pérez">
+        </label>
+        <label>DNI
+          <input type="text" id="f-dni" value="${escapeHtml(c.dni)}" placeholder="Ej: 30123456">
+        </label>
+        <label>Teléfono (con código de país, sin +)
+          <input type="tel" id="f-telefono" value="${escapeHtml(c.telefono)}" placeholder="Ej: 5492235551234">
+        </label>
+        <label>Domicilio
+          <input type="text" id="f-domicilio" value="${escapeHtml(c.domicilio)}" placeholder="Ej: Perez Bulnes 3752">
+        </label>
+        <label>Provincia
+          <input type="text" id="f-provincia" value="${escapeHtml(c.provincia)}" placeholder="Ej: Buenos Aires">
+        </label>
+        <label>Ciudad
+          <input type="text" id="f-ciudad" value="${escapeHtml(c.ciudad)}" placeholder="Ej: Mar del Plata">
+        </label>
+      </div>
+      <h3>Datos del vehículo</h3>
+      <div class="form-grid">
+        <label>Patente
+          <input type="text" id="f-patente" value="${escapeHtml(c.patente)}" placeholder="Ej: AB123CD">
+        </label>
+        <label>Marca
+          <input type="text" id="f-marca" value="${escapeHtml(c.marca)}" placeholder="Ej: Chevrolet">
+        </label>
+        <label>Modelo
+          <input type="text" id="f-modelo" value="${escapeHtml(c.modelo)}" placeholder="Ej: Corsa">
+        </label>
+        <label>Tipo
+          <input type="text" id="f-tipo-vehiculo" value="${escapeHtml(c.tipo_vehiculo)}" placeholder="Ej: Automóvil">
+        </label>
+        <label>Uso
+          <input type="text" id="f-uso" value="${escapeHtml(c.uso)}" placeholder="Ej: Particular">
+        </label>
+      </div>
+      <h3>Oblea</h3>
+      <div class="form-grid">
+        <label>Vencimiento Oblea
+          <input type="date" id="f-oblea" value="${c.fecha_oblea || ''}">
+        </label>
+      </div>
+      <h3>Prueba Hidráulica (CRPC)</h3>
+      <div class="form-grid">
+        <label>Fecha de la última revisión CRPC (mes/año)
+          <input type="month" id="f-crpc" value="${c.fecha_crpc || ''}">
+        </label>
+        <label>Periodicidad del cilindro
+          <select id="f-tipo-cilindro">
+            <option value="5" ${c.tipo_cilindro !== '3' ? 'selected' : ''}>Cada 5 años (acero, más común)</option>
+            <option value="3" ${c.tipo_cilindro === '3' ? 'selected' : ''}>Cada 3 años (liviano/compuesto)</option>
+          </select>
+        </label>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="btn-save">${existing ? 'Guardar cambios' : 'Agregar cliente'}</button>
+        <button class="btn btn-ghost" id="btn-cancel">Cancelar</button>
+      </div>
+    </div>`;
+  }
+
+  let currentQuery = '';
+  let showForm = false;
+  const scanFiles = { 'foto1': null, 'foto2': null };
+
+  // Comprime y redimensiona la foto en el navegador antes de guardarla,
+  // para que no pese demasiado (las fotos de celular sin comprimir son
+  // varios MB y no entran cómodas en el almacenamiento del navegador).
+  function compressImageFile(file, maxDim = 1280, quality = 0.72) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) { height = Math.round(height * maxDim / width); width = maxDim; }
+            else { width = Math.round(width * maxDim / height); height = maxDim; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width; canvas.height = height;
+          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => reject(new Error('No se pudo procesar la imagen'));
+        img.src = e.target.result;
+      };
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function dataUrlParts(dataUrl) {
+    const m = dataUrl.match(/^data:(.+);base64,(.*)$/);
+    return m ? { mediaType: m[1], base64: m[2] } : null;
+  }
+
+  function setupScanBox() {
+    const slots = ['foto1', 'foto2'];
+    slots.forEach(slot => {
+      const input = root.querySelector(`#scan-${slot}`);
+      if (!input) return;
+      input.addEventListener('change', async () => {
+        const file = input.files[0];
+        if (!file) return;
+        try {
+          const dataUrl = await compressImageFile(file);
+          scanFiles[slot] = dataUrl;
+        } catch (e) {
+          alert('No se pudo procesar esa foto, probá con otra.');
+          return;
+        }
+        render();
+      });
+    });
+    const btnScan = root.querySelector('#btn-scan');
+    if (btnScan) btnScan.addEventListener('click', runScan);
+    root.querySelectorAll('[data-remove-photo]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        scanFiles[btn.getAttribute('data-remove-photo')] = null;
+        render();
+      });
+    });
+    const btnFallback = root.querySelector('#btn-apply-scan-fallback');
+    if (btnFallback) btnFallback.addEventListener('click', () => {
+      const textarea = root.querySelector('#scan-fallback-text');
+      const resultBox = root.querySelector('#scan-fallback-result');
+      const parsed = parseAgentText(textarea.value || '');
+      if (parsed.found.length === 0) {
+        resultBox.className = 'agent-result err';
+        resultBox.textContent = 'No encontré ningún dato reconocible en ese texto. Probá pedirle a Claude que te lo escriba como "Nombre: ... DNI: ... Patente: ... Marca: ... Modelo: ...".';
+        return;
+      }
+      const map = {
+        nombre: '#f-nombre', dni: '#f-dni', domicilio: '#f-domicilio',
+        provincia: '#f-provincia', ciudad: '#f-ciudad', patente: '#f-patente',
+        marca: '#f-marca', modelo: '#f-modelo', tipo_vehiculo: '#f-tipo-vehiculo',
+        uso: '#f-uso', fecha_oblea: '#f-oblea', fecha_crpc: '#f-crpc'
+      };
+      Object.entries(map).forEach(([key, sel]) => {
+        if (parsed[key]) {
+          const el = root.querySelector(sel);
+          if (el) el.value = key === 'patente' ? parsed[key].toUpperCase() : parsed[key];
+        }
+      });
+      resultBox.className = 'agent-result';
+      resultBox.textContent = 'Aplicado: ' + parsed.found.join(' · ');
+    });
+  }
+
+  async function runScan() {
+    const btnScan = root.querySelector('#btn-scan');
+    const statusEl = root.querySelector('#scan-status');
+    btnScan.disabled = true;
+    statusEl.className = 'scan-status';
+    statusEl.textContent = 'Leyendo documentos...';
+
+    try {
+      const content = [];
+      const readableSlots = ['foto1', 'foto2'];
+      for (const slot of readableSlots) {
+        const dataUrl = scanFiles[slot];
+        if (!dataUrl) continue;
+        const parts = dataUrlParts(dataUrl);
+        if (!parts) continue;
+        content.push({
+          type: 'image',
+          source: { type: 'base64', media_type: parts.mediaType, data: parts.base64 }
+        });
+      }
+      content.push({
+        type: 'text',
+        text: `Estas imágenes muestran varios documentos argentinos fotografiados juntos sobre una mesa (probablemente DNI, Cédula Verde, y a veces una Tarjeta de Identificación de Equipo de GNC), una foto de un lado y otra del lado opuesto. Extraé SOLO los datos del DNI y de la Cédula Verde. Si aparece una Tarjeta de GNC, ignorala por completo — no extraigas nada de ella. Respondé SOLO con un objeto JSON válido, sin texto adicional, sin markdown, con esta forma exacta:
+{"nombre": "nombre y apellido o null", "dni": "numero de documento sin puntos o null", "domicilio": "calle y numero o null", "provincia": "provincia o null", "ciudad": "ciudad o localidad o null", "patente": "dominio/patente del vehiculo o null", "marca": "marca del vehiculo o null", "modelo": "modelo del vehiculo o null", "tipo_vehiculo": "tipo de vehiculo (ej: Automovil, Camioneta) o null", "uso": "uso del vehiculo (ej: Particular, Comercial) o null"}
+El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separados por guiones; separalos en los campos correspondientes. Si algún dato no aparece en las imágenes o no se puede leer con confianza, poné null en ese campo. No inventes datos.`
+      });
+
+      const response = await fetch('/api/read-docs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1000,
+          messages: [{ role: 'user', content }]
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.type === 'error') {
+        const msg = (data.error && data.error.message) ? data.error.message : JSON.stringify(data).slice(0, 300);
+        throw new Error(`API (${response.status}): ${msg}`);
+      }
+
+      const textBlock = (data.content || []).find(b => b.type === 'text');
+      if (!textBlock) throw new Error('La respuesta no trajo texto: ' + JSON.stringify(data).slice(0, 300));
+      const clean = textBlock.text.replace(/```json|```/g, '').trim();
+      let parsed;
+      try {
+        parsed = JSON.parse(clean);
+      } catch (e2) {
+        throw new Error('No pude interpretar la respuesta como JSON: ' + clean.slice(0, 200));
+      }
+
+      const fieldMap = {
+        nombre: '#f-nombre', dni: '#f-dni', domicilio: '#f-domicilio',
+        provincia: '#f-provincia', ciudad: '#f-ciudad', patente: '#f-patente',
+        marca: '#f-marca', modelo: '#f-modelo', tipo_vehiculo: '#f-tipo-vehiculo',
+        uso: '#f-uso'
+      };
+      Object.entries(fieldMap).forEach(([key, sel]) => {
+        if (parsed[key]) {
+          const el = root.querySelector(sel);
+          if (el) el.value = key === 'patente' ? String(parsed[key]).toUpperCase() : parsed[key];
+        }
+      });
+
+      statusEl.className = 'scan-status ok';
+      statusEl.textContent = 'Listo — revisá los datos completados y corregí lo que haga falta antes de guardar.';
+    } catch (e) {
+      console.error(e);
+      statusEl.className = 'scan-status err';
+      statusEl.textContent = 'Error: ' + (e.message || 'no se pudo leer los datos') + ' — cargalos a mano.';
+    } finally {
+      btnScan.disabled = false;
+    }
+  }
+
+  function render() {
+    if (!ready) { root.innerHTML = '<div class="loading">Cargando datos del taller...</div>'; return; }
+    const counts = computeCounts();
+    const list = sortedFiltered(currentQuery);
+    const editing = editingId ? clientes.find(c => c.id === editingId) : null;
+
+    root.innerHTML = `
+      <div class="wrap">
+        <div class="topbar">
+          <div class="brand">
+            <span class="tag">GNC</span>
+            <input class="taller-name-input" id="taller-input" value="${escapeHtml(tallerNombre)}">
+          </div>
+          <div class="gauge-box">
+            ${gaugeSVG(counts)}
+            <div class="gauge-legend">
+              <div><span class="dot" style="background:var(--danger)"></span> ${counts.danger} vencido(s)</div>
+              <div><span class="dot" style="background:var(--warn)"></span> ${counts.warn} por vencer (≤${WARN_DAYS}d)</div>
+              <div><span class="dot" style="background:var(--ok)"></span> ${counts.ok} al día</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="controls">
+          <input class="search-input" type="text" id="search-input" placeholder="Buscar por nombre o patente..." value="${escapeHtml(currentQuery)}">
+          <button class="btn btn-primary" id="btn-new">+ Nuevo cliente</button>
+        </div>
+
+        ${showForm || editing ? formPanel(editing) : ''}
+
+        ${list.length === 0
+          ? `<div class="empty">${clientes.length === 0 ? 'Todavía no cargaste clientes. Sumá el primero con "+ Nuevo cliente".' : 'No se encontraron clientes con esa búsqueda.'}</div>`
+          : list.map(clientCard).join('')}
+      </div>
+    `;
+
+    attachEvents();
+    setupScanBox();
+  }
+
+  function attachEvents() {
+    const tallerInput = root.querySelector('#taller-input');
+    if (tallerInput) {
+      tallerInput.addEventListener('change', (e) => {
+        tallerNombre = e.target.value.trim() || 'Mi Taller GNC';
+        saveTaller();
+      });
+    }
+    const searchInput = root.querySelector('#search-input');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        currentQuery = e.target.value;
+        render();
+      });
+    }
+    const btnNew = root.querySelector('#btn-new');
+    if (btnNew) btnNew.addEventListener('click', () => {
+      editingId = null; showForm = true;
+      Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
+      render();
+    });
+
+    const btnCancel = root.querySelector('#btn-cancel');
+    if (btnCancel) btnCancel.addEventListener('click', () => {
+      showForm = false; editingId = null;
+      Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
+      render();
+    });
+
+    const btnSave = root.querySelector('#btn-save');
+    if (btnSave) btnSave.addEventListener('click', async () => {
+      const nombre = root.querySelector('#f-nombre').value.trim();
+      if (!nombre) { alert('Poné al menos el nombre del cliente.'); return; }
+      const data = {
+        nombre,
+        dni: root.querySelector('#f-dni').value.trim(),
+        telefono: root.querySelector('#f-telefono').value.trim(),
+        domicilio: root.querySelector('#f-domicilio').value.trim(),
+        provincia: root.querySelector('#f-provincia').value.trim(),
+        ciudad: root.querySelector('#f-ciudad').value.trim(),
+        patente: root.querySelector('#f-patente').value.trim().toUpperCase(),
+        marca: root.querySelector('#f-marca').value.trim(),
+        modelo: root.querySelector('#f-modelo').value.trim(),
+        tipo_vehiculo: root.querySelector('#f-tipo-vehiculo').value.trim(),
+        uso: root.querySelector('#f-uso').value.trim(),
+        fecha_oblea: root.querySelector('#f-oblea').value,
+        fecha_crpc: root.querySelector('#f-crpc').value,
+        tipo_cilindro: root.querySelector('#f-tipo-cilindro').value,
+      };
+      let clientId;
+      if (editingId) {
+        clientId = editingId;
+        const idx = clientes.findIndex(c => c.id === editingId);
+        clientes[idx] = { ...clientes[idx], ...data };
+      } else {
+        clientId = 'c' + Date.now() + Math.random().toString(36).slice(2,7);
+        clientes.push({ id: clientId, ...data });
+      }
+      await saveClientes();
+
+      try {
+        const anyPhoto = Object.values(scanFiles).some(v => v);
+        if (anyPhoto) {
+          await window.storage.set(`fotos:${clientId}`, JSON.stringify(scanFiles), false);
+        } else {
+          try { await window.storage.delete(`fotos:${clientId}`, false); } catch (e) { /* no existía, ok */ }
+        }
+      } catch (e) {
+        console.error('Error guardando fotos', e);
+        alert('El cliente se guardó, pero hubo un problema guardando las fotos (puede que sean muy pesadas). Probá sacándolas de nuevo.');
+      }
+
+      showForm = false; editingId = null;
+      Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
+      render();
+    });
+
+    root.querySelectorAll('[data-edit]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-edit');
+        Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
+        try {
+          const res = await window.storage.get(`fotos:${id}`, false);
+          if (res) Object.assign(scanFiles, JSON.parse(res.value));
+        } catch (e) { /* este cliente todavía no tiene fotos guardadas */ }
+        editingId = id;
+        showForm = false;
+        agentBoxOpenFor = null;
+        render();
+        const panel = root.querySelector('#form-panel');
+        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+
+    root.querySelectorAll('[data-delete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-delete');
+        const c = clientes.find(x => x.id === id);
+        if (confirm(`¿Eliminar a ${c ? c.nombre : 'este cliente'}? Esta acción no se puede deshacer.`)) {
+          clientes = clientes.filter(x => x.id !== id);
+          await saveClientes();
+          try { await window.storage.delete(`fotos:${id}`, false); } catch (e) { /* no tenía fotos, ok */ }
+          render();
+        }
+      });
+    });
+
+    root.querySelectorAll('[data-agent]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-agent');
+        agentBoxOpenFor = agentBoxOpenFor === id ? null : id;
+        render();
+      });
+    });
+
+    root.querySelectorAll('[data-apply-agent]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-apply-agent');
+        const textarea = root.querySelector(`#agent-text-${id}`);
+        const resultBox = root.querySelector(`#agent-result-${id}`);
+        const parsed = parseAgentText(textarea.value || '');
+        if (!parsed.fecha_oblea && !parsed.fecha_crpc) {
+          resultBox.className = 'agent-result err';
+          resultBox.textContent = 'No pude encontrar "Fecha de vencimiento" ni "Fecha CRPC" en ese texto. Revisá que el agente haya incluido esas dos frases tal cual, o cargá los datos a mano en "Editar".';
+          return;
+        }
+        const idx = clientes.findIndex(c => c.id === id);
+        if (parsed.fecha_oblea) clientes[idx].fecha_oblea = parsed.fecha_oblea;
+        if (parsed.fecha_crpc) clientes[idx].fecha_crpc = parsed.fecha_crpc;
+        await saveClientes();
+        agentBoxOpenFor = null;
+        render();
+      });
+    });
+  }
+
+  loadData();
+})();
+</script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('service-worker.js').catch(console.error);
+    });
+  }
+</script>
+</body>
+</html>
