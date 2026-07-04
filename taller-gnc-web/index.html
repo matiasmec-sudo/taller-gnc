@@ -1350,6 +1350,13 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
 
   function render() {
     if (!ready) { root.innerHTML = '<div class="loading">Cargando datos del taller...</div>'; return; }
+    // Como el render reconstruye todo el DOM, si no restauramos el foco acá
+    // el buscador (u otro input con "input" en vivo) pierde el cursor en
+    // cada letra que se escribe y hay que volver a clickearlo.
+    const active = document.activeElement;
+    const focusInfo = (active && active.id && root.contains(active))
+      ? { id: active.id, start: active.selectionStart, end: active.selectionEnd }
+      : null;
     const counts = computeCounts();
     const list = sortedFiltered(currentQuery);
     const editing = editingId ? clientes.find(c => c.id === editingId) : null;
@@ -1395,6 +1402,16 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
     attachEvents();
     setupScanBox();
     setupTramiteBox();
+
+    if (focusInfo) {
+      const toFocus = root.querySelector('#' + focusInfo.id);
+      if (toFocus) {
+        toFocus.focus();
+        if (typeof toFocus.setSelectionRange === 'function' && focusInfo.start !== null) {
+          try { toFocus.setSelectionRange(focusInfo.start, focusInfo.end); } catch (e) { /* input sin soporte de selección, ok */ }
+        }
+      }
+    }
   }
 
   function setupTramiteBox() {
