@@ -1219,28 +1219,13 @@ window.storage = {
       </div>`;
   }
 
-  function nuevoClientePanel() {
-    const c = blankClienteBase();
-    return `<div class="panel" id="form-panel">
-      <h2 style="margin-top:0;">Nuevo cliente</h2>
-      ${datosPersonalesYDomicilioFields(c)}
-      <h3>Vehículo</h3>
-      <div class="form-grid">
-        <label>Patente
-          <input type="text" id="f-patente" value="${escapeHtml(c.patente)}" placeholder="Ej: AB123CD">
-        </label>
-      </div>
-      <div class="form-actions">
-        <button class="btn btn-primary" id="btn-save">Agregar cliente</button>
-        <button class="btn btn-ghost" id="btn-cancel">Cancelar</button>
-      </div>
-    </div>`;
-  }
-
+  // Misma pantalla para dar de alta un cliente nuevo y para editar la
+  // documentación de uno existente — el usuario pidió no tener un
+  // formulario aparte y más simple solo para el alta.
   function documentacionPanel(existing) {
-    const c = existing;
+    const c = existing || blankClienteBase();
     return `<div class="panel" id="form-panel">
-      <h2 style="margin-top:0;">Documentación — ${escapeHtml(c.nombre)}</h2>
+      <h2 style="margin-top:0;">${existing ? 'Documentación — ' + escapeHtml(c.nombre) : 'Nuevo cliente'}</h2>
       ${scanBox()}
       ${datosPersonalesYDomicilioFields(c)}
       <h3>Vehículo</h3>
@@ -1277,8 +1262,8 @@ window.storage = {
         </label>
       </div>
       <div class="form-actions">
-        <button class="btn btn-primary" id="btn-save-doc">Guardar cambios</button>
-        <button class="btn btn-ghost" id="btn-cancel-doc">Cerrar</button>
+        <button class="btn btn-primary" id="btn-save-doc">${existing ? 'Guardar cambios' : 'Agregar cliente'}</button>
+        <button class="btn btn-ghost" id="btn-cancel-doc">${existing ? 'Cerrar' : 'Cancelar'}</button>
       </div>
     </div>`;
   }
@@ -1818,8 +1803,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
         ${showBulkImport ? bulkImportPanel() : ''}
 
-        ${showForm ? nuevoClientePanel() : ''}
-        ${editing && editMode === 'documentacion' ? documentacionPanel(editing) : ''}
+        ${showForm || (editing && editMode === 'documentacion') ? documentacionPanel(editing) : ''}
         ${editing && editMode === 'tramite' ? tramitePanel(editing) : ''}
 
         ${list.length === 0
@@ -1997,12 +1981,6 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       });
     });
 
-    const btnCancel = root.querySelector('#btn-cancel');
-    if (btnCancel) btnCancel.addEventListener('click', () => {
-      showForm = false;
-      render();
-    });
-
     const ciudadInput = root.querySelector('#f-ciudad');
     if (ciudadInput) {
       ciudadInput.addEventListener('change', () => {
@@ -2013,36 +1991,10 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       });
     }
 
-    const btnSave = root.querySelector('#btn-save');
-    if (btnSave) btnSave.addEventListener('click', async () => {
-      const nombre = root.querySelector('#f-nombre').value.trim();
-      if (!nombre) { alert('Poné al menos el nombre del cliente.'); return; }
-      const data = {
-        ...blankClienteBase(),
-        nombre,
-        dni: root.querySelector('#f-dni').value.trim(),
-        tipo_documento: root.querySelector('#f-tipo-documento').value,
-        telefono: root.querySelector('#f-telefono').value.trim(),
-        domicilio: root.querySelector('#f-domicilio').value.trim(),
-        numero: root.querySelector('#f-numero').value.trim(),
-        piso: root.querySelector('#f-piso').value.trim(),
-        cpa: root.querySelector('#f-cpa').value.trim(),
-        provincia: root.querySelector('#f-provincia').value.trim(),
-        ciudad: root.querySelector('#f-ciudad').value.trim(),
-        patente: root.querySelector('#f-patente').value.trim().toUpperCase(),
-      };
-      const clientId = 'c' + Date.now() + Math.random().toString(36).slice(2,7);
-      clientes.push({ id: clientId, ...data, tramites: [], ultimoAvisoMes: {}, notas: '' });
-      await saveClientes();
-      showForm = false;
-      render();
-    });
-
+    // Misma pantalla (Documentación) sirve para dar de alta un cliente
+    // nuevo y para editar uno existente — si no hay editingId, es un alta.
     const btnSaveDoc = root.querySelector('#btn-save-doc');
     if (btnSaveDoc) btnSaveDoc.addEventListener('click', async () => {
-      if (!editingId) return;
-      const idx = clientes.findIndex(c => c.id === editingId);
-      if (idx === -1) return;
       const nombre = root.querySelector('#f-nombre').value.trim();
       if (!nombre) { alert('Poné al menos el nombre del cliente.'); return; }
       const data = {
@@ -2063,21 +2015,31 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         inyeccion: root.querySelector('#f-inyeccion').value,
         uso: root.querySelector('#f-uso').value,
       };
-      clientes[idx] = { ...clientes[idx], ...data };
+      let clientId;
+      if (editingId) {
+        clientId = editingId;
+        const idx = clientes.findIndex(c => c.id === editingId);
+        if (idx === -1) return;
+        clientes[idx] = { ...clientes[idx], ...data };
+      } else {
+        clientId = 'c' + Date.now() + Math.random().toString(36).slice(2, 7);
+        clientes.push({ id: clientId, ...blankClienteBase(), ...data, tramites: [], ultimoAvisoMes: {}, notas: '' });
+      }
       await saveClientes();
 
       try {
         const anyPhoto = Object.values(scanFiles).some(v => v);
         if (anyPhoto) {
-          await window.storage.set(`fotos:${editingId}`, JSON.stringify(scanFiles), false);
+          await window.storage.set(`fotos:${clientId}`, JSON.stringify(scanFiles), false);
         } else {
-          try { await window.storage.delete(`fotos:${editingId}`, false); } catch (e) { /* no existía, ok */ }
+          try { await window.storage.delete(`fotos:${clientId}`, false); } catch (e) { /* no existía, ok */ }
         }
       } catch (e) {
         console.error('Error guardando fotos', e);
         alert('El cliente se guardó, pero hubo un problema guardando las fotos (puede que sean muy pesadas). Probá sacándolas de nuevo.');
       }
 
+      showForm = false;
       editingId = null; editMode = null;
       enargasPasteOpen = false;
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
@@ -2086,6 +2048,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
     const btnCancelDoc = root.querySelector('#btn-cancel-doc');
     if (btnCancelDoc) btnCancelDoc.addEventListener('click', () => {
+      showForm = false;
       editingId = null; editMode = null;
       enargasPasteOpen = false;
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
