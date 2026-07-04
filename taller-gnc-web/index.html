@@ -1111,14 +1111,6 @@ window.storage = {
         <button class="btn btn-agent btn-sm" id="btn-scan" ${(scanFiles['foto1'] || scanFiles['foto2']) ? '' : 'disabled'}>Leer datos con IA</button>
         <span class="scan-status" id="scan-status"></span>
       </div>
-      <div class="agent-box" style="margin-top:14px;">
-        <label>¿No funcionó automático? Mandame las dos fotos acá en el chat y pedime que te lea los datos, y pegá mi respuesta acá:</label>
-        <textarea id="scan-fallback-text" placeholder="Ej: Apellido: Ponce. Nombre: Cintia Noemi. N° de Documento: 33266064. Domicilio: Perez Bulnes 3752. Provincia: Buenos Aires. Ciudad: Mar del Plata. Patente: AB123CD."></textarea>
-        <div class="form-actions">
-          <button type="button" class="btn btn-primary btn-sm" id="btn-apply-scan-fallback">Aplicar al formulario</button>
-        </div>
-        <div id="scan-fallback-result"></div>
-      </div>
     </div>`;
   }
 
@@ -1223,7 +1215,7 @@ window.storage = {
   // documentación de uno existente — el usuario pidió no tener un
   // formulario aparte y más simple solo para el alta.
   function documentacionPanel(existing) {
-    const c = existing || blankClienteBase();
+    const c = clienteDraft || existing || blankClienteBase();
     return `<div class="panel" id="form-panel">
       <h2 style="margin-top:0;">${existing ? 'Documentación — ' + escapeHtml(c.nombre) : 'Nuevo cliente'}</h2>
       ${scanBox()}
@@ -1495,6 +1487,24 @@ window.storage = {
   const scanFiles = { 'foto1': null, 'foto2': null };
   let currentSignature = null;
   let tramiteDraftEquipo = null;
+  // Borrador del cliente que se está dando de alta/editando en Documentación.
+  // Sin esto, cualquier render() a mitad de carga (ej. al aplicar un pegado
+  // de ENARGAS) reconstruía el formulario desde el último cliente GUARDADO,
+  // y lo tipeado todavía no guardado (nombre, DNI, domicilio...) desaparecía.
+  let clienteDraft = null;
+  const CLIENTE_DRAFT_CAMPOS = {
+    nombre: 'f-nombre', dni: 'f-dni', tipo_documento: 'f-tipo-documento', telefono: 'f-telefono',
+    domicilio: 'f-domicilio', numero: 'f-numero', piso: 'f-piso', cpa: 'f-cpa',
+    provincia: 'f-provincia', ciudad: 'f-ciudad', patente: 'f-patente',
+    marca: 'f-marca', modelo: 'f-modelo', anio: 'f-anio', inyeccion: 'f-inyeccion', uso: 'f-uso',
+  };
+  function syncClienteDraftFromDOM() {
+    if (!clienteDraft) return;
+    Object.entries(CLIENTE_DRAFT_CAMPOS).forEach(([key, id]) => {
+      const el = root.querySelector('#' + id);
+      if (el) clienteDraft[key] = el.value;
+    });
+  }
 
   const OTROS_EQUIPOS_CAMPOS = [
     { key: 'manometro', label: 'Manómetro' },
@@ -1510,13 +1520,28 @@ window.storage = {
     { key: 'mangueraBajaPresion', label: 'Manguera baja presión' },
   ];
 
-  function blankEquipo() {
+  // Si se pasa `seed` (el último equipo conocido del cliente, cargado por
+  // ENARGAS alguna vez), arranca el trámite con esos códigos/series ya
+  // completos — así con una sola consulta al SIC alcanza. La Operación
+  // (Montaje/Sigue/Desmontaje/Baja) nunca se hereda: es específica de cada
+  // trámite y hay que elegirla sí o sí cada vez.
+  function blankEquipo(seed) {
     const otros = {};
-    OTROS_EQUIPOS_CAMPOS.forEach(o => { otros[o.key] = { codigo: '', serie: '' }; });
+    OTROS_EQUIPOS_CAMPOS.forEach(o => {
+      const s = seed && seed.otros && seed.otros[o.key];
+      otros[o.key] = { codigo: (s && s.codigo) || '', serie: (s && s.serie) || '' };
+    });
+    const reg = seed && seed.regulador;
+    const cils = (seed && seed.cilindros && seed.cilindros.length) ? seed.cilindros : [{}];
+    const vals = (seed && seed.valvulas && seed.valvulas.length) ? seed.valvulas : [{}];
     return {
-      regulador: { codigo: '', serie: '', nuevoUsado: 'usado', operacion: '' },
-      cilindros: [{ codigo: '', serie: '', periodicidad: '5', nuevoUsado: 'usado', fabricadoMes: '', fabricadoAnio: '', revisadoMes: '', revisadoAnio: '', crpc: '', msdb: '' }],
-      valvulas: [{ codigo: '', serie: '', msb: '' }],
+      regulador: { codigo: (reg && reg.codigo) || '', serie: (reg && reg.serie) || '', nuevoUsado: (reg && reg.nuevoUsado) || 'usado', operacion: '' },
+      cilindros: cils.map(c => ({
+        codigo: c.codigo || '', serie: c.serie || '', periodicidad: c.periodicidad || '5',
+        nuevoUsado: c.nuevoUsado || 'usado', fabricadoMes: c.fabricadoMes || '', fabricadoAnio: c.fabricadoAnio || '',
+        revisadoMes: c.revisadoMes || '', revisadoAnio: c.revisadoAnio || '', crpc: c.crpc || '', msdb: '',
+      })),
+      valvulas: vals.map(v => ({ codigo: v.codigo || '', serie: v.serie || '', msb: '' })),
       otros,
     };
   }
@@ -1648,6 +1673,7 @@ window.storage = {
           alert('No se pudo procesar esa foto, probá con otra.');
           return;
         }
+        syncClienteDraftFromDOM();
         render();
       });
     });
@@ -1656,31 +1682,9 @@ window.storage = {
     root.querySelectorAll('[data-remove-photo]').forEach(btn => {
       btn.addEventListener('click', () => {
         scanFiles[btn.getAttribute('data-remove-photo')] = null;
+        syncClienteDraftFromDOM();
         render();
       });
-    });
-    const btnFallback = root.querySelector('#btn-apply-scan-fallback');
-    if (btnFallback) btnFallback.addEventListener('click', () => {
-      const textarea = root.querySelector('#scan-fallback-text');
-      const resultBox = root.querySelector('#scan-fallback-result');
-      const parsed = parseAgentText(textarea.value || '');
-      if (parsed.found.length === 0) {
-        resultBox.className = 'agent-result err';
-        resultBox.textContent = 'No encontré ningún dato reconocible en ese texto. Probá pedirle a Claude que te lo escriba como "Nombre: ... DNI: ... Patente: ...".';
-        return;
-      }
-      const map = {
-        nombre: '#f-nombre', dni: '#f-dni', domicilio: '#f-domicilio',
-        provincia: '#f-provincia', ciudad: '#f-ciudad', patente: '#f-patente',
-      };
-      Object.entries(map).forEach(([key, sel]) => {
-        if (parsed[key]) {
-          const el = root.querySelector(sel);
-          if (el) el.value = key === 'patente' ? parsed[key].toUpperCase() : parsed[key];
-        }
-      });
-      resultBox.className = 'agent-result';
-      resultBox.textContent = 'Aplicado: ' + parsed.found.join(' · ');
     });
   }
 
@@ -1767,6 +1771,13 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
   function render() {
     if (!ready) { root.innerHTML = '<div class="loading">Cargando datos del taller...</div>'; return; }
+    // Como el render reconstruye todo el DOM, si no restauramos el foco acá
+    // cualquier campo con eventos "input" en vivo pierde el cursor en cada
+    // letra que se escribe y hay que volver a clickearlo.
+    const activeEl = document.activeElement;
+    const focusInfo = (activeEl && activeEl.id && root.contains(activeEl))
+      ? { id: activeEl.id, start: activeEl.selectionStart, end: activeEl.selectionEnd }
+      : null;
     const counts = computeCounts();
     const list = sortedFiltered(currentQuery);
     const editing = editingId ? clientes.find(c => c.id === editingId) : null;
@@ -1815,6 +1826,16 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     attachEvents();
     setupScanBox();
     setupTramiteBox();
+
+    if (focusInfo) {
+      const toFocus = root.querySelector('#' + focusInfo.id);
+      if (toFocus) {
+        toFocus.focus();
+        if (typeof toFocus.setSelectionRange === 'function' && focusInfo.start !== null) {
+          try { toFocus.setSelectionRange(focusInfo.start, focusInfo.end); } catch (e) { /* input sin soporte de selección, ok */ }
+        }
+      }
+    }
   }
 
   function setupTramiteBox() {
@@ -1895,6 +1916,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       editingId = null; showForm = true;
       showBulkImport = false;
       enargasPasteOpen = false;
+      clienteDraft = blankClienteBase();
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
       render();
     });
@@ -2015,6 +2037,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         inyeccion: root.querySelector('#f-inyeccion').value,
         uso: root.querySelector('#f-uso').value,
       };
+      if (clienteDraft && clienteDraft.ultimoEquipoConocido) data.ultimoEquipoConocido = clienteDraft.ultimoEquipoConocido;
       let clientId;
       if (editingId) {
         clientId = editingId;
@@ -2042,6 +2065,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       showForm = false;
       editingId = null; editMode = null;
       enargasPasteOpen = false;
+      clienteDraft = null;
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
       render();
     });
@@ -2051,6 +2075,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       showForm = false;
       editingId = null; editMode = null;
       enargasPasteOpen = false;
+      clienteDraft = null;
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
       render();
     });
@@ -2067,6 +2092,8 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         editMode = 'documentacion';
         showForm = false;
         enargasPasteOpen = false;
+        const cliente = clientes.find(x => x.id === id);
+        clienteDraft = cliente ? { ...cliente } : blankClienteBase();
         render();
         const panel = root.querySelector('#form-panel');
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2082,7 +2109,8 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         addingTramite = true;
         currentSignature = null;
         enargasEqPasteOpen = false;
-        tramiteDraftEquipo = blankEquipo();
+        const cliente = clientes.find(x => x.id === id);
+        tramiteDraftEquipo = blankEquipo(cliente ? cliente.ultimoEquipoConocido : null);
         render();
         const panel = root.querySelector('#form-panel');
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2115,7 +2143,11 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     const btnBuscarEnargas = root.querySelector('#btn-buscar-enargas');
     if (btnBuscarEnargas) btnBuscarEnargas.addEventListener('click', async () => {
       const url = 'https://www.enargas.gob.ar/secciones/gas-natural-comprimido/consulta-dominio.php';
-      const patente = btnBuscarEnargas.getAttribute('data-patente');
+      // Leemos el valor en vivo del campo (no el atributo data-patente, que
+      // solo se actualiza al re-renderizar) para que copie lo que se acaba
+      // de escribir aunque todavía no se haya guardado el cliente.
+      const patenteInput = root.querySelector('#f-patente');
+      const patente = patenteInput ? patenteInput.value.trim().toUpperCase() : btnBuscarEnargas.getAttribute('data-patente');
       const hint = root.querySelector('#enargas-copy-hint');
       // Copiar ANTES de abrir la pestaña nueva: en cuanto se abre la otra
       // ventana esta página puede perder el foco, y navigator.clipboard
@@ -2134,84 +2166,60 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
     const btnToggleEnargas = root.querySelector('#btn-toggle-enargas-paste');
     if (btnToggleEnargas) btnToggleEnargas.addEventListener('click', () => {
+      syncClienteDraftFromDOM();
       enargasPasteOpen = !enargasPasteOpen;
       render();
     });
 
     const btnApplyEnargas = root.querySelector('#btn-apply-enargas');
-    if (btnApplyEnargas) btnApplyEnargas.addEventListener('click', async () => {
+    if (btnApplyEnargas) btnApplyEnargas.addEventListener('click', () => {
       const textarea = root.querySelector('#enargas-paste-text');
-      const resultBox = root.querySelector('#enargas-paste-result');
       const parsed = parseEnargasText(textarea.value || '');
       const aplicados = parsed.found.slice();
-      const idx = editingId ? clientes.findIndex(x => x.id === editingId) : -1;
 
-      if (idx !== -1) {
-        // Cliente ya guardado: escribimos directo en el objeto (no en los
-        // <input> en vivo) para que la actualización sobreviva al render()
-        // que hace falta para reflejar también el equipo del trámite en curso.
-        const campos = {
-          nombre: parsed.nombre, dni: parsed.dni, domicilio: parsed.domicilio,
-          provincia: parsed.provincia, ciudad: parsed.ciudad,
-          patente: parsed.patente ? String(parsed.patente).toUpperCase() : null,
-          marca: parsed.marca, modelo: parsed.modelo, uso: parsed.uso,
-          fecha_oblea: parsed.fecha_oblea, fecha_crpc: parsed.fecha_crpc, anio: parsed.anio,
-        };
-        Object.entries(campos).forEach(([key, val]) => { if (val) clientes[idx][key] = val; });
+      // Todo se aplica sobre el borrador (nunca directo a los <input> ni al
+      // cliente guardado) para no pisar lo que ya se tipeó y todavía no se
+      // guardó — se persiste recién cuando se toca "Guardar cambios".
+      syncClienteDraftFromDOM();
+      if (!clienteDraft) clienteDraft = blankClienteBase();
+      const campos = {
+        patente: parsed.patente ? String(parsed.patente).toUpperCase() : null,
+        marca: parsed.marca, modelo: parsed.modelo, uso: parsed.uso,
+        fecha_oblea: parsed.fecha_oblea, fecha_crpc: parsed.fecha_crpc, anio: parsed.anio,
+      };
+      Object.entries(campos).forEach(([key, val]) => { if (val) clienteDraft[key] = val; });
 
-        if (parsed.equipo && tramiteDraftEquipo) {
-          syncEquipoFromDOM();
-          if (parsed.equipo.regulador.codigo || parsed.equipo.regulador.serie) {
-            Object.assign(tramiteDraftEquipo.regulador, parsed.equipo.regulador);
-            aplicados.push('Regulador');
-          }
-          if (parsed.equipo.cilindro.codigo || parsed.equipo.cilindro.serie) {
-            Object.assign(tramiteDraftEquipo.cilindros[0], parsed.equipo.cilindro);
-            aplicados.push('Cilindro');
-          }
-          if (parsed.equipo.valvula.codigo || parsed.equipo.valvula.serie) {
-            Object.assign(tramiteDraftEquipo.valvulas[0], parsed.equipo.valvula);
-            aplicados.push('Válvula');
-          }
+      if (parsed.equipo) {
+        // Se guarda como "último equipo conocido" del cliente para que, al
+        // entrar a la solapa Trámite más tarde, el regulador/cilindro/
+        // válvula ya vengan completos — así con una sola consulta al SIC
+        // alcanza en vez de tener que pegarla de nuevo ahí.
+        const base = clienteDraft.ultimoEquipoConocido || blankEquipo();
+        if (parsed.equipo.regulador.codigo || parsed.equipo.regulador.serie) {
+          Object.assign(base.regulador, parsed.equipo.regulador);
+          aplicados.push('Regulador');
         }
-        await saveClientes();
-        render();
-        // El render de arriba reconstruye la caja (con los datos del
-        // vehículo/equipo ya actualizados) — el mensaje se muestra ahí en
-        // vez de un alert(), que bloquearía la pantalla.
-        const nuevoResultBox = root.querySelector('#enargas-paste-result');
-        if (nuevoResultBox) {
-          if (aplicados.length === 0) {
-            nuevoResultBox.className = 'agent-result err';
-            nuevoResultBox.textContent = 'No reconocí datos con formato conocido en ese texto — completá a mano lo que falte.';
-          } else {
-            nuevoResultBox.className = 'agent-result';
-            nuevoResultBox.textContent = 'Aplicado: ' + aplicados.join(' · ');
-          }
+        if (parsed.equipo.cilindro.codigo || parsed.equipo.cilindro.serie) {
+          Object.assign(base.cilindros[0], parsed.equipo.cilindro);
+          aplicados.push('Cilindro');
         }
-        return;
+        if (parsed.equipo.valvula.codigo || parsed.equipo.valvula.serie) {
+          Object.assign(base.valvulas[0], parsed.equipo.valvula);
+          aplicados.push('Válvula');
+        }
+        clienteDraft.ultimoEquipoConocido = base;
       }
 
-      // Cliente todavía no guardado (alta nueva): no hay objeto en
-      // `clientes` para mutar, así que completamos los <input> directamente.
-      const map = {
-        nombre: '#f-nombre', dni: '#f-dni', domicilio: '#f-domicilio',
-        provincia: '#f-provincia', ciudad: '#f-ciudad', patente: '#f-patente',
-        marca: '#f-marca', modelo: '#f-modelo',
-        uso: '#f-uso', fecha_oblea: '#f-oblea', fecha_crpc: '#f-crpc', anio: '#f-anio'
-      };
-      Object.entries(map).forEach(([key, sel]) => {
-        if (parsed[key]) {
-          const el = root.querySelector(sel);
-          if (el) el.value = key === 'patente' ? String(parsed[key]).toUpperCase() : parsed[key];
+      render();
+      const nuevoResultBox = root.querySelector('#enargas-paste-result');
+      if (nuevoResultBox) {
+        if (aplicados.length === 0) {
+          nuevoResultBox.className = 'agent-result err';
+          nuevoResultBox.textContent = 'No reconocí datos con formato conocido en ese texto — completá a mano lo que falte.';
+        } else {
+          nuevoResultBox.className = 'agent-result';
+          nuevoResultBox.textContent = 'Aplicado: ' + aplicados.join(' · ') + ' — no te olvides de tocar "Guardar cambios" para que quede guardado.';
         }
-      });
-      if (aplicados.length === 0) {
-        resultBox.className = 'agent-result err';
-        resultBox.textContent = 'No reconocí datos con formato conocido en ese texto — revisá el formulario y completá a mano lo que falte.';
-      } else {
-        resultBox.className = 'agent-result';
-        resultBox.textContent = 'Aplicado: ' + aplicados.join(' · ');
       }
     });
 
@@ -2255,11 +2263,22 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
           aplicados.push('Válvula');
         }
       }
-      if (editingId && parsed.equipo && parsed.equipo.cilindro.revisadoMes && parsed.equipo.cilindro.revisadoAnio) {
+      if (editingId && parsed.equipo) {
         const idx = clientes.findIndex(x => x.id === editingId);
         if (idx !== -1) {
-          clientes[idx].fecha_crpc = `${parsed.equipo.cilindro.revisadoAnio}-${String(parsed.equipo.cilindro.revisadoMes).padStart(2, '0')}`;
-          aplicados.push('Fecha Prueba Hidráulica');
+          if (parsed.equipo.cilindro.revisadoMes && parsed.equipo.cilindro.revisadoAnio) {
+            clientes[idx].fecha_crpc = `${parsed.equipo.cilindro.revisadoAnio}-${String(parsed.equipo.cilindro.revisadoMes).padStart(2, '0')}`;
+            aplicados.push('Fecha Prueba Hidráulica');
+          }
+          // Guardamos el equipo también como "último conocido" del cliente,
+          // por si la próxima vez se entra por Documentación en vez de por
+          // acá — así no hace falta pegar el resultado del SIC dos veces.
+          clientes[idx].ultimoEquipoConocido = {
+            regulador: { ...tramiteDraftEquipo.regulador },
+            cilindros: tramiteDraftEquipo.cilindros.map(c => ({ ...c })),
+            valvulas: tramiteDraftEquipo.valvulas.map(v => ({ ...v })),
+            otros: JSON.parse(JSON.stringify(tramiteDraftEquipo.otros)),
+          };
           await saveClientes();
         }
       }
@@ -2280,7 +2299,8 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     if (btnAddTramite) btnAddTramite.addEventListener('click', () => {
       addingTramite = !addingTramite;
       currentSignature = null;
-      tramiteDraftEquipo = addingTramite ? blankEquipo() : null;
+      const cliente = editingId ? clientes.find(x => x.id === editingId) : null;
+      tramiteDraftEquipo = addingTramite ? blankEquipo(cliente ? cliente.ultimoEquipoConocido : null) : null;
       render();
     });
 
