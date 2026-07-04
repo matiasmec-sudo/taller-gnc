@@ -1,6 +1,6 @@
 {
-  "name": "Mi Taller GNC",
-  "short_name": "Taller GNC",
+  "name": "Estelita",
+  "short_name": "Estelita",
   "description": "Gestión de clientes, Oblea y Prueba Hidráulica para talleres de GNC",
   "start_url": "./index.html",
   "scope": "./",

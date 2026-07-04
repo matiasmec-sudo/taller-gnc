@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Mi Taller GNC</title>
+<title>Estelita</title>
 <meta name="theme-color" content="#0F1620">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -229,6 +229,31 @@ window.storage = {
   text-decoration: underline; cursor: pointer; background: none; border: none; padding: 0;
 }
 #gnc-app .license-link:hover { color: var(--flame); }
+
+/* TRAMITES */
+#gnc-app .tramites-list { display: flex; flex-direction: column; gap: 8px; }
+#gnc-app .tramite-row {
+  background: var(--surface-alt); border-radius: 6px; padding: 10px 12px;
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+#gnc-app .tramite-row select { font-size: 11px; padding: 5px 7px; }
+#gnc-app .tramite-motivo { font-family: var(--mono); font-size: 11px; color: var(--danger); margin-top: 2px; width: 100%; }
+
+/* FIRMA ELECTRONICA */
+#gnc-app .signature-box canvas {
+  width: 100%; height: 160px; touch-action: none; display: block;
+  background: var(--surface-alt); border: 1px solid var(--line); border-radius: 8px;
+}
+
+/* IMPORTACION MASIVA */
+#gnc-app .import-preview { max-height: 320px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; margin: 12px 0; }
+#gnc-app .import-preview table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 11.5px; }
+#gnc-app .import-preview th, #gnc-app .import-preview td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--line); }
+#gnc-app .import-preview th { position: sticky; top: 0; background: var(--surface); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px; }
+#gnc-app .import-summary { font-family: var(--mono); font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+
+/* BANNERS */
+#gnc-app .reminder-banner, #gnc-app .incompletos-banner { border-color: var(--flame-dim); }
 </style>
 
 <script>
@@ -357,8 +382,44 @@ window.storage = {
       const res2 = await window.storage.get(TALLER_KEY, false);
       tallerNombre = res2 ? JSON.parse(res2.value) : 'Mi Taller GNC';
     } catch (e) { tallerNombre = 'Mi Taller GNC'; }
+    if (migrateClientes()) await saveClientes();
     ready = true;
     render();
+  }
+
+  // Suma campos nuevos (tramites, ultimoAvisoMes, notas) a clientes guardados
+  // con el formato viejo, sin tocar ni borrar nada de lo que ya tenían.
+  function migrateClientes() {
+    let changed = false;
+    clientes.forEach(c => {
+      if (!Array.isArray(c.tramites)) { c.tramites = []; changed = true; }
+      if (!c.ultimoAvisoMes || typeof c.ultimoAvisoMes !== 'object') { c.ultimoAvisoMes = {}; changed = true; }
+      if (typeof c.notas !== 'string') { c.notas = ''; changed = true; }
+    });
+    return changed;
+  }
+
+  const TRAMITE_TIPOS = [
+    { value: 'conversion', label: 'Conversión' },
+    { value: 'modificacion', label: 'Modificación' },
+    { value: 'revision_anual', label: 'Revisión Anual' },
+    { value: 'prueba_hidraulica', label: 'Prueba Hidráulica' },
+    { value: 'baja', label: 'Baja' },
+    { value: 'desmontaje', label: 'Desmontaje' },
+  ];
+
+  function tramiteTipoLabel(tipo) {
+    const t = TRAMITE_TIPOS.find(t => t.value === tipo);
+    return t ? t.label : tipo;
+  }
+
+  const ESTADO_PEC_LABELS = { pendiente: 'Pendiente', enviado: 'Enviado al PEC', incompleto: 'Incompleto' };
+
+  // Trámite más reciente de un cliente (opcionalmente filtrado por tipo/s).
+  function latestTramite(c, tipos) {
+    const list = tipos ? c.tramites.filter(t => tipos.includes(t.tipo)) : c.tramites;
+    if (!list.length) return null;
+    return list.slice().sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''))[0];
   }
 
   async function saveClientes() {
@@ -414,6 +475,233 @@ window.storage = {
     return counts;
   }
 
+  function currentYM() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  function reminderCandidates() {
+    const ym = currentYM();
+    const out = [];
+    clientes.forEach(c => {
+      if (c.fecha_oblea && c.fecha_oblea.slice(0, 7) === ym && c.ultimoAvisoMes.oblea !== ym) {
+        out.push({ cliente: c, tipo: 'oblea' });
+      }
+      const phIso = phVencimientoISO(c.fecha_crpc, c.tipo_cilindro);
+      if (phIso && phIso.slice(0, 7) === ym && c.ultimoAvisoMes.prueba !== ym) {
+        out.push({ cliente: c, tipo: 'prueba' });
+      }
+    });
+    return out;
+  }
+
+  function reminderBanner() {
+    const items = reminderCandidates();
+    if (!items.length) return '';
+    return `<div class="panel reminder-banner">
+      <h2>📅 ${items.length} cliente(s) para avisar este mes</h2>
+      <p class="scan-sub">Venc. de Oblea o Prueba Hidráulica este mes. Tocá "Avisar por WhatsApp" para cada uno.</p>
+      <div class="docs">
+        ${items.map(({ cliente, tipo }) => `
+          <div class="doc-row">
+            <div>
+              <div class="doc-label">${escapeHtml(cliente.nombre)} · ${escapeHtml(cliente.patente || 's/d')}</div>
+              <div class="doc-sub">${tipo === 'oblea' ? 'Oblea' : 'Prueba Hidráulica'}</div>
+            </div>
+            ${cleanPhone(cliente.telefono)
+              ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-mes="${cliente.id}" data-aviso-tipo="${tipo}" href="${waLink(cliente, tipo === 'oblea' ? 'oblea' : 'prueba')}">Avisar por WhatsApp</a>`
+              : '<span class="badge badge-warn">Sin teléfono</span>'}
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  function incompletosBanner() {
+    const items = [];
+    clientes.forEach(c => {
+      const lt = latestTramite(c);
+      if (lt && lt.estadoPec !== 'enviado') items.push({ cliente: c, tramite: lt });
+    });
+    if (!items.length) return '';
+    return `<div class="panel incompletos-banner">
+      <h2>⚠ ${items.length} trámite(s) sin enviar o incompletos</h2>
+      <div class="tramites-list">
+        ${items.map(({ cliente, tramite }) => `
+          <div class="tramite-row">
+            <div>
+              <div class="doc-label">${escapeHtml(cliente.nombre)} · ${escapeHtml(cliente.patente || 's/d')}</div>
+              <div class="doc-sub">${tramiteTipoLabel(tramite.tipo)} · ${fmtDate(tramite.fecha)}</div>
+              ${tramite.estadoPec === 'incompleto' && tramite.motivoIncompleto ? `<div class="tramite-motivo">Motivo: ${escapeHtml(tramite.motivoIncompleto)}</div>` : ''}
+            </div>
+            <span class="badge ${tramite.estadoPec === 'incompleto' ? 'badge-danger' : 'badge-warn'}">${ESTADO_PEC_LABELS[tramite.estadoPec]}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  // --- Importación masiva ---
+
+  function parseCSV(text) {
+    const rows = [];
+    let row = [], field = '', inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i], next = text[i + 1];
+      if (inQuotes) {
+        if (ch === '"' && next === '"') { field += '"'; i++; }
+        else if (ch === '"') { inQuotes = false; }
+        else { field += ch; }
+      } else {
+        if (ch === '"') inQuotes = true;
+        else if (ch === ',' || ch === '\t') { row.push(field); field = ''; }
+        else if (ch === '\r') { /* se ignora, lo maneja \n */ }
+        else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+        else field += ch;
+      }
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows.filter(r => r.some(c => c.trim() !== ''));
+  }
+
+  function parseDateLenient(str) {
+    if (!str) return null;
+    str = str.trim();
+    let m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (m) {
+      let [, d, mo, y] = m;
+      if (y.length === 2) y = '20' + y;
+      if (+mo < 1 || +mo > 12 || +d < 1 || +d > 31) return null;
+      return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    m = str.match(/^(\d{1,2})\/(\d{2,4})$/);
+    if (m) {
+      let [, mo, y] = m;
+      if (y.length === 2) y = '20' + y;
+      if (+mo < 1 || +mo > 12) return null;
+      return `${y}-${mo.padStart(2, '0')}-01`;
+    }
+    return null;
+  }
+
+  function extractPhoneDigits(raw) {
+    const digits = (raw || '').replace(/\D/g, '');
+    return (digits.length >= 6 && digits.length <= 15) ? digits : null;
+  }
+
+  function normalizeHeader(h) {
+    return (h || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+  }
+
+  const HEADER_SYNONYMS = {
+    nombre: ['nombre', 'nombreyapellido', 'cliente', 'apellidoynombre'],
+    telefono: ['telefono', 'tel', 'celular', 'whatsapp', 'numero'],
+    patente: ['patente', 'dominio'],
+    fecha: ['fecha', 'vencimiento', 'fechaoblea', 'fechavencimiento'],
+    dni: ['dni', 'documento'],
+    marca: ['marca'], modelo: ['modelo'],
+  };
+
+  function looksLikeHeaderRow(row) {
+    return row.some(cell => {
+      const n = normalizeHeader(cell);
+      return Object.values(HEADER_SYNONYMS).some(syns => syns.includes(n));
+    });
+  }
+
+  function matchColumns(headerRow) {
+    const norm = headerRow.map(normalizeHeader);
+    const map = {};
+    Object.entries(HEADER_SYNONYMS).forEach(([field, syns]) => {
+      const idx = norm.findIndex(h => syns.includes(h));
+      if (idx !== -1) map[field] = idx;
+    });
+    return map;
+  }
+
+  // Interpreta el texto pegado/subido: con encabezado reconocible usa esas
+  // columnas; si no, asume el formato real de la base del taller
+  // (patente, teléfono, fecha) sin encabezado.
+  function parseBulkImportText(text) {
+    const allRows = parseCSV(text);
+    if (!allRows.length) return [];
+    let dataRows = allRows;
+    let colMap = { patente: 0, telefono: 1, fecha: 2 };
+    if (looksLikeHeaderRow(allRows[0])) {
+      colMap = matchColumns(allRows[0]);
+      dataRows = allRows.slice(1);
+    }
+    const parsed = dataRows.map(row => {
+      const rawPatente = (colMap.patente !== undefined ? row[colMap.patente] : '') || '';
+      const rawTelefono = (colMap.telefono !== undefined ? row[colMap.telefono] : '') || '';
+      const rawFecha = (colMap.fecha !== undefined ? row[colMap.fecha] : '') || '';
+      const rawNombre = (colMap.nombre !== undefined ? row[colMap.nombre] : '') || '';
+      const patente = rawPatente.trim().toUpperCase().replace(/\s+/g, '');
+      const telefono = extractPhoneDigits(rawTelefono);
+      const fecha_oblea = parseDateLenient(rawFecha);
+      return {
+        patente,
+        nombre: rawNombre.trim(),
+        telefono: telefono || '',
+        notas: telefono ? '' : (rawTelefono.trim() ? `Teléfono original en planilla: ${rawTelefono.trim()}` : ''),
+        fecha_oblea: fecha_oblea || '',
+        fechaSinParsear: !fecha_oblea && rawFecha.trim() ? rawFecha.trim() : '',
+      };
+    }).filter(r => r.patente);
+
+    // Deduplicar por patente: nos quedamos con la fecha parseable más reciente.
+    const byPatente = new Map();
+    parsed.forEach(r => {
+      const prev = byPatente.get(r.patente);
+      if (!prev) { byPatente.set(r.patente, r); return; }
+      if (r.fecha_oblea && (!prev.fecha_oblea || r.fecha_oblea > prev.fecha_oblea)) {
+        byPatente.set(r.patente, { ...r, telefono: r.telefono || prev.telefono, notas: r.notas || prev.notas });
+      } else if (!prev.telefono && r.telefono) {
+        byPatente.set(r.patente, { ...prev, telefono: r.telefono });
+      }
+    });
+    return Array.from(byPatente.values());
+  }
+
+  function bulkImportPanel() {
+    const rows = bulkImportRows;
+    const existentes = new Set(clientes.map(c => (c.patente || '').toUpperCase()));
+    const previewRows = rows.slice(0, 50);
+    return `<div class="panel" id="bulk-import-panel">
+      <h2>Importar clientes</h2>
+      <p class="scan-sub">Subí un archivo CSV, o pegá directamente las filas (patente, teléfono, fecha) en la caja de texto. Funciona con o sin encabezados.</p>
+      <input type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values,text/plain" id="bulk-import-file">
+      <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">O pegá acá</label>
+      <textarea id="bulk-import-text" placeholder="EIJ507	2235776850	1/03/2024"></textarea>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-bulk-parse">Previsualizar</button>
+      </div>
+      ${rows.length ? `
+        <div class="import-summary">${rows.length} fila(s) detectada(s)${rows.length > 50 ? ' (mostrando las primeras 50)' : ''}. Las que ya existen (misma patente) vienen destildadas.</div>
+        <div class="import-preview">
+          <table>
+            <thead><tr><th></th><th>Patente</th><th>Teléfono</th><th>Vencimiento oblea</th><th>Notas</th></tr></thead>
+            <tbody>
+              ${previewRows.map((r, i) => {
+                const yaExiste = existentes.has(r.patente);
+                const checked = bulkImportSkip.has(i) ? '' : 'checked';
+                return `<tr>
+                  <td><input type="checkbox" data-bulk-row="${i}" ${checked}></td>
+                  <td>${escapeHtml(r.patente)}</td>
+                  <td>${escapeHtml(r.telefono || '(sin teléfono)')}</td>
+                  <td>${r.fecha_oblea ? fmtDate(r.fecha_oblea) : (r.fechaSinParsear ? 'no reconocida: ' + escapeHtml(r.fechaSinParsear) : '—')}</td>
+                  <td>${yaExiste ? '<span class="badge badge-warn">Ya existe</span>' : (r.notas ? escapeHtml(r.notas) : '')}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-bulk-confirm">Confirmar importación</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-bulk-cancel">Cancelar</button>
+        </div>
+      ` : ''}
+    </div>`;
+  }
+
   function sortedFiltered(query) {
     let list = clientes.slice();
     if (query) {
@@ -438,11 +726,50 @@ window.storage = {
     return (str || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   }
 
+  // Escapa un valor para CSV: neutraliza caracteres que Excel/Sheets podría
+  // interpretar como el inicio de una fórmula, y entrecomilla si hace falta.
+  function csvEscape(val) {
+    let s = (val === null || val === undefined) ? '' : String(val);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  function exportClientesCSV() {
+    const headers = [
+      'Nombre', 'DNI', 'Domicilio', 'Provincia', 'Ciudad', 'Teléfono',
+      'Patente', 'Marca', 'Modelo', 'Tipo de vehículo', 'Uso',
+      'Vencimiento Oblea', 'Última revisión CRPC', 'Periodicidad cilindro',
+      'Último trámite (tipo)', 'Último trámite (fecha)', 'Estado último trámite', 'Notas'
+    ];
+    const rows = clientes.map(c => {
+      const lt = latestTramite(c);
+      return [
+        c.nombre, c.dni, c.domicilio, c.provincia, c.ciudad, c.telefono,
+        c.patente, c.marca, c.modelo, c.tipo_vehiculo, c.uso,
+        fmtDate(c.fecha_oblea), fmtMonthYear(c.fecha_crpc),
+        c.tipo_cilindro === '3' ? '3 años' : '5 años',
+        lt ? tramiteTipoLabel(lt.tipo) : '', lt ? fmtDate(lt.fecha) : '', lt ? ESTADO_PEC_LABELS[lt.estadoPec] : '',
+        c.notas || ''
+      ].map(csvEscape).join(',');
+    });
+    const csv = [headers.map(csvEscape).join(','), ...rows].join('\r\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `clientes_${(tallerNombre || 'taller').replace(/[^a-z0-9]+/gi, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   function docRowOblea(cliente) {
     const s = statusOf(cliente.fecha_oblea);
     const badgeClass = s.level === 'danger' ? 'badge-danger' : s.level === 'warn' ? 'badge-warn' : s.level === 'ok' ? 'badge-ok' : '';
     const waBtn = (s.level === 'danger' || s.level === 'warn') && cleanPhone(cliente.telefono)
-      ? `<a class="btn btn-wa" target="_blank" rel="noopener" href="${waLink(cliente, 'oblea')}">Avisar por WhatsApp</a>`
+      ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-mes="${cliente.id}" data-aviso-tipo="oblea" href="${waLink(cliente, 'oblea')}">Avisar por WhatsApp</a>`
       : '';
     return `<div class="doc-row">
       <div>
@@ -459,7 +786,7 @@ window.storage = {
     const badgeClass = s.level === 'danger' ? 'badge-danger' : s.level === 'warn' ? 'badge-warn' : s.level === 'ok' ? 'badge-ok' : '';
     const vencMY = phIso ? `${phIso.slice(5,7)}/${phIso.slice(0,4)}` : '—';
     const waBtn = (s.level === 'danger' || s.level === 'warn') && cleanPhone(cliente.telefono)
-      ? `<a class="btn btn-wa" target="_blank" rel="noopener" href="${waLink(cliente, 'prueba')}">Avisar por WhatsApp</a>`
+      ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-mes="${cliente.id}" data-aviso-tipo="prueba" href="${waLink(cliente, 'prueba')}">Avisar por WhatsApp</a>`
       : '';
     const sub = cliente.fecha_crpc
       ? `Últ. CRPC: ${fmtMonthYear(cliente.fecha_crpc)} · cada ${cliente.tipo_cilindro === '3' ? '3' : '5'} años`
@@ -482,7 +809,7 @@ window.storage = {
       <div class="client-top">
         <div>
           <div class="client-name">${escapeHtml(c.nombre)}</div>
-          <div class="client-meta">Patente ${escapeHtml(c.patente || 's/d')} ${(c.marca || c.modelo) ? '· ' + escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) : ''} ${c.telefono ? '· ' + escapeHtml(c.telefono) : ''}</div>
+          <div class="client-meta">Patente ${escapeHtml(c.patente || 's/d')} ${(c.marca || c.modelo) ? '· ' + escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) : ''} ${c.telefono ? '· ' + escapeHtml(c.telefono) : ''} ${c.tramites.length ? `· ${c.tramites.length} trámite(s)` : ''}</div>
         </div>
         <div class="client-actions">
           <button class="btn btn-agent" data-agent="${c.id}">${agentOpen ? 'Cerrar' : 'Pegar resultado del agente'}</button>
@@ -594,6 +921,26 @@ window.storage = {
     return out;
   }
 
+  // Todavía no tenemos un ejemplo real de lo que muestra la consulta pública
+  // de ENARGAS, así que por ahora reusamos las mismas etiquetas que ya
+  // buscamos en parseAgentText como primera pasada. Falta afinar esto
+  // cuando llegue un ejemplo real del resultado.
+  function parseEnargasText(text) {
+    return { ...parseAgentText(text), rawText: text };
+  }
+
+  function enargasPasteBox() {
+    return `<div class="agent-box" style="grid-column: 1/-1;">
+      <label>Pegá acá lo que te muestra la consulta de ENARGAS</label>
+      <textarea id="enargas-paste-text" placeholder="Pegá el resultado de la consulta por dominio..."></textarea>
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary btn-sm" id="btn-apply-enargas">Aplicar al formulario</button>
+      </div>
+      <div class="agent-hint">Todavía estamos mejorando esta función — puede que no reconozca todos los datos automáticamente. Si no completa algo, cargalo a mano.</div>
+      <div id="enargas-paste-result"></div>
+    </div>`;
+  }
+
   function scanBox() {
     const slots = [
       { key: 'foto1', label: 'Foto 1 — Documentos (lado A)' },
@@ -661,6 +1008,11 @@ window.storage = {
         <label>Patente
           <input type="text" id="f-patente" value="${escapeHtml(c.patente)}" placeholder="Ej: AB123CD">
         </label>
+        <div style="grid-column: 1/-1; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <a class="btn btn-ghost btn-sm" target="_blank" rel="noopener" href="https://www.enargas.gob.ar/secciones/gas-natural-comprimido/consulta-dominio.php">Buscar en ENARGAS ↗</a>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-enargas-paste">${enargasPasteOpen ? 'Cerrar' : 'Pegar resultado'}</button>
+        </div>
+        ${enargasPasteOpen ? enargasPasteBox() : ''}
         <label>Marca
           <input type="text" id="f-marca" value="${escapeHtml(c.marca)}" placeholder="Ej: Chevrolet">
         </label>
@@ -696,12 +1048,91 @@ window.storage = {
         <button class="btn btn-primary" id="btn-save">${existing ? 'Guardar cambios' : 'Agregar cliente'}</button>
         <button class="btn btn-ghost" id="btn-cancel">Cancelar</button>
       </div>
+
+      ${existing ? tramitesSection(existing) : ''}
     </div>`;
+  }
+
+  function tramiteRow(clienteId, t) {
+    const badgeClass = t.estadoPec === 'enviado' ? 'badge-ok' : t.estadoPec === 'incompleto' ? 'badge-danger' : 'badge-warn';
+    return `<div class="tramite-row">
+      <div>
+        <div class="doc-label">${tramiteTipoLabel(t.tipo)} · ${fmtDate(t.fecha)}</div>
+        ${t.detalle ? `<div class="doc-sub">${escapeHtml(t.detalle)}</div>` : ''}
+        ${t.estadoPec === 'incompleto' && t.motivoIncompleto ? `<div class="tramite-motivo">Motivo: ${escapeHtml(t.motivoIncompleto)}</div>` : ''}
+      </div>
+      <select data-tramite-status="${clienteId}" data-tramite-id="${t.id}">
+        <option value="pendiente" ${t.estadoPec === 'pendiente' ? 'selected' : ''}>Pendiente</option>
+        <option value="enviado" ${t.estadoPec === 'enviado' ? 'selected' : ''}>Enviado al PEC</option>
+        <option value="incompleto" ${t.estadoPec === 'incompleto' ? 'selected' : ''}>Incompleto</option>
+      </select>
+      <span class="badge ${badgeClass}">${ESTADO_PEC_LABELS[t.estadoPec]}</span>
+    </div>`;
+  }
+
+  function tramiteAddForm(c) {
+    return `<div class="agent-box" id="tramite-add-box">
+      <label>Nuevo trámite</label>
+      <div class="form-grid">
+        <label>Tipo
+          <select id="t-tipo">
+            ${TRAMITE_TIPOS.map(t => `<option value="${t.value}">${t.label}</option>`).join('')}
+          </select>
+        </label>
+        <label>Fecha
+          <input type="date" id="t-fecha" value="${new Date().toISOString().slice(0,10)}">
+        </label>
+      </div>
+      <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Detalle (equipo, observaciones)
+        <textarea id="t-detalle" placeholder="Ej: Cilindro N° serie 1540652, código 1N37..."></textarea>
+      </label>
+      <div class="form-grid" style="margin-top:10px;">
+        <label>Estado
+          <select id="t-estado">
+            <option value="pendiente">Pendiente</option>
+            <option value="enviado">Enviado al PEC</option>
+            <option value="incompleto">Incompleto</option>
+          </select>
+        </label>
+        <label>Motivo (si quedó incompleto)
+          <input type="text" id="t-motivo" placeholder="Ej: falta firma del propietario">
+        </label>
+      </div>
+      <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Firma del propietario (opcional en esta etapa)</label>
+      <div class="signature-box">
+        <canvas id="sig-canvas" width="600" height="200"></canvas>
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-sig-clear">Limpiar firma</button>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary btn-sm" id="btn-save-tramite">Guardar trámite</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-cancel-tramite">Cancelar</button>
+      </div>
+    </div>`;
+  }
+
+  function tramitesSection(c) {
+    const rows = c.tramites.slice().sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''))
+      .map(t => tramiteRow(c.id, t)).join('');
+    return `<h3>Trámites / historial</h3>
+      <div class="tramites-list">${rows || '<div class="empty" style="padding:16px;">Sin trámites cargados todavía.</div>'}</div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-add-tramite">${addingTramite ? 'Cerrar' : '+ Agregar trámite'}</button>
+      </div>
+      ${addingTramite ? tramiteAddForm(c) : ''}`;
   }
 
   let currentQuery = '';
   let showForm = false;
+  let showBulkImport = false;
+  let tramitesOpenFor = null;
+  let addingTramite = false;
+  let bulkImportRows = [];
+  let bulkImportSkip = new Set();
+  let enargasPasteOpen = false;
   const scanFiles = { 'foto1': null, 'foto2': null };
+  let currentSignature = null;
 
   // Comprime y redimensiona la foto en el navegador antes de guardarla,
   // para que no pese demasiado (las fotos de celular sin comprimir son
@@ -733,6 +1164,52 @@ window.storage = {
   function dataUrlParts(dataUrl) {
     const m = dataUrl.match(/^data:(.+);base64,(.*)$/);
     return m ? { mediaType: m[1], base64: m[2] } : null;
+  }
+
+  // Firma electrónica: canvas con soporte mouse y touch. Como render()
+  // reconstruye todo el DOM, el trazo se guarda en `currentSignature` en
+  // cada fin de trazo y se restaura acá mismo si ya había algo dibujado.
+  function attachSignaturePad(canvas) {
+    const ctx = canvas.getContext('2d');
+    ctx.strokeStyle = '#E9F1F6';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    let drawing = false, last = null;
+
+    if (currentSignature) {
+      const img = new Image();
+      img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      img.src = currentSignature;
+    }
+
+    function posFromEvent(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+      const point = e.touches ? e.touches[0] : e;
+      return { x: (point.clientX - rect.left) * scaleX, y: (point.clientY - rect.top) * scaleY };
+    }
+    function start(e) { e.preventDefault(); drawing = true; last = posFromEvent(e); }
+    function move(e) {
+      if (!drawing) return;
+      e.preventDefault();
+      const p = posFromEvent(e);
+      ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+      last = p;
+    }
+    function end() {
+      if (!drawing) return;
+      drawing = false;
+      currentSignature = canvas.toDataURL('image/png');
+    }
+
+    canvas.addEventListener('mousedown', start);
+    canvas.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
+    canvas.addEventListener('touchstart', start, { passive: false });
+    canvas.addEventListener('touchmove', move, { passive: false });
+    canvas.addEventListener('touchend', end);
+    canvas.addEventListener('touchcancel', end);
   }
 
   function setupScanBox() {
@@ -881,7 +1358,7 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
       <div class="wrap">
         <div class="topbar">
           <div class="brand">
-            <span class="tag">GNC</span>
+            <span class="tag">ESTELITA</span>
             <input class="taller-name-input" id="taller-input" value="${escapeHtml(tallerNombre)}">
             <button type="button" class="license-link" id="btn-change-license">Cambiar código de licencia</button>
           </div>
@@ -895,10 +1372,17 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
           </div>
         </div>
 
+        ${reminderBanner()}
+        ${incompletosBanner()}
+
         <div class="controls">
           <input class="search-input" type="text" id="search-input" placeholder="Buscar por nombre o patente..." value="${escapeHtml(currentQuery)}">
           <button class="btn btn-primary" id="btn-new">+ Nuevo cliente</button>
+          <button class="btn btn-ghost" id="btn-import">+ Importar clientes</button>
+          <button class="btn btn-ghost" id="btn-export-csv">Exportar CSV</button>
         </div>
+
+        ${showBulkImport ? bulkImportPanel() : ''}
 
         ${showForm || editing ? formPanel(editing) : ''}
 
@@ -910,6 +1394,18 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
 
     attachEvents();
     setupScanBox();
+    setupTramiteBox();
+  }
+
+  function setupTramiteBox() {
+    const canvas = root.querySelector('#sig-canvas');
+    if (canvas) attachSignaturePad(canvas);
+    const btnSigClear = root.querySelector('#btn-sig-clear');
+    if (btnSigClear) btnSigClear.addEventListener('click', () => {
+      currentSignature = null;
+      const c = root.querySelector('#sig-canvas');
+      if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height);
+    });
   }
 
   function attachEvents() {
@@ -940,13 +1436,98 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
     const btnNew = root.querySelector('#btn-new');
     if (btnNew) btnNew.addEventListener('click', () => {
       editingId = null; showForm = true;
+      showBulkImport = false;
+      enargasPasteOpen = false;
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
       render();
+    });
+
+    const btnExportCsv = root.querySelector('#btn-export-csv');
+    if (btnExportCsv) btnExportCsv.addEventListener('click', exportClientesCSV);
+
+    const btnImport = root.querySelector('#btn-import');
+    if (btnImport) btnImport.addEventListener('click', () => {
+      showForm = false; editingId = null;
+      showBulkImport = !showBulkImport;
+      bulkImportRows = []; bulkImportSkip = new Set();
+      render();
+    });
+
+    function applyBulkParsedRows(rows) {
+      bulkImportRows = rows;
+      const existentes = new Set(clientes.map(c => (c.patente || '').toUpperCase()));
+      bulkImportSkip = new Set();
+      rows.forEach((r, i) => { if (existentes.has(r.patente)) bulkImportSkip.add(i); });
+      render();
+    }
+
+    const bulkFileInput = root.querySelector('#bulk-import-file');
+    if (bulkFileInput) bulkFileInput.addEventListener('change', () => {
+      const file = bulkFileInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => applyBulkParsedRows(parseBulkImportText(e.target.result));
+      reader.readAsText(file);
+    });
+
+    const btnBulkParse = root.querySelector('#btn-bulk-parse');
+    if (btnBulkParse) btnBulkParse.addEventListener('click', () => {
+      const text = root.querySelector('#bulk-import-text').value || '';
+      if (!text.trim()) { alert('Pegá algo de texto o elegí un archivo primero.'); return; }
+      applyBulkParsedRows(parseBulkImportText(text));
+    });
+
+    root.querySelectorAll('[data-bulk-row]').forEach(chk => {
+      chk.addEventListener('change', () => {
+        const i = Number(chk.getAttribute('data-bulk-row'));
+        if (chk.checked) bulkImportSkip.delete(i); else bulkImportSkip.add(i);
+      });
+    });
+
+    const btnBulkCancel = root.querySelector('#btn-bulk-cancel');
+    if (btnBulkCancel) btnBulkCancel.addEventListener('click', () => {
+      showBulkImport = false; bulkImportRows = []; bulkImportSkip = new Set();
+      render();
+    });
+
+    const btnBulkConfirm = root.querySelector('#btn-bulk-confirm');
+    if (btnBulkConfirm) btnBulkConfirm.addEventListener('click', async () => {
+      let importados = 0, sinTelefono = 0, sinFecha = 0;
+      bulkImportRows.forEach((r, i) => {
+        if (bulkImportSkip.has(i)) return;
+        clientes.push({
+          id: 'c' + Date.now() + Math.random().toString(36).slice(2, 7),
+          nombre: r.nombre || r.patente, dni: '', domicilio: '', provincia: '', ciudad: '',
+          telefono: r.telefono || '', patente: r.patente, marca: '', modelo: '',
+          tipo_vehiculo: '', uso: '', fecha_oblea: r.fecha_oblea || '', fecha_crpc: '',
+          tipo_cilindro: '5', notas: r.notas || '', tramites: [], ultimoAvisoMes: {}
+        });
+        importados++;
+        if (!r.telefono) sinTelefono++;
+        if (!r.fecha_oblea) sinFecha++;
+      });
+      await saveClientes();
+      showBulkImport = false; bulkImportRows = []; bulkImportSkip = new Set();
+      render();
+      alert(`Se importaron ${importados} cliente(s). ${sinTelefono} sin teléfono reconocido, ${sinFecha} sin fecha de oblea reconocida — revisalos y completá lo que falte.`);
+    });
+
+    root.querySelectorAll('[data-aviso-mes]').forEach(a => {
+      a.addEventListener('click', async () => {
+        const id = a.getAttribute('data-aviso-mes');
+        const tipo = a.getAttribute('data-aviso-tipo');
+        const c = clientes.find(x => x.id === id);
+        if (!c) return;
+        c.ultimoAvisoMes[tipo] = currentYM();
+        await saveClientes();
+        render();
+      });
     });
 
     const btnCancel = root.querySelector('#btn-cancel');
     if (btnCancel) btnCancel.addEventListener('click', () => {
       showForm = false; editingId = null;
+      enargasPasteOpen = false;
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
       render();
     });
@@ -978,7 +1559,7 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
         clientes[idx] = { ...clientes[idx], ...data };
       } else {
         clientId = 'c' + Date.now() + Math.random().toString(36).slice(2,7);
-        clientes.push({ id: clientId, ...data });
+        clientes.push({ id: clientId, ...data, tramites: [], ultimoAvisoMes: {}, notas: '' });
       }
       await saveClientes();
 
@@ -1010,6 +1591,9 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
         editingId = id;
         showForm = false;
         agentBoxOpenFor = null;
+        addingTramite = false;
+        enargasPasteOpen = false;
+        currentSignature = null;
         render();
         const panel = root.querySelector('#form-panel');
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1026,6 +1610,98 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
           try { await window.storage.delete(`fotos:${id}`, false); } catch (e) { /* no tenía fotos, ok */ }
           render();
         }
+      });
+    });
+
+    const btnToggleEnargas = root.querySelector('#btn-toggle-enargas-paste');
+    if (btnToggleEnargas) btnToggleEnargas.addEventListener('click', () => {
+      enargasPasteOpen = !enargasPasteOpen;
+      render();
+    });
+
+    const btnApplyEnargas = root.querySelector('#btn-apply-enargas');
+    if (btnApplyEnargas) btnApplyEnargas.addEventListener('click', () => {
+      const textarea = root.querySelector('#enargas-paste-text');
+      const resultBox = root.querySelector('#enargas-paste-result');
+      const parsed = parseEnargasText(textarea.value || '');
+      const map = {
+        nombre: '#f-nombre', dni: '#f-dni', domicilio: '#f-domicilio',
+        provincia: '#f-provincia', ciudad: '#f-ciudad', patente: '#f-patente',
+        marca: '#f-marca', modelo: '#f-modelo', tipo_vehiculo: '#f-tipo-vehiculo',
+        uso: '#f-uso', fecha_oblea: '#f-oblea', fecha_crpc: '#f-crpc'
+      };
+      Object.entries(map).forEach(([key, sel]) => {
+        if (parsed[key]) {
+          const el = root.querySelector(sel);
+          if (el) el.value = key === 'patente' ? String(parsed[key]).toUpperCase() : parsed[key];
+        }
+      });
+      if (parsed.found.length === 0) {
+        resultBox.className = 'agent-result err';
+        resultBox.textContent = 'No reconocí datos con formato conocido en ese texto — revisá el formulario y completá a mano lo que falte.';
+      } else {
+        resultBox.className = 'agent-result';
+        resultBox.textContent = 'Aplicado: ' + parsed.found.join(' · ');
+      }
+    });
+
+    const btnAddTramite = root.querySelector('#btn-add-tramite');
+    if (btnAddTramite) btnAddTramite.addEventListener('click', () => {
+      addingTramite = !addingTramite;
+      currentSignature = null;
+      render();
+    });
+
+    const btnCancelTramite = root.querySelector('#btn-cancel-tramite');
+    if (btnCancelTramite) btnCancelTramite.addEventListener('click', () => {
+      addingTramite = false;
+      currentSignature = null;
+      render();
+    });
+
+    const btnSaveTramite = root.querySelector('#btn-save-tramite');
+    if (btnSaveTramite) btnSaveTramite.addEventListener('click', async () => {
+      if (!editingId) return;
+      const idx = clientes.findIndex(c => c.id === editingId);
+      if (idx === -1) return;
+      const tipo = root.querySelector('#t-tipo').value;
+      const fecha = root.querySelector('#t-fecha').value;
+      if (!fecha) { alert('Poné una fecha para el trámite.'); return; }
+      const estadoPec = root.querySelector('#t-estado').value;
+      const tramite = {
+        id: 't' + Date.now() + Math.random().toString(36).slice(2, 7),
+        tipo,
+        fecha,
+        detalle: root.querySelector('#t-detalle').value.trim(),
+        estadoPec,
+        motivoIncompleto: estadoPec === 'incompleto' ? root.querySelector('#t-motivo').value.trim() : '',
+        firma: currentSignature,
+        creadoEn: new Date().toISOString(),
+      };
+      clientes[idx].tramites.push(tramite);
+      if (tipo === 'prueba_hidraulica') clientes[idx].fecha_crpc = fecha.slice(0, 7);
+      await saveClientes();
+      addingTramite = false;
+      currentSignature = null;
+      render();
+    });
+
+    root.querySelectorAll('[data-tramite-status]').forEach(sel => {
+      sel.addEventListener('change', async () => {
+        const clienteId = sel.getAttribute('data-tramite-status');
+        const tramiteId = sel.getAttribute('data-tramite-id');
+        const c = clientes.find(x => x.id === clienteId);
+        if (!c) return;
+        const t = c.tramites.find(x => x.id === tramiteId);
+        if (!t) return;
+        t.estadoPec = sel.value;
+        if (t.estadoPec !== 'incompleto') t.motivoIncompleto = '';
+        else {
+          const motivo = prompt('¿Cuál es el motivo por el que quedó incompleto?', t.motivoIncompleto || '');
+          t.motivoIncompleto = motivo || '';
+        }
+        await saveClientes();
+        render();
       });
     });
 
