@@ -1,4 +1,4 @@
-# Mi Taller GNC — cómo publicarlo en tu propio sitio
+# Estelita — cómo publicarlo en tu propio sitio
 
 Esta carpeta ya tiene todo armado. Vas a usar **Vercel** (tiene un plan gratis
 de sobra para este uso, no pide tarjeta de crédito para el plan gratuito).
