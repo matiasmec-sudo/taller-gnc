@@ -925,8 +925,9 @@ window.storage = {
     const mCiudad = text.match(/(?:ciudad|localidad)[:\s]+([^\n,;]{3,40})/i);
     if (mCiudad) { out.ciudad = mCiudad[1].trim(); out.found.push(`Ciudad: ${out.ciudad}`); }
 
-    // Patente / Dominio
-    const mPatente = text.match(/(?:patente|dominio)[:\s]+([A-Za-z0-9\s-]{5,10})/i);
+    // Patente / Dominio (espacio literal, no \s, para no comerse el
+    // renglón/sección siguiente cuando el texto pegado tiene líneas en blanco)
+    const mPatente = text.match(/(?:patente|dominio)[:\s]+([A-Za-z0-9 -]{5,10})/i);
     if (mPatente) { out.patente = mPatente[1].replace(/\s|-/g,'').toUpperCase(); out.found.push(`Patente: ${out.patente}`); }
 
     // Marca
@@ -948,12 +949,72 @@ window.storage = {
     return out;
   }
 
-  // Todavía no tenemos un ejemplo real de lo que muestra la consulta pública
-  // de ENARGAS, así que por ahora reusamos las mismas etiquetas que ya
-  // buscamos en parseAgentText como primera pasada. Falta afinar esto
-  // cuando llegue un ejemplo real del resultado.
+  // Ajustado con un ejemplo real del "Detalle de la operación" del SIC de
+  // ENARGAS (pantalla a la que se llega tras la consulta por dominio):
+  // trae Marca/Modelo/Año/Uso/Dominio del vehículo, "Fecha Vencimiento" de
+  // la Oblea, y tablas de Regulador/Cilindro/Válvula con Código
+  // Homologación + Número de Serie (+ Fecha Fab./CRPC/Fecha CRPC en el
+  // cilindro). Como no sabemos todavía cómo queda el texto exacto al
+  // copiar y pegar esa pantalla (recién vimos una captura), esto puede
+  // necesitar un ajuste fino la primera vez que alguien lo use de verdad.
   function parseEnargasText(text) {
-    return { ...parseAgentText(text), rawText: text };
+    const out = { ...parseAgentText(text), rawText: text };
+
+    const mVenc = text.match(/fecha\s*vencimiento[:\s]*\n?\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})/i);
+    if (mVenc) {
+      let [, d, m, y] = mVenc;
+      if (y.length === 2) y = '20' + y;
+      out.fecha_oblea = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+      out.found.push(`Vencimiento Oblea: ${d}/${m}/${y}`);
+    }
+
+    const mAnio = text.match(/a[nñ]o[:\s]*\n?\s*(\d{4})/i);
+    if (mAnio) { out.anio = mAnio[1]; out.found.push(`Año: ${mAnio[1]}`); }
+
+    out.equipo = parseEnargasEquipo(text);
+    return out;
+  }
+
+  // Recorta el texto a partir de cada encabezado de sección conocido y
+  // busca dentro un código de homologación (2 letras + 2/3 números, ej.
+  // "TT01", "CC35") y un número de serie (una tira larga de dígitos).
+  function parseEnargasEquipo(text) {
+    function seccion(patronInicio, patronFin) {
+      const iniMatch = text.match(patronInicio);
+      if (!iniMatch) return '';
+      const desde = iniMatch.index + iniMatch[0].length;
+      const resto = text.slice(desde);
+      const finMatch = patronFin ? resto.match(patronFin) : null;
+      return finMatch ? resto.slice(0, finMatch.index) : resto.slice(0, 300);
+    }
+    function codigoYSerie(bloque) {
+      const mCod = bloque.match(/\b([A-Z]{2}\d{2,3})\b/);
+      const mSerie = bloque.match(/\b(\d{4,10})\b/);
+      return { codigo: mCod ? mCod[1] : '', serie: mSerie ? mSerie[1] : '' };
+    }
+
+    const regBloque = seccion(/datos\s*(?:del\s*)?regulador/i, /datos\s*(?:del\s*)?cilindro/i);
+    const cilBloque = seccion(/datos\s*(?:del\s*)?cilindro(?!.*v[aá]lvula)/i, /datos?\s*v[aá]lvula/i);
+    const valBloque = seccion(/datos?\s*v[aá]lvula/i, /informaci[oó]n\s*desplegada|declaraci[oó]n\s*jurada/i);
+
+    const regulador = codigoYSerie(regBloque);
+    const cilindro = codigoYSerie(cilBloque);
+    const valvula = codigoYSerie(valBloque);
+
+    // En la tabla del SIC los encabezados ("Fecha Fab.", "Fecha CRPC") van
+    // en una fila y los valores en la siguiente, lejos uno del otro — así
+    // que en vez de buscar el valor pegado a la etiqueta, tomamos las
+    // fechas tipo mes/año en el orden en que aparecen: la primera es
+    // Fecha Fab. y la segunda, si existe, es Fecha CRPC.
+    const fechasNN = [...cilBloque.matchAll(/(\d{1,2})\s*\/\s*(\d{1,2})(?!\d)/g)];
+    function mesAnio(m) {
+      return { mes: m[1], anio: m[2].length <= 2 ? '20' + m[2].padStart(2, '0') : m[2] };
+    }
+    if (fechasNN[0]) { const f = mesAnio(fechasNN[0]); cilindro.fabricadoMes = f.mes; cilindro.fabricadoAnio = f.anio; }
+    if (fechasNN[1]) { const f = mesAnio(fechasNN[1]); cilindro.revisadoMes = f.mes; cilindro.revisadoAnio = f.anio; }
+
+    const hayAlgo = [regulador, cilindro, valvula].some(e => e.codigo || e.serie);
+    return hayAlgo ? { regulador, cilindro, valvula } : null;
   }
 
   function enargasPasteBox() {
@@ -1246,7 +1307,12 @@ window.storage = {
   }
 
   function equipoSection(eq) {
-    return `${reguladorFields(eq)}
+    return `<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+        <a class="btn btn-ghost btn-sm" target="_blank" rel="noopener" href="https://www.enargas.gob.ar/secciones/gas-natural-comprimido/consulta-dominio.php">Buscar en ENARGAS ↗</a>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-enargas-equipo">${enargasEquipoPasteOpen ? 'Cerrar' : 'Pegar resultado del SIC'}</button>
+      </div>
+      ${enargasEquipoPasteOpen ? enargasEquipoPasteBox() : ''}
+      ${reguladorFields(eq)}
       <h3>Cilindros</h3>
       ${eq.cilindros.map((cil, i) => cilindroRow(i, cil)).join('')}
       <div class="form-actions"><button type="button" class="btn btn-ghost btn-sm" id="btn-add-cilindro">+ Agregar cilindro</button></div>
@@ -1254,6 +1320,18 @@ window.storage = {
       ${eq.valvulas.map((val, i) => valvulaRow(i, val)).join('')}
       <div class="form-actions"><button type="button" class="btn btn-ghost btn-sm" id="btn-add-valvula">+ Agregar válvula</button></div>
       ${otrosEquiposDetails(eq)}`;
+  }
+
+  function enargasEquipoPasteBox() {
+    return `<div class="agent-box">
+      <label>Pegá acá el "Detalle de la operación" del SIC (después de buscar por dominio)</label>
+      <textarea id="enargas-equipo-paste-text" placeholder="Pegá el resultado de la consulta..."></textarea>
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary btn-sm" id="btn-apply-enargas-equipo">Aplicar a regulador/cilindro/válvula</button>
+      </div>
+      <div class="agent-hint">También completa la fecha de vencimiento de la Oblea y el año del vehículo si aparecen en el texto pegado.</div>
+      <div id="enargas-equipo-paste-result"></div>
+    </div>`;
   }
 
   function tramiteAddForm(c) {
@@ -1320,6 +1398,7 @@ window.storage = {
   let bulkImportRows = [];
   let bulkImportSkip = new Set();
   let enargasPasteOpen = false;
+  let enargasEquipoPasteOpen = false;
   const scanFiles = { 'foto1': null, 'foto2': null };
   let currentSignature = null;
   let tramiteDraftEquipo = null;
@@ -1871,6 +1950,7 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
         agentBoxOpenFor = null;
         addingTramite = false;
         enargasPasteOpen = false;
+        enargasEquipoPasteOpen = false;
         currentSignature = null;
         tramiteDraftEquipo = null;
         render();
@@ -1907,7 +1987,7 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
         nombre: '#f-nombre', dni: '#f-dni', domicilio: '#f-domicilio',
         provincia: '#f-provincia', ciudad: '#f-ciudad', patente: '#f-patente',
         marca: '#f-marca', modelo: '#f-modelo', tipo_vehiculo: '#f-tipo-vehiculo',
-        uso: '#f-uso', fecha_oblea: '#f-oblea', fecha_crpc: '#f-crpc'
+        uso: '#f-uso', fecha_oblea: '#f-oblea', fecha_crpc: '#f-crpc', anio: '#f-anio'
       };
       Object.entries(map).forEach(([key, sel]) => {
         if (parsed[key]) {
@@ -1928,6 +2008,7 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
     if (btnAddTramite) btnAddTramite.addEventListener('click', () => {
       addingTramite = !addingTramite;
       currentSignature = null;
+      enargasEquipoPasteOpen = false;
       tramiteDraftEquipo = addingTramite ? blankEquipo() : null;
       render();
     });
@@ -1936,7 +2017,56 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
     if (btnCancelTramite) btnCancelTramite.addEventListener('click', () => {
       addingTramite = false;
       currentSignature = null;
+      enargasEquipoPasteOpen = false;
       tramiteDraftEquipo = null;
+      render();
+    });
+
+    const btnToggleEnargasEquipo = root.querySelector('#btn-toggle-enargas-equipo');
+    if (btnToggleEnargasEquipo) btnToggleEnargasEquipo.addEventListener('click', () => {
+      enargasEquipoPasteOpen = !enargasEquipoPasteOpen;
+      render();
+    });
+
+    const btnApplyEnargasEquipo = root.querySelector('#btn-apply-enargas-equipo');
+    if (btnApplyEnargasEquipo) btnApplyEnargasEquipo.addEventListener('click', async () => {
+      const textarea = root.querySelector('#enargas-equipo-paste-text');
+      const resultBox = root.querySelector('#enargas-equipo-paste-result');
+      const parsed = parseEnargasText(textarea.value || '');
+      syncEquipoFromDOM();
+      const aplicados = [];
+      if (parsed.equipo) {
+        if (parsed.equipo.regulador.codigo || parsed.equipo.regulador.serie) {
+          Object.assign(tramiteDraftEquipo.regulador, parsed.equipo.regulador);
+          aplicados.push('Regulador');
+        }
+        if (parsed.equipo.cilindro.codigo || parsed.equipo.cilindro.serie) {
+          Object.assign(tramiteDraftEquipo.cilindros[0], parsed.equipo.cilindro);
+          aplicados.push('Cilindro');
+        }
+        if (parsed.equipo.valvula.codigo || parsed.equipo.valvula.serie) {
+          Object.assign(tramiteDraftEquipo.valvulas[0], parsed.equipo.valvula);
+          aplicados.push('Válvula');
+        }
+      }
+      // fecha_oblea/año pertenecen al cliente, no al trámite en curso — se
+      // guardan directo (como ya hace el resto de las cajas de "aplicar")
+      // para que no se pierdan cuando este render() reconstruya el <input>.
+      if (parsed.fecha_oblea || parsed.anio) {
+        const idx = clientes.findIndex(x => x.id === editingId);
+        if (idx !== -1) {
+          if (parsed.fecha_oblea) { clientes[idx].fecha_oblea = parsed.fecha_oblea; aplicados.push('Vencimiento Oblea'); }
+          if (parsed.anio) { clientes[idx].anio = parsed.anio; aplicados.push('Año'); }
+          await saveClientes();
+        }
+      }
+      if (aplicados.length === 0) {
+        resultBox.className = 'agent-result err';
+        resultBox.textContent = 'No reconocí datos de equipo en ese texto — completá los campos a mano.';
+      } else {
+        resultBox.className = 'agent-result';
+        resultBox.textContent = 'Aplicado: ' + aplicados.join(' · ');
+      }
       render();
     });
 
@@ -1998,6 +2128,7 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
       await saveClientes();
       addingTramite = false;
       currentSignature = null;
+      enargasEquipoPasteOpen = false;
       tramiteDraftEquipo = null;
       render();
     });
