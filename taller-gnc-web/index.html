@@ -436,6 +436,7 @@ window.storage = {
   }
 
   const ESTADO_PEC_LABELS = { pendiente: 'Pendiente', enviado: 'Enviado al PEC', incompleto: 'Incompleto' };
+  const USO_VEHICULO_OPCIONES = ['Auto', 'Pick Up', 'Moto', 'Taxi', 'Particular', 'Bus', 'Oficial', 'Otros'];
 
   // Trámite más reciente de un cliente (opcionalmente filtrado por tipo/s).
   function latestTramite(c, tipos) {
@@ -765,7 +766,7 @@ window.storage = {
   function exportClientesCSV() {
     const headers = [
       'Nombre', 'Tipo de documento', 'N° Documento', 'Calle', 'N°', 'Piso/Depto', 'CPA', 'Provincia', 'Ciudad', 'Teléfono',
-      'Patente', 'Marca', 'Modelo', 'Año', 'Inyección', 'Tipo de vehículo', 'Uso',
+      'Patente', 'Marca', 'Modelo', 'Año', 'Inyección', 'Uso',
       'Vencimiento Oblea', 'Última revisión CRPC', 'Periodicidad cilindro',
       'Último trámite (tipo)', 'Último trámite (fecha)', 'Estado último trámite', 'Notas'
     ];
@@ -773,7 +774,7 @@ window.storage = {
       const lt = latestTramite(c);
       return [
         c.nombre, c.tipo_documento || 'DNI', c.dni, c.domicilio, c.numero, c.piso, c.cpa, c.provincia, c.ciudad, c.telefono,
-        c.patente, c.marca, c.modelo, c.anio, c.inyeccion === 'si' ? 'Sí' : 'No', c.tipo_vehiculo, c.uso,
+        c.patente, c.marca, c.modelo, c.anio, c.inyeccion === 'si' ? 'Sí' : 'No', c.uso,
         fmtDate(c.fecha_oblea), fmtMonthYear(c.fecha_crpc),
         c.tipo_cilindro === '3' ? '3 años' : '5 años',
         lt ? tramiteTipoLabel(lt.tipo) : '', lt ? fmtDate(lt.fecha) : '', lt ? ESTADO_PEC_LABELS[lt.estadoPec] : '',
@@ -1159,9 +1160,10 @@ window.storage = {
           <input type="text" id="f-patente" value="${escapeHtml(c.patente)}" placeholder="Ej: AB123CD">
         </label>
         <div style="grid-column: 1/-1; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-          <a class="btn btn-ghost btn-sm" target="_blank" rel="noopener" href="https://www.enargas.gob.ar/secciones/gas-natural-comprimido/consulta-dominio.php">Buscar en ENARGAS ↗</a>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-buscar-enargas" data-patente="${escapeHtml(c.patente)}">Buscar en ENARGAS ↗</button>
           <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-enargas-paste">${enargasPasteOpen ? 'Cerrar' : 'Pegar resultado'}</button>
         </div>
+        <div id="enargas-copy-hint" class="agent-hint" style="display:none; grid-column: 1/-1;"></div>
         ${enargasPasteOpen ? enargasPasteBox() : ''}
         <label>Marca
           <input type="text" id="f-marca" value="${escapeHtml(c.marca)}" placeholder="Ej: Chevrolet">
@@ -1178,11 +1180,11 @@ window.storage = {
             <option value="no" ${c.inyeccion !== 'si' ? 'selected' : ''}>No</option>
           </select>
         </label>
-        <label>Tipo
-          <input type="text" id="f-tipo-vehiculo" value="${escapeHtml(c.tipo_vehiculo)}" placeholder="Ej: Automóvil">
-        </label>
         <label>Uso
-          <input type="text" id="f-uso" value="${escapeHtml(c.uso)}" placeholder="Ej: Particular">
+          <select id="f-uso">
+            <option value="" ${!c.uso ? 'selected' : ''}>-- Elegí --</option>
+            ${USO_VEHICULO_OPCIONES.map(o => `<option value="${o}" ${c.uso === o ? 'selected' : ''}>${o}</option>`).join('')}
+          </select>
         </label>
       </div>
       <h3>Oblea</h3>
@@ -1307,11 +1309,7 @@ window.storage = {
   }
 
   function equipoSection(eq) {
-    return `<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
-        <a class="btn btn-ghost btn-sm" target="_blank" rel="noopener" href="https://www.enargas.gob.ar/secciones/gas-natural-comprimido/consulta-dominio.php">Buscar en ENARGAS ↗</a>
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-enargas-equipo">${enargasEquipoPasteOpen ? 'Cerrar' : 'Pegar resultado del SIC'}</button>
-      </div>
-      ${enargasEquipoPasteOpen ? enargasEquipoPasteBox() : ''}
+    return `<p class="agent-hint" style="margin-top:0;">Tip: si pegás el resultado de ENARGAS con "Pegar resultado" (arriba, en Datos del vehículo) mientras estás cargando este trámite, también completa el regulador, el cilindro y la válvula acá abajo.</p>
       ${reguladorFields(eq)}
       <h3>Cilindros</h3>
       ${eq.cilindros.map((cil, i) => cilindroRow(i, cil)).join('')}
@@ -1320,18 +1318,6 @@ window.storage = {
       ${eq.valvulas.map((val, i) => valvulaRow(i, val)).join('')}
       <div class="form-actions"><button type="button" class="btn btn-ghost btn-sm" id="btn-add-valvula">+ Agregar válvula</button></div>
       ${otrosEquiposDetails(eq)}`;
-  }
-
-  function enargasEquipoPasteBox() {
-    return `<div class="agent-box">
-      <label>Pegá acá el "Detalle de la operación" del SIC (después de buscar por dominio)</label>
-      <textarea id="enargas-equipo-paste-text" placeholder="Pegá el resultado de la consulta..."></textarea>
-      <div class="form-actions">
-        <button type="button" class="btn btn-primary btn-sm" id="btn-apply-enargas-equipo">Aplicar a regulador/cilindro/válvula</button>
-      </div>
-      <div class="agent-hint">También completa la fecha de vencimiento de la Oblea y el año del vehículo si aparecen en el texto pegado.</div>
-      <div id="enargas-equipo-paste-result"></div>
-    </div>`;
   }
 
   function tramiteAddForm(c) {
@@ -1398,7 +1384,6 @@ window.storage = {
   let bulkImportRows = [];
   let bulkImportSkip = new Set();
   let enargasPasteOpen = false;
-  let enargasEquipoPasteOpen = false;
   const scanFiles = { 'foto1': null, 'foto2': null };
   let currentSignature = null;
   let tramiteDraftEquipo = null;
@@ -1569,7 +1554,7 @@ window.storage = {
       const map = {
         nombre: '#f-nombre', dni: '#f-dni', domicilio: '#f-domicilio',
         provincia: '#f-provincia', ciudad: '#f-ciudad', patente: '#f-patente',
-        marca: '#f-marca', modelo: '#f-modelo', tipo_vehiculo: '#f-tipo-vehiculo',
+        marca: '#f-marca', modelo: '#f-modelo',
         uso: '#f-uso', fecha_oblea: '#f-oblea', fecha_crpc: '#f-crpc'
       };
       Object.entries(map).forEach(([key, sel]) => {
@@ -1645,7 +1630,7 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
       const fieldMap = {
         nombre: '#f-nombre', dni: '#f-dni', domicilio: '#f-domicilio',
         provincia: '#f-provincia', ciudad: '#f-ciudad', patente: '#f-patente',
-        marca: '#f-marca', modelo: '#f-modelo', tipo_vehiculo: '#f-tipo-vehiculo',
+        marca: '#f-marca', modelo: '#f-modelo',
         uso: '#f-uso'
       };
       Object.entries(fieldMap).forEach(([key, sel]) => {
@@ -1903,8 +1888,7 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
         modelo: root.querySelector('#f-modelo').value.trim(),
         anio: root.querySelector('#f-anio').value.trim(),
         inyeccion: root.querySelector('#f-inyeccion').value,
-        tipo_vehiculo: root.querySelector('#f-tipo-vehiculo').value.trim(),
-        uso: root.querySelector('#f-uso').value.trim(),
+        uso: root.querySelector('#f-uso').value,
         fecha_oblea: root.querySelector('#f-oblea').value,
         fecha_crpc: root.querySelector('#f-crpc').value,
         tipo_cilindro: root.querySelector('#f-tipo-cilindro').value,
@@ -1950,7 +1934,6 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
         agentBoxOpenFor = null;
         addingTramite = false;
         enargasPasteOpen = false;
-        enargasEquipoPasteOpen = false;
         currentSignature = null;
         tramiteDraftEquipo = null;
         render();
@@ -1972,6 +1955,23 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
       });
     });
 
+    const btnBuscarEnargas = root.querySelector('#btn-buscar-enargas');
+    if (btnBuscarEnargas) btnBuscarEnargas.addEventListener('click', async () => {
+      const url = 'https://www.enargas.gob.ar/secciones/gas-natural-comprimido/consulta-dominio.php';
+      const patente = btnBuscarEnargas.getAttribute('data-patente');
+      const hint = root.querySelector('#enargas-copy-hint');
+      // window.open (en vez de un <a target="_blank">) para que abra en una
+      // pestaña/ventana nueva de verdad incluso instalado como app en el
+      // celular, donde un link común a veces navega en la misma ventana.
+      window.open(url, '_blank', 'noopener');
+      if (patente && navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(patente);
+          if (hint) { hint.style.display = 'block'; hint.textContent = `Copiamos "${patente}" al portapapeles — pegala (mantené apretado y "Pegar") en el campo Dominio de esa página.`; }
+        } catch (e) { /* el navegador no dejó copiar, no pasa nada */ }
+      }
+    });
+
     const btnToggleEnargas = root.querySelector('#btn-toggle-enargas-paste');
     if (btnToggleEnargas) btnToggleEnargas.addEventListener('click', () => {
       enargasPasteOpen = !enargasPasteOpen;
@@ -1979,14 +1979,53 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
     });
 
     const btnApplyEnargas = root.querySelector('#btn-apply-enargas');
-    if (btnApplyEnargas) btnApplyEnargas.addEventListener('click', () => {
+    if (btnApplyEnargas) btnApplyEnargas.addEventListener('click', async () => {
       const textarea = root.querySelector('#enargas-paste-text');
       const resultBox = root.querySelector('#enargas-paste-result');
       const parsed = parseEnargasText(textarea.value || '');
+      const aplicados = parsed.found.slice();
+      const idx = editingId ? clientes.findIndex(x => x.id === editingId) : -1;
+
+      if (idx !== -1) {
+        // Cliente ya guardado: escribimos directo en el objeto (no en los
+        // <input> en vivo) para que la actualización sobreviva al render()
+        // que hace falta para reflejar también el equipo del trámite en curso.
+        const campos = {
+          nombre: parsed.nombre, dni: parsed.dni, domicilio: parsed.domicilio,
+          provincia: parsed.provincia, ciudad: parsed.ciudad,
+          patente: parsed.patente ? String(parsed.patente).toUpperCase() : null,
+          marca: parsed.marca, modelo: parsed.modelo, uso: parsed.uso,
+          fecha_oblea: parsed.fecha_oblea, fecha_crpc: parsed.fecha_crpc, anio: parsed.anio,
+        };
+        Object.entries(campos).forEach(([key, val]) => { if (val) clientes[idx][key] = val; });
+
+        if (parsed.equipo && tramiteDraftEquipo) {
+          syncEquipoFromDOM();
+          if (parsed.equipo.regulador.codigo || parsed.equipo.regulador.serie) {
+            Object.assign(tramiteDraftEquipo.regulador, parsed.equipo.regulador);
+            aplicados.push('Regulador');
+          }
+          if (parsed.equipo.cilindro.codigo || parsed.equipo.cilindro.serie) {
+            Object.assign(tramiteDraftEquipo.cilindros[0], parsed.equipo.cilindro);
+            aplicados.push('Cilindro');
+          }
+          if (parsed.equipo.valvula.codigo || parsed.equipo.valvula.serie) {
+            Object.assign(tramiteDraftEquipo.valvulas[0], parsed.equipo.valvula);
+            aplicados.push('Válvula');
+          }
+        }
+        await saveClientes();
+        alert(aplicados.length ? 'Aplicado: ' + aplicados.join(' · ') : 'No reconocí datos con formato conocido en ese texto — completá a mano lo que falte.');
+        render();
+        return;
+      }
+
+      // Cliente todavía no guardado (alta nueva): no hay objeto en
+      // `clientes` para mutar, así que completamos los <input> directamente.
       const map = {
         nombre: '#f-nombre', dni: '#f-dni', domicilio: '#f-domicilio',
         provincia: '#f-provincia', ciudad: '#f-ciudad', patente: '#f-patente',
-        marca: '#f-marca', modelo: '#f-modelo', tipo_vehiculo: '#f-tipo-vehiculo',
+        marca: '#f-marca', modelo: '#f-modelo',
         uso: '#f-uso', fecha_oblea: '#f-oblea', fecha_crpc: '#f-crpc', anio: '#f-anio'
       };
       Object.entries(map).forEach(([key, sel]) => {
@@ -1995,12 +2034,12 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
           if (el) el.value = key === 'patente' ? String(parsed[key]).toUpperCase() : parsed[key];
         }
       });
-      if (parsed.found.length === 0) {
+      if (aplicados.length === 0) {
         resultBox.className = 'agent-result err';
         resultBox.textContent = 'No reconocí datos con formato conocido en ese texto — revisá el formulario y completá a mano lo que falte.';
       } else {
         resultBox.className = 'agent-result';
-        resultBox.textContent = 'Aplicado: ' + parsed.found.join(' · ');
+        resultBox.textContent = 'Aplicado: ' + aplicados.join(' · ');
       }
     });
 
@@ -2008,7 +2047,6 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
     if (btnAddTramite) btnAddTramite.addEventListener('click', () => {
       addingTramite = !addingTramite;
       currentSignature = null;
-      enargasEquipoPasteOpen = false;
       tramiteDraftEquipo = addingTramite ? blankEquipo() : null;
       render();
     });
@@ -2017,56 +2055,7 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
     if (btnCancelTramite) btnCancelTramite.addEventListener('click', () => {
       addingTramite = false;
       currentSignature = null;
-      enargasEquipoPasteOpen = false;
       tramiteDraftEquipo = null;
-      render();
-    });
-
-    const btnToggleEnargasEquipo = root.querySelector('#btn-toggle-enargas-equipo');
-    if (btnToggleEnargasEquipo) btnToggleEnargasEquipo.addEventListener('click', () => {
-      enargasEquipoPasteOpen = !enargasEquipoPasteOpen;
-      render();
-    });
-
-    const btnApplyEnargasEquipo = root.querySelector('#btn-apply-enargas-equipo');
-    if (btnApplyEnargasEquipo) btnApplyEnargasEquipo.addEventListener('click', async () => {
-      const textarea = root.querySelector('#enargas-equipo-paste-text');
-      const resultBox = root.querySelector('#enargas-equipo-paste-result');
-      const parsed = parseEnargasText(textarea.value || '');
-      syncEquipoFromDOM();
-      const aplicados = [];
-      if (parsed.equipo) {
-        if (parsed.equipo.regulador.codigo || parsed.equipo.regulador.serie) {
-          Object.assign(tramiteDraftEquipo.regulador, parsed.equipo.regulador);
-          aplicados.push('Regulador');
-        }
-        if (parsed.equipo.cilindro.codigo || parsed.equipo.cilindro.serie) {
-          Object.assign(tramiteDraftEquipo.cilindros[0], parsed.equipo.cilindro);
-          aplicados.push('Cilindro');
-        }
-        if (parsed.equipo.valvula.codigo || parsed.equipo.valvula.serie) {
-          Object.assign(tramiteDraftEquipo.valvulas[0], parsed.equipo.valvula);
-          aplicados.push('Válvula');
-        }
-      }
-      // fecha_oblea/año pertenecen al cliente, no al trámite en curso — se
-      // guardan directo (como ya hace el resto de las cajas de "aplicar")
-      // para que no se pierdan cuando este render() reconstruya el <input>.
-      if (parsed.fecha_oblea || parsed.anio) {
-        const idx = clientes.findIndex(x => x.id === editingId);
-        if (idx !== -1) {
-          if (parsed.fecha_oblea) { clientes[idx].fecha_oblea = parsed.fecha_oblea; aplicados.push('Vencimiento Oblea'); }
-          if (parsed.anio) { clientes[idx].anio = parsed.anio; aplicados.push('Año'); }
-          await saveClientes();
-        }
-      }
-      if (aplicados.length === 0) {
-        resultBox.className = 'agent-result err';
-        resultBox.textContent = 'No reconocí datos de equipo en ese texto — completá los campos a mano.';
-      } else {
-        resultBox.className = 'agent-result';
-        resultBox.textContent = 'Aplicado: ' + aplicados.join(' · ');
-      }
       render();
     });
 
@@ -2128,7 +2117,6 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
       await saveClientes();
       addingTramite = false;
       currentSignature = null;
-      enargasEquipoPasteOpen = false;
       tramiteDraftEquipo = null;
       render();
     });
