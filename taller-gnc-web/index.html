@@ -265,9 +265,11 @@ window.storage = {
 #gnc-app .reminder-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
 /* EQUIPO (grilla del tramite) */
-#gnc-app .equipo-fila { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 8px; margin-bottom: 8px; align-items: end; }
+#gnc-app .equipo-fila { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; align-items: end; }
 #gnc-app .equipo-fila label { font-size: 11px; color: var(--text-muted); font-family: var(--mono); display: flex; flex-direction: column; gap: 4px; }
 @media (max-width: 640px) { #gnc-app .equipo-fila { grid-template-columns: 1fr 1fr; } }
+#gnc-app .equipo-grupo { padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px dashed var(--line); }
+#gnc-app .equipo-grupo:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
 #gnc-app details.otros-equipos { margin-top: 14px; border: 1px dashed var(--line); border-radius: 8px; padding: 10px 14px; }
 #gnc-app details.otros-equipos summary { cursor: pointer; font-family: var(--mono); font-size: 12px; color: var(--flame); text-transform: uppercase; letter-spacing: 1px; }
 #gnc-app details.otros-equipos .form-grid { margin-top: 12px; }
@@ -1070,7 +1072,7 @@ window.storage = {
     ];
     return `<div class="scan-box" id="scan-box">
       <h3 style="margin-top:0; border-top:none; padding-top:0;">Fotos del cliente</h3>
-      <p class="scan-sub">Poné el DNI, la Cédula Verde y la Tarjeta de GNC juntos sobre una mesa y sacá una sola foto con todo (Foto 1). Después dalos vuelta y sacá otra (Foto 2). Con eso alcanza. Las dos fotos quedan guardadas junto con el cliente, y la IA lee de ahí el DNI y la Cédula Verde para completar el formulario solo (la Tarjeta de GNC no se lee, solo queda de respaldo).</p>
+      <p class="scan-sub">Poné el DNI, la Cédula Verde y la Tarjeta de GNC juntos sobre una mesa y sacá una sola foto con todo (Foto 1). Después dalos vuelta y sacá otra (Foto 2). Con eso alcanza. Las dos fotos quedan guardadas junto con el cliente, y la IA lee del DNI los datos personales y de la Cédula Verde solo la patente (el resto de los datos del vehículo y del equipo se completan con la consulta a ENARGAS, más abajo). La Tarjeta de GNC no se lee, solo queda de respaldo.</p>
       <div class="scan-grid" style="grid-template-columns: repeat(2, 1fr);">
         ${slots.map(s => `
         <div class="scan-slot">
@@ -1086,7 +1088,7 @@ window.storage = {
       </div>
       <div class="agent-box" style="margin-top:14px;">
         <label>¿No funcionó automático? Mandame las dos fotos acá en el chat y pedime que te lea los datos, y pegá mi respuesta acá:</label>
-        <textarea id="scan-fallback-text" placeholder="Ej: Apellido: Ponce. Nombre: Cintia Noemi. N° de Documento: 33266064. Domicilio: Perez Bulnes 3752. Provincia: Buenos Aires. Ciudad: Mar del Plata. Patente: AB123CD. Marca: Chevrolet. Modelo: Corsa. Tipo: Automóvil. Uso: Particular."></textarea>
+        <textarea id="scan-fallback-text" placeholder="Ej: Apellido: Ponce. Nombre: Cintia Noemi. N° de Documento: 33266064. Domicilio: Perez Bulnes 3752. Provincia: Buenos Aires. Ciudad: Mar del Plata. Patente: AB123CD."></textarea>
         <div class="form-actions">
           <button type="button" class="btn btn-primary btn-sm" id="btn-apply-scan-fallback">Aplicar al formulario</button>
         </div>
@@ -1295,32 +1297,40 @@ window.storage = {
   }
 
   function cilindroRow(i, cil) {
-    return `<div class="equipo-fila">
-      <label>Código<input type="text" id="eq-cil-codigo-${i}" value="${escapeHtml(cil.codigo)}"></label>
-      <label>N° Serie<input type="text" id="eq-cil-serie-${i}" value="${escapeHtml(cil.serie)}"></label>
-      <label>Capacidad<input type="text" id="eq-cil-capacidad-${i}" value="${escapeHtml(cil.capacidad)}"></label>
-      <label>Estado
-        <select id="eq-cil-nuevousado-${i}">
-          <option value="usado" ${cil.nuevoUsado !== 'nuevo' ? 'selected' : ''}>Usado</option>
-          <option value="nuevo" ${cil.nuevoUsado === 'nuevo' ? 'selected' : ''}>Nuevo</option>
-        </select>
-      </label>
-      <button type="button" class="btn btn-danger-outline btn-sm" data-remove-cilindro="${i}">Quitar</button>
-      <label>Fabricado (mes)<input type="text" id="eq-cil-fabmes-${i}" value="${escapeHtml(cil.fabricadoMes)}" placeholder="MM"></label>
-      <label>Fabricado (año)<input type="text" id="eq-cil-fabanio-${i}" value="${escapeHtml(cil.fabricadoAnio)}" placeholder="AAAA"></label>
-      <label>Revisado (mes)<input type="text" id="eq-cil-revmes-${i}" value="${escapeHtml(cil.revisadoMes)}" placeholder="MM"></label>
-      <label>Revisado (año)<input type="text" id="eq-cil-revanio-${i}" value="${escapeHtml(cil.revisadoAnio)}" placeholder="AAAA"></label>
-      <label>CRPC<input type="text" id="eq-cil-crpc-${i}" value="${escapeHtml(cil.crpc)}"></label>
-      <label>M/S/D/B<input type="text" id="eq-cil-msdb-${i}" value="${escapeHtml(cil.msdb)}" placeholder="Ej: SC"></label>
+    return `<div class="equipo-grupo">
+      <div class="equipo-fila">
+        <label>Código<input type="text" id="eq-cil-codigo-${i}" value="${escapeHtml(cil.codigo)}"></label>
+        <label>N° Serie<input type="text" id="eq-cil-serie-${i}" value="${escapeHtml(cil.serie)}"></label>
+        <label>Capacidad<input type="text" id="eq-cil-capacidad-${i}" value="${escapeHtml(cil.capacidad)}"></label>
+        <label>Estado
+          <select id="eq-cil-nuevousado-${i}">
+            <option value="usado" ${cil.nuevoUsado !== 'nuevo' ? 'selected' : ''}>Usado</option>
+            <option value="nuevo" ${cil.nuevoUsado === 'nuevo' ? 'selected' : ''}>Nuevo</option>
+          </select>
+        </label>
+        <label>Fabricado (mes)<input type="text" id="eq-cil-fabmes-${i}" value="${escapeHtml(cil.fabricadoMes)}" placeholder="MM"></label>
+        <label>Fabricado (año)<input type="text" id="eq-cil-fabanio-${i}" value="${escapeHtml(cil.fabricadoAnio)}" placeholder="AAAA"></label>
+        <label>Revisado (mes)<input type="text" id="eq-cil-revmes-${i}" value="${escapeHtml(cil.revisadoMes)}" placeholder="MM"></label>
+        <label>Revisado (año)<input type="text" id="eq-cil-revanio-${i}" value="${escapeHtml(cil.revisadoAnio)}" placeholder="AAAA"></label>
+        <label>CRPC<input type="text" id="eq-cil-crpc-${i}" value="${escapeHtml(cil.crpc)}"></label>
+        <label>M/S/D/B<input type="text" id="eq-cil-msdb-${i}" value="${escapeHtml(cil.msdb)}" placeholder="Ej: SC"></label>
+      </div>
+      <div class="form-actions" style="margin-top:8px;">
+        <button type="button" class="btn btn-danger-outline btn-sm" data-remove-cilindro="${i}">Quitar cilindro ${i + 1}</button>
+      </div>
     </div>`;
   }
 
   function valvulaRow(i, val) {
-    return `<div class="equipo-fila">
-      <label>Código<input type="text" id="eq-val-codigo-${i}" value="${escapeHtml(val.codigo)}"></label>
-      <label>N° Serie<input type="text" id="eq-val-serie-${i}" value="${escapeHtml(val.serie)}"></label>
-      <label>M/S/B<input type="text" id="eq-val-msb-${i}" value="${escapeHtml(val.msb)}"></label>
-      <button type="button" class="btn btn-danger-outline btn-sm" data-remove-valvula="${i}">Quitar</button>
+    return `<div class="equipo-grupo">
+      <div class="equipo-fila">
+        <label>Código<input type="text" id="eq-val-codigo-${i}" value="${escapeHtml(val.codigo)}"></label>
+        <label>N° Serie<input type="text" id="eq-val-serie-${i}" value="${escapeHtml(val.serie)}"></label>
+        <label>M/S/B<input type="text" id="eq-val-msb-${i}" value="${escapeHtml(val.msb)}"></label>
+      </div>
+      <div class="form-actions" style="margin-top:8px;">
+        <button type="button" class="btn btn-danger-outline btn-sm" data-remove-valvula="${i}">Quitar válvula ${i + 1}</button>
+      </div>
     </div>`;
   }
 
@@ -1584,14 +1594,12 @@ window.storage = {
       const parsed = parseAgentText(textarea.value || '');
       if (parsed.found.length === 0) {
         resultBox.className = 'agent-result err';
-        resultBox.textContent = 'No encontré ningún dato reconocible en ese texto. Probá pedirle a Claude que te lo escriba como "Nombre: ... DNI: ... Patente: ... Marca: ... Modelo: ...".';
+        resultBox.textContent = 'No encontré ningún dato reconocible en ese texto. Probá pedirle a Claude que te lo escriba como "Nombre: ... DNI: ... Patente: ...".';
         return;
       }
       const map = {
         nombre: '#f-nombre', dni: '#f-dni', domicilio: '#f-domicilio',
         provincia: '#f-provincia', ciudad: '#f-ciudad', patente: '#f-patente',
-        marca: '#f-marca', modelo: '#f-modelo',
-        uso: '#f-uso', fecha_oblea: '#f-oblea', fecha_crpc: '#f-crpc'
       };
       Object.entries(map).forEach(([key, sel]) => {
         if (parsed[key]) {
@@ -1626,9 +1634,9 @@ window.storage = {
       }
       content.push({
         type: 'text',
-        text: `Estas imágenes muestran varios documentos argentinos fotografiados juntos sobre una mesa (probablemente DNI, Cédula Verde, y a veces una Tarjeta de Identificación de Equipo de GNC), una foto de un lado y otra del lado opuesto. Extraé SOLO los datos del DNI y de la Cédula Verde. Si aparece una Tarjeta de GNC, ignorala por completo — no extraigas nada de ella. Respondé SOLO con un objeto JSON válido, sin texto adicional, sin markdown, con esta forma exacta:
-{"nombre": "nombre y apellido o null", "dni": "numero de documento sin puntos o null", "domicilio": "calle y numero o null", "provincia": "provincia o null", "ciudad": "ciudad o localidad o null", "patente": "dominio/patente del vehiculo o null", "marca": "marca del vehiculo o null", "modelo": "modelo del vehiculo o null", "tipo_vehiculo": "tipo de vehiculo (ej: Automovil, Camioneta) o null", "uso": "uso del vehiculo (ej: Particular, Comercial) o null"}
-El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separados por guiones; separalos en los campos correspondientes. Si algún dato no aparece en las imágenes o no se puede leer con confianza, poné null en ese campo. No inventes datos.`
+        text: `Estas imágenes muestran varios documentos argentinos fotografiados juntos sobre una mesa (probablemente DNI, Cédula Verde, y a veces una Tarjeta de Identificación de Equipo de GNC), una foto de un lado y otra del lado opuesto. Del DNI extraé los datos personales. De la Cédula Verde extraé SOLO la patente/dominio del vehículo — no extraigas marca, modelo, tipo ni uso, esos datos se completan después con una consulta aparte. Si aparece una Tarjeta de GNC, ignorala por completo — no extraigas nada de ella. Respondé SOLO con un objeto JSON válido, sin texto adicional, sin markdown, con esta forma exacta:
+{"nombre": "nombre y apellido o null", "dni": "numero de documento sin puntos o null", "domicilio": "calle y numero o null", "provincia": "provincia o null", "ciudad": "ciudad o localidad o null", "patente": "dominio/patente del vehiculo o null"}
+El domicilio del DNI suele venir junto con ciudad y provincia separados por guiones; separalos en los campos correspondientes. Si algún dato no aparece en las imágenes o no se puede leer con confianza, poné null en ese campo. No inventes datos.`
       });
 
       const response = await fetch('/api/read-docs', {
@@ -1666,8 +1674,6 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
       const fieldMap = {
         nombre: '#f-nombre', dni: '#f-dni', domicilio: '#f-domicilio',
         provincia: '#f-provincia', ciudad: '#f-ciudad', patente: '#f-patente',
-        marca: '#f-marca', modelo: '#f-modelo',
-        uso: '#f-uso'
       };
       Object.entries(fieldMap).forEach(([key, sel]) => {
         if (parsed[key]) {
