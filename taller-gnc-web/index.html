@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -270,6 +270,10 @@ window.storage = {
 @media (max-width: 640px) { #gnc-app .equipo-fila { grid-template-columns: 1fr 1fr; } }
 #gnc-app .equipo-grupo { padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px dashed var(--line); }
 #gnc-app .equipo-grupo:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+#gnc-app .equipo-operacion { color: var(--warn) !important; }
+#gnc-app .equipo-operacion select {
+  border-color: var(--warn); background: rgba(242,169,59,0.1); color: var(--warn); font-weight: 600;
+}
 #gnc-app details.otros-equipos { margin-top: 14px; border: 1px dashed var(--line); border-radius: 8px; padding: 10px 14px; }
 #gnc-app details.otros-equipos summary { cursor: pointer; font-family: var(--mono); font-size: 12px; color: var(--flame); text-transform: uppercase; letter-spacing: 1px; }
 #gnc-app details.otros-equipos .form-grid { margin-top: 12px; }
@@ -296,6 +300,7 @@ window.storage = {
   let tallerConfig = { ...TALLER_CONFIG_DEFAULT };
   let showTallerConfig = false;
   let editingId = null;
+  let editMode = null; // 'documentacion' | 'tramite'
   let ready = false;
 
   root.innerHTML = '<div class="loading">Cargando datos del taller...</div>';
@@ -447,6 +452,25 @@ window.storage = {
 
   const ESTADO_PEC_LABELS = { pendiente: 'Pendiente', enviado: 'Enviado al PEC', incompleto: 'Incompleto' };
   const USO_VEHICULO_OPCIONES = ['Auto', 'Pick Up', 'Moto', 'Taxi', 'Particular', 'Bus', 'Oficial', 'Otros'];
+  // Qué se hizo con ese componente en este trámite puntual — se resalta con
+  // otro color en el formulario porque hay que completarlo sí o sí y es
+  // fácil olvidarse.
+  const OPERACION_OPCIONES = [
+    { value: '', label: '-- Elegí --' },
+    { value: 'montaje', label: 'Montaje' },
+    { value: 'sigue', label: 'Sigue' },
+    { value: 'desmontaje', label: 'Desmontaje' },
+    { value: 'baja', label: 'Baja' },
+  ];
+  // Códigos postales conocidos para autocompletar el CPA según la ciudad —
+  // por ahora solo cubre la zona del taller; si la ciudad no está en la
+  // lista, el CPA se sigue cargando a mano.
+  const CODIGOS_POSTALES = {
+    'mar del plata': '7600',
+  };
+  function normalizarCiudad(s) {
+    return (s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
 
   // Trámite más reciente de un cliente (opcionalmente filtrado por tipo/s).
   function latestTramite(c, tipos) {
@@ -854,7 +878,8 @@ window.storage = {
           <div class="client-meta">Patente ${escapeHtml(c.patente || 's/d')} ${(c.marca || c.modelo) ? '· ' + escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) : ''} ${c.telefono ? '· ' + escapeHtml(c.telefono) : ''} ${c.tramites.length ? `· ${c.tramites.length} trámite(s)` : ''}</div>
         </div>
         <div class="client-actions">
-          <button class="btn btn-ghost" data-edit="${c.id}">Editar</button>
+          <button class="btn btn-ghost" data-doc="${c.id}">Documentación</button>
+          <button class="btn btn-agent" data-tramite="${c.id}">Trámite</button>
           <button class="btn btn-danger-outline" data-delete="${c.id}">Eliminar</button>
         </div>
       </div>
@@ -1145,17 +1170,16 @@ window.storage = {
     </div>`;
   }
 
-  function formPanel(existing) {
-    const c = existing || {
+  function blankClienteBase() {
+    return {
       nombre:'', dni:'', tipo_documento:'DNI', domicilio:'', numero:'', piso:'', cpa:'', provincia:'', ciudad:'', telefono:'',
       patente:'', marca:'', modelo:'', anio:'', inyeccion:'no', tipo_vehiculo:'', uso:'',
       fecha_oblea:'', fecha_crpc:'', tipo_cilindro:'5'
     };
-    return `<div class="panel" id="form-panel">
-      <h2>${existing ? 'Editar cliente' : 'Nuevo cliente'}</h2>
-      ${existing ? tramitesSection(existing) : ''}
-      ${scanBox()}
-      <h3${existing ? '' : ' style="margin-top:0;"'}>Datos personales</h3>
+  }
+
+  function datosPersonalesYDomicilioFields(c) {
+    return `<h3 style="margin-top:0;">Datos personales</h3>
       <div class="form-grid">
         <label>Nombre y apellido
           <input type="text" id="f-nombre" value="${escapeHtml(c.nombre)}" placeholder="Ej: Juan Pérez">
@@ -1171,6 +1195,9 @@ window.storage = {
         <label>Teléfono (con código de país, sin +)
           <input type="tel" id="f-telefono" value="${escapeHtml(c.telefono)}" placeholder="Ej: 5492235551234">
         </label>
+      </div>
+      <h3>Domicilio</h3>
+      <div class="form-grid">
         <label>Calle
           <input type="text" id="f-domicilio" value="${escapeHtml(c.domicilio)}" placeholder="Ej: Perez Bulnes">
         </label>
@@ -1180,17 +1207,43 @@ window.storage = {
         <label>Piso/Depto
           <input type="text" id="f-piso" value="${escapeHtml(c.piso)}" placeholder="Ej: 2° B">
         </label>
+        <label>Ciudad
+          <input type="text" id="f-ciudad" value="${escapeHtml(c.ciudad)}" placeholder="Ej: Mar del Plata">
+        </label>
         <label>CPA (código postal)
-          <input type="text" id="f-cpa" value="${escapeHtml(c.cpa)}" placeholder="Ej: 7600">
+          <input type="text" id="f-cpa" value="${escapeHtml(c.cpa)}" placeholder="Se completa solo según la ciudad">
         </label>
         <label>Provincia
           <input type="text" id="f-provincia" value="${escapeHtml(c.provincia)}" placeholder="Ej: Buenos Aires">
         </label>
-        <label>Ciudad
-          <input type="text" id="f-ciudad" value="${escapeHtml(c.ciudad)}" placeholder="Ej: Mar del Plata">
+      </div>`;
+  }
+
+  function nuevoClientePanel() {
+    const c = blankClienteBase();
+    return `<div class="panel" id="form-panel">
+      <h2 style="margin-top:0;">Nuevo cliente</h2>
+      ${datosPersonalesYDomicilioFields(c)}
+      <h3>Vehículo</h3>
+      <div class="form-grid">
+        <label>Patente
+          <input type="text" id="f-patente" value="${escapeHtml(c.patente)}" placeholder="Ej: AB123CD">
         </label>
       </div>
-      <h3>Datos del vehículo</h3>
+      <div class="form-actions">
+        <button class="btn btn-primary" id="btn-save">Agregar cliente</button>
+        <button class="btn btn-ghost" id="btn-cancel">Cancelar</button>
+      </div>
+    </div>`;
+  }
+
+  function documentacionPanel(existing) {
+    const c = existing;
+    return `<div class="panel" id="form-panel">
+      <h2 style="margin-top:0;">Documentación — ${escapeHtml(c.nombre)}</h2>
+      ${scanBox()}
+      ${datosPersonalesYDomicilioFields(c)}
+      <h3>Vehículo</h3>
       <div class="form-grid">
         <label>Patente
           <input type="text" id="f-patente" value="${escapeHtml(c.patente)}" placeholder="Ej: AB123CD">
@@ -1223,27 +1276,20 @@ window.storage = {
           </select>
         </label>
       </div>
-      <h3>Oblea</h3>
-      <div class="form-grid">
-        <label>Vencimiento Oblea
-          <input type="date" id="f-oblea" value="${c.fecha_oblea || ''}">
-        </label>
-      </div>
-      <h3>Prueba Hidráulica (CRPC)</h3>
-      <div class="form-grid">
-        <label>Fecha de la última revisión CRPC (mes/año)
-          <input type="month" id="f-crpc" value="${c.fecha_crpc || ''}">
-        </label>
-        <label>Periodicidad del cilindro
-          <select id="f-tipo-cilindro">
-            <option value="5" ${c.tipo_cilindro !== '3' ? 'selected' : ''}>Cada 5 años (acero, más común)</option>
-            <option value="3" ${c.tipo_cilindro === '3' ? 'selected' : ''}>Cada 3 años (liviano/compuesto)</option>
-          </select>
-        </label>
-      </div>
       <div class="form-actions">
-        <button class="btn btn-primary" id="btn-save">${existing ? 'Guardar cambios' : 'Agregar cliente'}</button>
-        <button class="btn btn-ghost" id="btn-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="btn-save-doc">Guardar cambios</button>
+        <button class="btn btn-ghost" id="btn-cancel-doc">Cerrar</button>
+      </div>
+    </div>`;
+  }
+
+  function tramitePanel(existing) {
+    const c = existing;
+    return `<div class="panel" id="form-panel">
+      <h2 style="margin-top:0;">Trámite — ${escapeHtml(c.nombre)}</h2>
+      ${tramitesSection(c)}
+      <div class="form-actions">
+        <button class="btn btn-ghost" id="btn-close-tramite-panel">Cerrar</button>
       </div>
     </div>`;
   }
@@ -1282,6 +1328,14 @@ window.storage = {
     </div>`;
   }
 
+  function operacionSelect(id, valorActual) {
+    return `<label class="equipo-operacion">Operación (M/S/D/B)
+      <select id="${id}">
+        ${OPERACION_OPCIONES.map(o => `<option value="${o.value}" ${valorActual === o.value ? 'selected' : ''}>${o.label}</option>`).join('')}
+      </select>
+    </label>`;
+  }
+
   function reguladorFields(eq) {
     return `<h3>Regulador</h3>
       <div class="equipo-fila">
@@ -1293,6 +1347,7 @@ window.storage = {
             <option value="nuevo" ${eq.regulador.nuevoUsado === 'nuevo' ? 'selected' : ''}>Nuevo</option>
           </select>
         </label>
+        ${operacionSelect('eq-regulador-operacion', eq.regulador.operacion)}
       </div>`;
   }
 
@@ -1301,11 +1356,16 @@ window.storage = {
       <div class="equipo-fila">
         <label>Código<input type="text" id="eq-cil-codigo-${i}" value="${escapeHtml(cil.codigo)}"></label>
         <label>N° Serie<input type="text" id="eq-cil-serie-${i}" value="${escapeHtml(cil.serie)}"></label>
-        <label>Capacidad<input type="text" id="eq-cil-capacidad-${i}" value="${escapeHtml(cil.capacidad)}"></label>
         <label>Estado
           <select id="eq-cil-nuevousado-${i}">
             <option value="usado" ${cil.nuevoUsado !== 'nuevo' ? 'selected' : ''}>Usado</option>
             <option value="nuevo" ${cil.nuevoUsado === 'nuevo' ? 'selected' : ''}>Nuevo</option>
+          </select>
+        </label>
+        <label>Periodicidad
+          <select id="eq-cil-periodicidad-${i}">
+            <option value="5" ${cil.periodicidad !== '3' ? 'selected' : ''}>Cada 5 años</option>
+            <option value="3" ${cil.periodicidad === '3' ? 'selected' : ''}>Cada 3 años</option>
           </select>
         </label>
         <label>Fabricado (mes)<input type="text" id="eq-cil-fabmes-${i}" value="${escapeHtml(cil.fabricadoMes)}" placeholder="MM"></label>
@@ -1313,7 +1373,7 @@ window.storage = {
         <label>Revisado (mes)<input type="text" id="eq-cil-revmes-${i}" value="${escapeHtml(cil.revisadoMes)}" placeholder="MM"></label>
         <label>Revisado (año)<input type="text" id="eq-cil-revanio-${i}" value="${escapeHtml(cil.revisadoAnio)}" placeholder="AAAA"></label>
         <label>CRPC<input type="text" id="eq-cil-crpc-${i}" value="${escapeHtml(cil.crpc)}"></label>
-        <label>M/S/D/B<input type="text" id="eq-cil-msdb-${i}" value="${escapeHtml(cil.msdb)}" placeholder="Ej: SC"></label>
+        ${operacionSelect(`eq-cil-msdb-${i}`, cil.msdb)}
       </div>
       <div class="form-actions" style="margin-top:8px;">
         <button type="button" class="btn btn-danger-outline btn-sm" data-remove-cilindro="${i}">Quitar cilindro ${i + 1}</button>
@@ -1326,7 +1386,7 @@ window.storage = {
       <div class="equipo-fila">
         <label>Código<input type="text" id="eq-val-codigo-${i}" value="${escapeHtml(val.codigo)}"></label>
         <label>N° Serie<input type="text" id="eq-val-serie-${i}" value="${escapeHtml(val.serie)}"></label>
-        <label>M/S/B<input type="text" id="eq-val-msb-${i}" value="${escapeHtml(val.msb)}"></label>
+        ${operacionSelect(`eq-val-msb-${i}`, val.msb)}
       </div>
       <div class="form-actions" style="margin-top:8px;">
         <button type="button" class="btn btn-danger-outline btn-sm" data-remove-valvula="${i}">Quitar válvula ${i + 1}</button>
@@ -1350,8 +1410,22 @@ window.storage = {
     </details>`;
   }
 
-  function equipoSection(eq) {
-    return `<p class="agent-hint" style="margin-top:0;">Tip: si pegás el resultado de ENARGAS con "Pegar resultado" (arriba, en Datos del vehículo) mientras estás cargando este trámite, también completa el regulador, el cilindro y la válvula acá abajo.</p>
+  function equipoSection(eq, c) {
+    return `<h3>Datos del equipo</h3>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-buscar-enargas-eq" data-patente="${escapeHtml(c.patente)}">Buscar en ENARGAS ↗</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-enargas-eq-paste">${enargasEqPasteOpen ? 'Cerrar' : 'Pegar resultado del SIC'}</button>
+      </div>
+      <div id="enargas-eq-copy-hint" class="agent-hint" style="display:none;"></div>
+      ${enargasEqPasteOpen ? `<div class="agent-box">
+        <label>Pegá acá el "Detalle de la operación" del SIC</label>
+        <textarea id="enargas-eq-paste-text" placeholder="Pegá el resultado de la consulta..."></textarea>
+        <div class="form-actions">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-apply-enargas-eq">Aplicar al equipo</button>
+        </div>
+        <div class="agent-hint">Completa regulador, cilindro y válvula, y también la fecha de la prueba hidráulica.</div>
+        <div id="enargas-eq-paste-result"></div>
+      </div>` : ''}
       ${reguladorFields(eq)}
       <h3>Cilindros</h3>
       ${eq.cilindros.map((cil, i) => cilindroRow(i, cil)).join('')}
@@ -1376,8 +1450,9 @@ window.storage = {
           <input type="date" id="t-fecha" value="${new Date().toISOString().slice(0,10)}">
         </label>
       </div>
+      <p class="agent-hint">Vehículo: ${escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) || 'sin marca/modelo cargado'} — Patente ${escapeHtml(c.patente || 's/d')}</p>
 
-      ${equipoSection(eq)}
+      ${equipoSection(eq, c)}
 
       <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Observaciones adicionales</label>
       <textarea id="t-detalle" placeholder="Cualquier detalle que no entre en los campos de arriba..."></textarea>
@@ -1393,7 +1468,7 @@ window.storage = {
           <input type="text" id="t-motivo" placeholder="Ej: falta firma del propietario">
         </label>
       </div>
-      <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Firma del propietario (opcional en esta etapa)</label>
+      <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Firma del propietario</label>
       <div class="signature-box">
         <canvas id="sig-canvas" width="600" height="200"></canvas>
         <div class="form-actions">
@@ -1402,6 +1477,7 @@ window.storage = {
       </div>
       <div class="form-actions">
         <button type="button" class="btn btn-primary btn-sm" id="btn-save-tramite">Guardar trámite</button>
+        <button type="button" class="btn btn-agent btn-sm" id="btn-send-pec-tramite">Enviar al PEC</button>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-cancel-tramite">Cancelar</button>
       </div>
     </div>`;
@@ -1429,6 +1505,7 @@ window.storage = {
   let bulkImportRows = [];
   let bulkImportSkip = new Set();
   let enargasPasteOpen = false;
+  let enargasEqPasteOpen = false;
   let reminderBannerOpen = false;
   const scanFiles = { 'foto1': null, 'foto2': null };
   let currentSignature = null;
@@ -1452,11 +1529,20 @@ window.storage = {
     const otros = {};
     OTROS_EQUIPOS_CAMPOS.forEach(o => { otros[o.key] = { codigo: '', serie: '' }; });
     return {
-      regulador: { codigo: '', serie: '', nuevoUsado: 'usado' },
-      cilindros: [{ codigo: '', serie: '', capacidad: '', nuevoUsado: 'usado', fabricadoMes: '', fabricadoAnio: '', revisadoMes: '', revisadoAnio: '', crpc: '', msdb: '' }],
+      regulador: { codigo: '', serie: '', nuevoUsado: 'usado', operacion: '' },
+      cilindros: [{ codigo: '', serie: '', periodicidad: '5', nuevoUsado: 'usado', fabricadoMes: '', fabricadoAnio: '', revisadoMes: '', revisadoAnio: '', crpc: '', msdb: '' }],
       valvulas: [{ codigo: '', serie: '', msb: '' }],
       otros,
     };
+  }
+
+  // Devuelve true si algún componente del equipo quedó marcado como "Baja".
+  function equipoTieneBaja(eq) {
+    if (!eq) return false;
+    if (eq.regulador.operacion === 'baja') return true;
+    if (eq.cilindros.some(c => c.msdb === 'baja')) return true;
+    if (eq.valvulas.some(v => v.msb === 'baja')) return true;
+    return false;
   }
 
   // Lee del DOM los valores actuales del equipo antes de agregar/quitar una
@@ -1466,10 +1552,11 @@ window.storage = {
     if (!tramiteDraftEquipo) return;
     const val = (sel) => { const el = root.querySelector(sel); return el ? el.value : ''; };
     tramiteDraftEquipo.regulador = {
-      codigo: val('#eq-regulador-codigo'), serie: val('#eq-regulador-serie'), nuevoUsado: val('#eq-regulador-nuevousado') || 'usado'
+      codigo: val('#eq-regulador-codigo'), serie: val('#eq-regulador-serie'), nuevoUsado: val('#eq-regulador-nuevousado') || 'usado',
+      operacion: val('#eq-regulador-operacion'),
     };
     tramiteDraftEquipo.cilindros = tramiteDraftEquipo.cilindros.map((_, i) => ({
-      codigo: val(`#eq-cil-codigo-${i}`), serie: val(`#eq-cil-serie-${i}`), capacidad: val(`#eq-cil-capacidad-${i}`),
+      codigo: val(`#eq-cil-codigo-${i}`), serie: val(`#eq-cil-serie-${i}`), periodicidad: val(`#eq-cil-periodicidad-${i}`) || '5',
       nuevoUsado: val(`#eq-cil-nuevousado-${i}`) || 'usado',
       fabricadoMes: val(`#eq-cil-fabmes-${i}`), fabricadoAnio: val(`#eq-cil-fabanio-${i}`),
       revisadoMes: val(`#eq-cil-revmes-${i}`), revisadoAnio: val(`#eq-cil-revanio-${i}`),
@@ -1731,7 +1818,9 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
         ${showBulkImport ? bulkImportPanel() : ''}
 
-        ${showForm || editing ? formPanel(editing) : ''}
+        ${showForm ? nuevoClientePanel() : ''}
+        ${editing && editMode === 'documentacion' ? documentacionPanel(editing) : ''}
+        ${editing && editMode === 'tramite' ? tramitePanel(editing) : ''}
 
         ${list.length === 0
           ? `<div class="empty">${clientes.length === 0 ? 'Todavía no cargaste clientes. Sumá el primero con "+ Nuevo cliente".' : 'No se encontraron clientes con esa búsqueda.'}</div>`
@@ -1910,14 +1999,50 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
     const btnCancel = root.querySelector('#btn-cancel');
     if (btnCancel) btnCancel.addEventListener('click', () => {
-      showForm = false; editingId = null;
-      enargasPasteOpen = false;
-      Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
+      showForm = false;
       render();
     });
 
+    const ciudadInput = root.querySelector('#f-ciudad');
+    if (ciudadInput) {
+      ciudadInput.addEventListener('change', () => {
+        const cpaInput = root.querySelector('#f-cpa');
+        if (!cpaInput || cpaInput.value.trim()) return; // no pisar un CPA ya cargado a mano
+        const cpa = CODIGOS_POSTALES[normalizarCiudad(ciudadInput.value)];
+        if (cpa) cpaInput.value = cpa;
+      });
+    }
+
     const btnSave = root.querySelector('#btn-save');
     if (btnSave) btnSave.addEventListener('click', async () => {
+      const nombre = root.querySelector('#f-nombre').value.trim();
+      if (!nombre) { alert('Poné al menos el nombre del cliente.'); return; }
+      const data = {
+        ...blankClienteBase(),
+        nombre,
+        dni: root.querySelector('#f-dni').value.trim(),
+        tipo_documento: root.querySelector('#f-tipo-documento').value,
+        telefono: root.querySelector('#f-telefono').value.trim(),
+        domicilio: root.querySelector('#f-domicilio').value.trim(),
+        numero: root.querySelector('#f-numero').value.trim(),
+        piso: root.querySelector('#f-piso').value.trim(),
+        cpa: root.querySelector('#f-cpa').value.trim(),
+        provincia: root.querySelector('#f-provincia').value.trim(),
+        ciudad: root.querySelector('#f-ciudad').value.trim(),
+        patente: root.querySelector('#f-patente').value.trim().toUpperCase(),
+      };
+      const clientId = 'c' + Date.now() + Math.random().toString(36).slice(2,7);
+      clientes.push({ id: clientId, ...data, tramites: [], ultimoAvisoMes: {}, notas: '' });
+      await saveClientes();
+      showForm = false;
+      render();
+    });
+
+    const btnSaveDoc = root.querySelector('#btn-save-doc');
+    if (btnSaveDoc) btnSaveDoc.addEventListener('click', async () => {
+      if (!editingId) return;
+      const idx = clientes.findIndex(c => c.id === editingId);
+      if (idx === -1) return;
       const nombre = root.querySelector('#f-nombre').value.trim();
       if (!nombre) { alert('Poné al menos el nombre del cliente.'); return; }
       const data = {
@@ -1937,56 +2062,77 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         anio: root.querySelector('#f-anio').value.trim(),
         inyeccion: root.querySelector('#f-inyeccion').value,
         uso: root.querySelector('#f-uso').value,
-        fecha_oblea: root.querySelector('#f-oblea').value,
-        fecha_crpc: root.querySelector('#f-crpc').value,
-        tipo_cilindro: root.querySelector('#f-tipo-cilindro').value,
       };
-      let clientId;
-      if (editingId) {
-        clientId = editingId;
-        const idx = clientes.findIndex(c => c.id === editingId);
-        clientes[idx] = { ...clientes[idx], ...data };
-      } else {
-        clientId = 'c' + Date.now() + Math.random().toString(36).slice(2,7);
-        clientes.push({ id: clientId, ...data, tramites: [], ultimoAvisoMes: {}, notas: '' });
-      }
+      clientes[idx] = { ...clientes[idx], ...data };
       await saveClientes();
 
       try {
         const anyPhoto = Object.values(scanFiles).some(v => v);
         if (anyPhoto) {
-          await window.storage.set(`fotos:${clientId}`, JSON.stringify(scanFiles), false);
+          await window.storage.set(`fotos:${editingId}`, JSON.stringify(scanFiles), false);
         } else {
-          try { await window.storage.delete(`fotos:${clientId}`, false); } catch (e) { /* no existía, ok */ }
+          try { await window.storage.delete(`fotos:${editingId}`, false); } catch (e) { /* no existía, ok */ }
         }
       } catch (e) {
         console.error('Error guardando fotos', e);
         alert('El cliente se guardó, pero hubo un problema guardando las fotos (puede que sean muy pesadas). Probá sacándolas de nuevo.');
       }
 
-      showForm = false; editingId = null;
+      editingId = null; editMode = null;
+      enargasPasteOpen = false;
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
       render();
     });
 
-    root.querySelectorAll('[data-edit]').forEach(btn => {
+    const btnCancelDoc = root.querySelector('#btn-cancel-doc');
+    if (btnCancelDoc) btnCancelDoc.addEventListener('click', () => {
+      editingId = null; editMode = null;
+      enargasPasteOpen = false;
+      Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
+      render();
+    });
+
+    root.querySelectorAll('[data-doc]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const id = btn.getAttribute('data-edit');
+        const id = btn.getAttribute('data-doc');
         Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
         try {
           const res = await window.storage.get(`fotos:${id}`, false);
           if (res) Object.assign(scanFiles, JSON.parse(res.value));
         } catch (e) { /* este cliente todavía no tiene fotos guardadas */ }
         editingId = id;
+        editMode = 'documentacion';
+        showForm = false;
+        enargasPasteOpen = false;
+        render();
+        const panel = root.querySelector('#form-panel');
+        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+
+    root.querySelectorAll('[data-tramite]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-tramite');
+        editingId = id;
+        editMode = 'tramite';
         showForm = false;
         addingTramite = true;
-        enargasPasteOpen = false;
         currentSignature = null;
+        enargasEqPasteOpen = false;
         tramiteDraftEquipo = blankEquipo();
         render();
         const panel = root.querySelector('#form-panel');
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
+    });
+
+    const btnCloseTramitePanel = root.querySelector('#btn-close-tramite-panel');
+    if (btnCloseTramitePanel) btnCloseTramitePanel.addEventListener('click', () => {
+      editingId = null; editMode = null;
+      addingTramite = false;
+      currentSignature = null;
+      tramiteDraftEquipo = null;
+      render();
     });
 
     root.querySelectorAll('[data-delete]').forEach(btn => {
@@ -1995,6 +2141,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         const c = clientes.find(x => x.id === id);
         if (confirm(`¿Eliminar a ${c ? c.nombre : 'este cliente'}? Esta acción no se puede deshacer.`)) {
           clientes = clientes.filter(x => x.id !== id);
+          if (editingId === id) { editingId = null; editMode = null; }
           await saveClientes();
           try { await window.storage.delete(`fotos:${id}`, false); } catch (e) { /* no tenía fotos, ok */ }
           render();
@@ -2105,6 +2252,67 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       }
     });
 
+    const btnBuscarEnargasEq = root.querySelector('#btn-buscar-enargas-eq');
+    if (btnBuscarEnargasEq) btnBuscarEnargasEq.addEventListener('click', async () => {
+      const url = 'https://www.enargas.gob.ar/secciones/gas-natural-comprimido/consulta-dominio.php';
+      const patente = btnBuscarEnargasEq.getAttribute('data-patente');
+      const hint = root.querySelector('#enargas-eq-copy-hint');
+      if (patente && navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(patente);
+          if (hint) { hint.style.display = 'block'; hint.textContent = `Copiamos "${patente}" al portapapeles — pegala en el campo Dominio de esa página.`; }
+        } catch (e) { console.error('No se pudo copiar la patente', e); }
+      }
+      window.open(url, '_blank', 'noopener');
+    });
+
+    const btnToggleEnargasEq = root.querySelector('#btn-toggle-enargas-eq-paste');
+    if (btnToggleEnargasEq) btnToggleEnargasEq.addEventListener('click', () => {
+      enargasEqPasteOpen = !enargasEqPasteOpen;
+      render();
+    });
+
+    const btnApplyEnargasEq = root.querySelector('#btn-apply-enargas-eq');
+    if (btnApplyEnargasEq) btnApplyEnargasEq.addEventListener('click', async () => {
+      const textarea = root.querySelector('#enargas-eq-paste-text');
+      const parsed = parseEnargasText(textarea.value || '');
+      const aplicados = [];
+      syncEquipoFromDOM();
+      if (parsed.equipo) {
+        if (parsed.equipo.regulador.codigo || parsed.equipo.regulador.serie) {
+          Object.assign(tramiteDraftEquipo.regulador, parsed.equipo.regulador);
+          aplicados.push('Regulador');
+        }
+        if (parsed.equipo.cilindro.codigo || parsed.equipo.cilindro.serie) {
+          Object.assign(tramiteDraftEquipo.cilindros[0], parsed.equipo.cilindro);
+          aplicados.push('Cilindro');
+        }
+        if (parsed.equipo.valvula.codigo || parsed.equipo.valvula.serie) {
+          Object.assign(tramiteDraftEquipo.valvulas[0], parsed.equipo.valvula);
+          aplicados.push('Válvula');
+        }
+      }
+      if (editingId && parsed.equipo && parsed.equipo.cilindro.revisadoMes && parsed.equipo.cilindro.revisadoAnio) {
+        const idx = clientes.findIndex(x => x.id === editingId);
+        if (idx !== -1) {
+          clientes[idx].fecha_crpc = `${parsed.equipo.cilindro.revisadoAnio}-${String(parsed.equipo.cilindro.revisadoMes).padStart(2, '0')}`;
+          aplicados.push('Fecha Prueba Hidráulica');
+          await saveClientes();
+        }
+      }
+      render();
+      const nuevoResultBox = root.querySelector('#enargas-eq-paste-result');
+      if (nuevoResultBox) {
+        if (aplicados.length === 0) {
+          nuevoResultBox.className = 'agent-result err';
+          nuevoResultBox.textContent = 'No reconocí datos de equipo en ese texto — completá a mano lo que falte.';
+        } else {
+          nuevoResultBox.className = 'agent-result';
+          nuevoResultBox.textContent = 'Aplicado: ' + aplicados.join(' · ');
+        }
+      }
+    });
+
     const btnAddTramite = root.querySelector('#btn-add-tramite');
     if (btnAddTramite) btnAddTramite.addEventListener('click', () => {
       addingTramite = !addingTramite;
@@ -2124,7 +2332,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     const btnAddCilindro = root.querySelector('#btn-add-cilindro');
     if (btnAddCilindro) btnAddCilindro.addEventListener('click', () => {
       syncEquipoFromDOM();
-      tramiteDraftEquipo.cilindros.push({ codigo: '', serie: '', capacidad: '', nuevoUsado: 'usado', fabricadoMes: '', fabricadoAnio: '', revisadoMes: '', revisadoAnio: '', crpc: '', msdb: '' });
+      tramiteDraftEquipo.cilindros.push({ codigo: '', serie: '', periodicidad: '5', nuevoUsado: 'usado', fabricadoMes: '', fabricadoAnio: '', revisadoMes: '', revisadoAnio: '', crpc: '', msdb: '' });
       render();
     });
 
@@ -2153,16 +2361,25 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       });
     });
 
-    const btnSaveTramite = root.querySelector('#btn-save-tramite');
-    if (btnSaveTramite) btnSaveTramite.addEventListener('click', async () => {
+    async function guardarTramite(estadoForzado) {
       if (!editingId) return;
       const idx = clientes.findIndex(c => c.id === editingId);
       if (idx === -1) return;
       const tipo = root.querySelector('#t-tipo').value;
       const fecha = root.querySelector('#t-fecha').value;
       if (!fecha) { alert('Poné una fecha para el trámite.'); return; }
-      const estadoPec = root.querySelector('#t-estado').value;
       syncEquipoFromDOM();
+
+      if (equipoTieneBaja(tramiteDraftEquipo)) {
+        const partes = [];
+        if (tramiteDraftEquipo.regulador.operacion === 'baja') partes.push('Regulador');
+        tramiteDraftEquipo.cilindros.forEach((c, i) => { if (c.msdb === 'baja') partes.push(`Cilindro ${i + 1}`); });
+        tramiteDraftEquipo.valvulas.forEach((v, i) => { if (v.msb === 'baja') partes.push(`Válvula ${i + 1}`); });
+        const ok = confirm(`Atención TDM: vas a dar de BAJA — ${partes.join(', ')}. ¿Confirmás que querés continuar con el trámite?`);
+        if (!ok) return;
+      }
+
+      const estadoPec = estadoForzado || root.querySelector('#t-estado').value;
       const tramite = {
         id: 't' + Date.now() + Math.random().toString(36).slice(2, 7),
         tipo,
@@ -2176,11 +2393,22 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       };
       clientes[idx].tramites.push(tramite);
       if (tipo === 'prueba_hidraulica') clientes[idx].fecha_crpc = fecha.slice(0, 7);
+      const primerCilindro = tramiteDraftEquipo.cilindros[0];
+      if (primerCilindro && primerCilindro.periodicidad) clientes[idx].tipo_cilindro = primerCilindro.periodicidad;
       await saveClientes();
       addingTramite = false;
       currentSignature = null;
       tramiteDraftEquipo = null;
       render();
+    }
+
+    const btnSaveTramite = root.querySelector('#btn-save-tramite');
+    if (btnSaveTramite) btnSaveTramite.addEventListener('click', () => guardarTramite(null));
+
+    const btnSendPecTramite = root.querySelector('#btn-send-pec-tramite');
+    if (btnSendPecTramite) btnSendPecTramite.addEventListener('click', () => {
+      if (!currentSignature) { alert('Falta la firma del propietario antes de enviar al PEC.'); return; }
+      guardarTramite('enviado');
     });
 
     root.querySelectorAll('[data-tramite-status]').forEach(sel => {
