@@ -65,6 +65,7 @@ window.storage = {
   min-height: 100vh;
   padding: 0;
   box-sizing: border-box;
+  line-height: 1.5;
 }
 #gnc-app *, #gnc-app *::before, #gnc-app *::after { box-sizing: border-box; }
 
@@ -97,6 +98,7 @@ window.storage = {
 #gnc-app .gauge-box {
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
   padding: 18px 22px; display: flex; align-items: center; gap: 18px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
 }
 #gnc-app .gauge-svg { width: 100px; height: 62px; flex-shrink: 0; }
 #gnc-app .gauge-legend { display: flex; flex-direction: column; gap: 4px; font-family: var(--mono); font-size: 12px; }
@@ -111,21 +113,23 @@ window.storage = {
 #gnc-app input[type="month"], #gnc-app select, #gnc-app textarea {
   background: var(--surface); border: 1px solid var(--line); color: var(--text);
   border-radius: 6px; padding: 9px 11px; font-family: var(--sans); font-size: 14px;
-  outline: none;
+  outline: none; transition: border-color .15s ease, box-shadow .15s ease;
 }
 #gnc-app textarea { width: 100%; resize: vertical; min-height: 90px; font-family: var(--mono); font-size: 12.5px; }
-#gnc-app input:focus, #gnc-app select:focus, #gnc-app textarea:focus { border-color: var(--flame); }
+#gnc-app input:focus, #gnc-app select:focus, #gnc-app textarea:focus {
+  border-color: var(--flame); box-shadow: 0 0 0 3px rgba(63,169,245,0.15);
+}
 #gnc-app .search-input { flex: 1; min-width: 180px; }
 #gnc-app .btn {
   font-family: var(--sans); font-weight: 600; font-size: 13px; letter-spacing: 0.3px;
   border-radius: 6px; padding: 10px 16px; border: 1px solid transparent; cursor: pointer;
-  transition: transform .08s ease, filter .12s ease;
+  transition: transform .08s ease, filter .12s ease, background-color .15s ease, border-color .15s ease;
 }
 #gnc-app .btn:active { transform: scale(0.97); }
-#gnc-app .btn-primary { background: var(--flame); color: #05202F; }
+#gnc-app .btn-primary { background: var(--flame); color: #05202F; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
 #gnc-app .btn-primary:hover { filter: brightness(1.08); }
 #gnc-app .btn-ghost { background: transparent; border-color: var(--line); color: var(--text-muted); }
-#gnc-app .btn-ghost:hover { color: var(--text); border-color: var(--flame-dim); }
+#gnc-app .btn-ghost:hover { color: var(--text); border-color: var(--flame-dim); background: rgba(63,169,245,0.08); }
 #gnc-app .btn-wa { background: #1F3A2E; color: #7EE0A8; border-color: #2C5942; font-size: 12px; padding: 7px 10px; }
 #gnc-app .btn-wa:hover { filter: brightness(1.15); }
 #gnc-app .btn-danger-outline { background: transparent; color: var(--danger); border-color: #5A2C22; font-size: 12px; padding: 7px 10px; }
@@ -136,7 +140,7 @@ window.storage = {
 /* FORM PANEL */
 #gnc-app .panel {
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
-  padding: 20px; margin-bottom: 20px;
+  padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
 }
 #gnc-app .panel h2 {
   font-family: var(--display); font-size: 16px; text-transform: uppercase;
@@ -192,7 +196,9 @@ window.storage = {
 #gnc-app .client-card {
   background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--line);
   border-radius: 8px; padding: 16px 18px; margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25); transition: box-shadow .15s ease, transform .15s ease;
 }
+#gnc-app .client-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,0.35); transform: translateY(-1px); }
 #gnc-app .client-card.st-danger { border-left-color: var(--danger); }
 #gnc-app .client-card.st-warn { border-left-color: var(--warn); }
 #gnc-app .client-card.st-ok { border-left-color: var(--ok); }
@@ -205,7 +211,9 @@ window.storage = {
 #gnc-app .doc-row {
   background: var(--surface-alt); border-radius: 6px; padding: 10px 12px;
   display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
+  transition: background-color .15s ease;
 }
+#gnc-app .doc-row:hover { background: #24334570; }
 #gnc-app .doc-label { font-family: var(--mono); font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
 #gnc-app .doc-date { font-family: var(--mono); font-size: 13px; }
 #gnc-app .doc-sub { font-family: var(--mono); font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
@@ -254,6 +262,7 @@ window.storage = {
 
 /* BANNERS */
 #gnc-app .reminder-banner, #gnc-app .incompletos-banner { border-color: var(--flame-dim); }
+#gnc-app .reminder-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
 /* EQUIPO (grilla del tramite) */
 #gnc-app .equipo-fila { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 8px; margin-bottom: 8px; align-items: end; }
@@ -285,7 +294,6 @@ window.storage = {
   let tallerConfig = { ...TALLER_CONFIG_DEFAULT };
   let showTallerConfig = false;
   let editingId = null;
-  let agentBoxOpenFor = null;
   let ready = false;
 
   root.innerHTML = '<div class="loading">Cargando datos del taller...</div>';
@@ -527,20 +535,25 @@ window.storage = {
     const items = reminderCandidates();
     if (!items.length) return '';
     return `<div class="panel reminder-banner">
-      <h2>📅 ${items.length} cliente(s) para avisar este mes</h2>
-      <p class="scan-sub">Venc. de Oblea o Prueba Hidráulica este mes. Tocá "Avisar por WhatsApp" para cada uno.</p>
-      <div class="docs">
-        ${items.map(({ cliente, tipo }) => `
-          <div class="doc-row">
-            <div>
-              <div class="doc-label">${escapeHtml(cliente.nombre)} · ${escapeHtml(cliente.patente || 's/d')}</div>
-              <div class="doc-sub">${tipo === 'oblea' ? 'Oblea' : 'Prueba Hidráulica'}</div>
-            </div>
-            ${cleanPhone(cliente.telefono)
-              ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-mes="${cliente.id}" data-aviso-tipo="${tipo}" href="${waLink(cliente, tipo === 'oblea' ? 'oblea' : 'prueba')}">Avisar por WhatsApp</a>`
-              : '<span class="badge badge-warn">Sin teléfono</span>'}
-          </div>`).join('')}
+      <div class="reminder-header">
+        <h2 style="margin:0;">📅 ${items.length} cliente(s) para avisar este mes</h2>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-reminder">${reminderBannerOpen ? 'Ocultar' : 'Ver'}</button>
       </div>
+      ${reminderBannerOpen ? `
+        <p class="scan-sub">Venc. de Oblea o Prueba Hidráulica este mes. Tocá "Avisar por WhatsApp" para cada uno.</p>
+        <div class="docs">
+          ${items.map(({ cliente, tipo }) => `
+            <div class="doc-row">
+              <div>
+                <div class="doc-label">${escapeHtml(cliente.nombre)} · ${escapeHtml(cliente.patente || 's/d')}</div>
+                <div class="doc-sub">${tipo === 'oblea' ? 'Oblea' : 'Prueba Hidráulica'}</div>
+              </div>
+              ${cleanPhone(cliente.telefono)
+                ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-mes="${cliente.id}" data-aviso-tipo="${tipo}" href="${waLink(cliente, tipo === 'oblea' ? 'oblea' : 'prueba')}">Avisar por WhatsApp</a>`
+                : '<span class="badge badge-warn">Sin teléfono</span>'}
+            </div>`).join('')}
+        </div>
+      ` : ''}
     </div>`;
   }
 
@@ -832,7 +845,6 @@ window.storage = {
   function clientCard(c) {
     const s = worstStatus(c);
     const cls = s.level === 'danger' ? 'st-danger' : s.level === 'warn' ? 'st-warn' : 'st-ok';
-    const agentOpen = agentBoxOpenFor === c.id;
     return `<div class="client-card ${cls}">
       <div class="client-top">
         <div>
@@ -840,7 +852,6 @@ window.storage = {
           <div class="client-meta">Patente ${escapeHtml(c.patente || 's/d')} ${(c.marca || c.modelo) ? '· ' + escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) : ''} ${c.telefono ? '· ' + escapeHtml(c.telefono) : ''} ${c.tramites.length ? `· ${c.tramites.length} trámite(s)` : ''}</div>
         </div>
         <div class="client-actions">
-          <button class="btn btn-agent" data-agent="${c.id}">${agentOpen ? 'Cerrar' : 'Pegar resultado del agente'}</button>
           <button class="btn btn-ghost" data-edit="${c.id}">Editar</button>
           <button class="btn btn-danger-outline" data-delete="${c.id}">Eliminar</button>
         </div>
@@ -849,19 +860,6 @@ window.storage = {
         ${docRowOblea(c)}
         ${docRowPH(c)}
       </div>
-      ${agentOpen ? agentBox(c) : ''}
-    </div>`;
-  }
-
-  function agentBox(c) {
-    return `<div class="agent-box">
-      <label>Pegá acá el texto que te devolvió el agente (Claude en Chrome)</label>
-      <textarea id="agent-text-${c.id}" placeholder="Ej: Fecha de vencimiento: 01/04/2027 ... Fecha CRPC: 4/24 ..."></textarea>
-      <div class="form-actions">
-        <button class="btn btn-primary btn-sm" data-apply-agent="${c.id}">Aplicar y guardar</button>
-      </div>
-      <div class="agent-hint">Busco automáticamente "Fecha de vencimiento" (Oblea, dd/mm/aaaa) y "Fecha CRPC" (mm/aa). El tipo de cilindro (3 o 5 años) lo definís vos en "Editar" si todavía no lo cargaste — por defecto se asume 5 años.</div>
-      <div id="agent-result-${c.id}"></div>
     </div>`;
   }
 
@@ -1153,8 +1151,9 @@ window.storage = {
     };
     return `<div class="panel" id="form-panel">
       <h2>${existing ? 'Editar cliente' : 'Nuevo cliente'}</h2>
+      ${existing ? tramitesSection(existing) : ''}
       ${scanBox()}
-      <h3 style="margin-top:0;">Datos personales</h3>
+      <h3${existing ? '' : ' style="margin-top:0;"'}>Datos personales</h3>
       <div class="form-grid">
         <label>Nombre y apellido
           <input type="text" id="f-nombre" value="${escapeHtml(c.nombre)}" placeholder="Ej: Juan Pérez">
@@ -1244,8 +1243,6 @@ window.storage = {
         <button class="btn btn-primary" id="btn-save">${existing ? 'Guardar cambios' : 'Agregar cliente'}</button>
         <button class="btn btn-ghost" id="btn-cancel">Cancelar</button>
       </div>
-
-      ${existing ? tramitesSection(existing) : ''}
     </div>`;
   }
 
@@ -1403,12 +1400,15 @@ window.storage = {
   function tramitesSection(c) {
     const rows = c.tramites.slice().sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''))
       .map(t => tramiteRow(c.id, t)).join('');
-    return `<h3>Trámites / historial</h3>
-      <div class="tramites-list">${rows || '<div class="empty" style="padding:16px;">Sin trámites cargados todavía.</div>'}</div>
-      <div class="form-actions">
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-add-tramite">${addingTramite ? 'Cerrar' : '+ Agregar trámite'}</button>
-      </div>
-      ${addingTramite ? tramiteAddForm(c) : ''}`;
+    return `<h3 style="margin-top:0;">Nuevo trámite</h3>
+      ${addingTramite
+        ? tramiteAddForm(c)
+        : `<div class="form-actions"><button type="button" class="btn btn-ghost btn-sm" id="btn-add-tramite">+ Agregar trámite</button></div>`}
+      ${c.tramites.length ? `
+        <h3>Historial de trámites</h3>
+        <div class="tramites-list">${rows}</div>
+      ` : ''}
+      ${addingTramite ? `<div class="form-actions"><button type="button" class="btn btn-ghost btn-sm" id="btn-add-tramite">Cerrar nuevo trámite</button></div>` : ''}`;
   }
 
   let currentQuery = '';
@@ -1419,6 +1419,7 @@ window.storage = {
   let bulkImportRows = [];
   let bulkImportSkip = new Set();
   let enargasPasteOpen = false;
+  let reminderBannerOpen = false;
   const scanFiles = { 'foto1': null, 'foto2': null };
   let currentSignature = null;
   let tramiteDraftEquipo = null;
@@ -1757,6 +1758,12 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
       });
     }
 
+    const btnToggleReminder = root.querySelector('#btn-toggle-reminder');
+    if (btnToggleReminder) btnToggleReminder.addEventListener('click', () => {
+      reminderBannerOpen = !reminderBannerOpen;
+      render();
+    });
+
     const btnToggleTallerConfig = root.querySelector('#btn-toggle-taller-config');
     if (btnToggleTallerConfig) btnToggleTallerConfig.addEventListener('click', () => {
       showTallerConfig = !showTallerConfig;
@@ -1966,11 +1973,10 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
         } catch (e) { /* este cliente todavía no tiene fotos guardadas */ }
         editingId = id;
         showForm = false;
-        agentBoxOpenFor = null;
-        addingTramite = false;
+        addingTramite = true;
         enargasPasteOpen = false;
         currentSignature = null;
-        tramiteDraftEquipo = null;
+        tramiteDraftEquipo = blankEquipo();
         render();
         const panel = root.querySelector('#form-panel');
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2053,8 +2059,20 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
           }
         }
         await saveClientes();
-        alert(aplicados.length ? 'Aplicado: ' + aplicados.join(' · ') : 'No reconocí datos con formato conocido en ese texto — completá a mano lo que falte.');
         render();
+        // El render de arriba reconstruye la caja (con los datos del
+        // vehículo/equipo ya actualizados) — el mensaje se muestra ahí en
+        // vez de un alert(), que bloquearía la pantalla.
+        const nuevoResultBox = root.querySelector('#enargas-paste-result');
+        if (nuevoResultBox) {
+          if (aplicados.length === 0) {
+            nuevoResultBox.className = 'agent-result err';
+            nuevoResultBox.textContent = 'No reconocí datos con formato conocido en ese texto — completá a mano lo que falte.';
+          } else {
+            nuevoResultBox.className = 'agent-result';
+            nuevoResultBox.textContent = 'Aplicado: ' + aplicados.join(' · ');
+          }
+        }
         return;
       }
 
@@ -2178,33 +2196,6 @@ El domicilio de la Cédula Verde suele venir junto con ciudad y provincia separa
       });
     });
 
-    root.querySelectorAll('[data-agent]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.getAttribute('data-agent');
-        agentBoxOpenFor = agentBoxOpenFor === id ? null : id;
-        render();
-      });
-    });
-
-    root.querySelectorAll('[data-apply-agent]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const id = btn.getAttribute('data-apply-agent');
-        const textarea = root.querySelector(`#agent-text-${id}`);
-        const resultBox = root.querySelector(`#agent-result-${id}`);
-        const parsed = parseAgentText(textarea.value || '');
-        if (!parsed.fecha_oblea && !parsed.fecha_crpc) {
-          resultBox.className = 'agent-result err';
-          resultBox.textContent = 'No pude encontrar "Fecha de vencimiento" ni "Fecha CRPC" en ese texto. Revisá que el agente haya incluido esas dos frases tal cual, o cargá los datos a mano en "Editar".';
-          return;
-        }
-        const idx = clientes.findIndex(c => c.id === id);
-        if (parsed.fecha_oblea) clientes[idx].fecha_oblea = parsed.fecha_oblea;
-        if (parsed.fecha_crpc) clientes[idx].fecha_crpc = parsed.fecha_crpc;
-        await saveClientes();
-        agentBoxOpenFor = null;
-        render();
-      });
-    });
   }
 
   boot();
