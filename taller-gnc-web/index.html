@@ -298,12 +298,19 @@ window.storage = {
   }
   #gnc-app .fab-nuevo-tramite:active { transform: scale(0.92); filter: brightness(0.85); }
 }
+#gnc-app .client-card-wrap { position: relative; margin-bottom: 12px; border-radius: 8px; overflow: hidden; }
 #gnc-app .client-card {
   background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--line);
-  border-radius: 8px; padding: 16px 18px; margin-bottom: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.25); transition: box-shadow .15s ease, transform .15s ease;
+  border-radius: 8px; padding: 16px 18px; position: relative; z-index: 1;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.25); transition: box-shadow .15s ease;
+  touch-action: pan-y;
 }
-#gnc-app .client-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,0.35); transform: translateY(-1px); }
+#gnc-app .client-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,0.35); }
+#gnc-app .client-swipe-delete {
+  position: absolute; inset: 0; z-index: 0; border: none; border-radius: 8px;
+  background: var(--danger); color: #fff; font-family: var(--mono); font-weight: 600; font-size: 13px;
+  display: flex; align-items: center; justify-content: flex-end; padding-right: 24px; cursor: pointer;
+}
 #gnc-app .client-card.st-danger { border-left-color: var(--danger); }
 #gnc-app .client-card.st-warn { border-left-color: var(--warn); }
 #gnc-app .client-card.st-ok { border-left-color: var(--ok); }
@@ -422,6 +429,18 @@ window.storage = {
     if (typeof render === 'function' && ready) render();
   });
 
+  // Tocar en cualquier lado fuera de la tarjeta deslizada (swipe para
+  // eliminar) la cierra — mismo patrón que las apps de mail en el celular.
+  // Se registra una sola vez acá (no en cada render) para no acumular
+  // listeners iguales.
+  document.addEventListener('click', (e) => {
+    if (swipeAbiertoId === null) return;
+    const abierta = root.querySelector(`.client-card-wrap[data-client-id="${swipeAbiertoId}"]`);
+    if (abierta && abierta.contains(e.target)) return;
+    swipeAbiertoId = null;
+    if (typeof render === 'function' && ready) render();
+  });
+
   const TALLER_CONFIG_DEFAULT = {
     razonSocial: '', direccion: '', cuit: '',
     tecnicoNombre: '', tecnicoMatricula: '',
@@ -445,6 +464,9 @@ window.storage = {
   // saber si un panel "recién se abrió" (y animarlo) o si sigue abierto
   // desde antes (y no repetir la animación).
   let prevPanelState = {};
+  // Id del cliente cuya tarjeta quedó deslizada (swipe para eliminar) en
+  // mobile — null si ninguna está abierta.
+  let swipeAbiertoId = null;
 
   root.innerHTML = '<div class="loading"><span class="gnc-spinner"></span> Cargando datos del taller...</div>';
 
@@ -1168,32 +1190,39 @@ window.storage = {
     </div>`;
   }
 
+  // "-wrap" es lo que se mueve al reacomodarse la lista (animación FLIP en
+  // render()) y lo que contiene la franja roja de "swipe para eliminar" —
+  // el swipe en sí desliza solo ".client-card" (adentro), así los dos
+  // efectos no se pisan el transform entre ellos.
   function clientCard(c) {
     const s = worstStatus(c);
     const cls = s.level === 'danger' ? 'st-danger' : s.level === 'warn' ? 'st-warn' : 'st-ok';
     const expandido = clientesExpandidos.has(c.id);
-    return `<div class="client-card ${cls}">
-      <div class="client-top">
-        <div>
-          <div class="client-patente">${escapeHtml(c.patente || 'SIN PATENTE')}</div>
-          <div class="client-modelo">${escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) || 'Sin marca/modelo'}${c.anio ? ' · ' + escapeHtml(c.anio) : ''}</div>
-          <div class="client-name">${escapeHtml(c.nombre)}${c.telefono ? ' · ' + escapeHtml(c.telefono) : ''}</div>
+    return `<div class="client-card-wrap" data-client-id="${c.id}">
+      <button type="button" class="client-swipe-delete" data-swipe-delete="${c.id}">Eliminar</button>
+      <div class="client-card ${cls}">
+        <div class="client-top">
+          <div>
+            <div class="client-patente">${escapeHtml(c.patente || 'SIN PATENTE')}</div>
+            <div class="client-modelo">${escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) || 'Sin marca/modelo'}${c.anio ? ' · ' + escapeHtml(c.anio) : ''}</div>
+            <div class="client-name">${escapeHtml(c.nombre)}${c.telefono ? ' · ' + escapeHtml(c.telefono) : ''}</div>
+          </div>
+          <div class="client-actions">
+            ${c.telefono ? `<a class="btn btn-wa" target="_blank" rel="noopener" href="${waLinkGeneral(c)}">WhatsApp</a>` : ''}
+            <button class="btn btn-ghost" data-fotos="${c.id}">Documentación</button>
+            <button class="btn btn-agent" data-tramite="${c.id}">Inicio de trámite</button>
+            <button class="btn btn-danger-outline" data-delete="${c.id}">Eliminar</button>
+          </div>
         </div>
-        <div class="client-actions">
-          ${c.telefono ? `<a class="btn btn-wa" target="_blank" rel="noopener" href="${waLinkGeneral(c)}">WhatsApp</a>` : ''}
-          <button class="btn btn-ghost" data-fotos="${c.id}">Documentación</button>
-          <button class="btn btn-agent" data-tramite="${c.id}">Inicio de trámite</button>
-          <button class="btn btn-danger-outline" data-delete="${c.id}">Eliminar</button>
+        <div class="docs">
+          ${docRowOblea(c)}
+          ${docRowPH(c)}
         </div>
+        <div class="form-actions" style="margin-top:10px;">
+          <button type="button" class="btn btn-ghost btn-sm" data-toggle-detalle="${c.id}">${expandido ? 'Ocultar detalle' : `Ver datos y trámites${c.tramites.length ? ` (${c.tramites.length})` : ''}`}</button>
+        </div>
+        ${expandido ? clientDetalleExpandido(c) : ''}
       </div>
-      <div class="docs">
-        ${docRowOblea(c)}
-        ${docRowPH(c)}
-      </div>
-      <div class="form-actions" style="margin-top:10px;">
-        <button type="button" class="btn btn-ghost btn-sm" data-toggle-detalle="${c.id}">${expandido ? 'Ocultar detalle' : `Ver datos y trámites${c.tramites.length ? ` (${c.tramites.length})` : ''}`}</button>
-      </div>
-      ${expandido ? clientDetalleExpandido(c) : ''}
     </div>`;
   }
 
@@ -2560,8 +2589,38 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     }
   }
 
+  // Técnica FLIP (First-Last-Invert-Play): como el render reconstruye toda
+  // la lista de cero, no hay animación de reacomodo "gratis" como con un
+  // diffing con claves — se mide la posición de cada tarjeta ANTES de
+  // reescribir el HTML, y después de reescribirlo se calcula cuánto se
+  // movió cada una (por id) y se anima desde la posición vieja a la nueva.
+  function medirRectsClientes() {
+    const rects = {};
+    root.querySelectorAll('.client-card-wrap[data-client-id]').forEach(el => {
+      rects[el.getAttribute('data-client-id')] = el.getBoundingClientRect();
+    });
+    return rects;
+  }
+  function animarReacomodoClientes(oldRects) {
+    root.querySelectorAll('.client-card-wrap[data-client-id]').forEach(el => {
+      const oldRect = oldRects[el.getAttribute('data-client-id')];
+      if (!oldRect) return;
+      const newRect = el.getBoundingClientRect();
+      const dx = oldRect.left - newRect.left;
+      const dy = oldRect.top - newRect.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      el.style.transition = 'none';
+      el.style.transform = `translate(${dx}px, ${dy}px)`;
+      requestAnimationFrame(() => {
+        el.style.transition = 'transform 220ms ease';
+        el.style.transform = '';
+      });
+    });
+  }
+
   function render() {
     if (!ready) { root.innerHTML = '<div class="loading"><span class="gnc-spinner"></span> Cargando datos del taller...</div>'; return; }
+    const rectsAntes = medirRectsClientes();
     // Como el render reconstruye todo el DOM, si no restauramos el foco acá
     // cualquier campo con eventos "input" en vivo pierde el cursor en cada
     // letra que se escribe y hay que volver a clickearlo.
@@ -2656,6 +2715,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     attachEvents();
     setupScanBox();
     setupTramiteBox();
+    animarReacomodoClientes(rectsAntes);
 
     if (focusInfo) {
       const toFocus = root.querySelector('#' + focusInfo.id);
@@ -3053,20 +3113,85 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       });
     });
 
+    async function eliminarCliente(id) {
+      const c = clientes.find(x => x.id === id);
+      const ok = await customConfirm(`¿Eliminar a ${c ? c.nombre : 'este cliente'}? Esta acción no se puede deshacer.`, { titulo: 'Eliminar cliente', danger: true, okLabel: 'Eliminar' });
+      if (swipeAbiertoId === id) swipeAbiertoId = null;
+      if (ok) {
+        clientes = clientes.filter(x => x.id !== id);
+        if (editingId === id) cerrarWizard();
+        if (showFotosFor === id) showFotosFor = null;
+        await saveClientes();
+        try { await window.storage.delete(`fotos:${id}`, false); } catch (e) { /* no tenía fotos, ok */ }
+      }
+      render();
+    }
+
     root.querySelectorAll('[data-delete]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const id = btn.getAttribute('data-delete');
-        const c = clientes.find(x => x.id === id);
-        const ok = await customConfirm(`¿Eliminar a ${c ? c.nombre : 'este cliente'}? Esta acción no se puede deshacer.`, { titulo: 'Eliminar cliente', danger: true, okLabel: 'Eliminar' });
-        if (ok) {
-          clientes = clientes.filter(x => x.id !== id);
-          if (editingId === id) cerrarWizard();
-          if (showFotosFor === id) showFotosFor = null;
-          await saveClientes();
-          try { await window.storage.delete(`fotos:${id}`, false); } catch (e) { /* no tenía fotos, ok */ }
-          render();
+      btn.addEventListener('click', () => eliminarCliente(btn.getAttribute('data-delete')));
+    });
+
+    root.querySelectorAll('[data-swipe-delete]').forEach(btn => {
+      btn.addEventListener('click', () => eliminarCliente(btn.getAttribute('data-swipe-delete')));
+    });
+
+    // Swipe para eliminar en mobile — desliza ".client-card" (adentro del
+    // wrap) para revelar la franja roja de atrás; alternativa al botón
+    // "Eliminar" de siempre, que sigue funcionando igual.
+    const SWIPE_ABRE_PX = 92;
+    const SWIPE_UMBRAL_PX = 60;
+    root.querySelectorAll('.client-card-wrap[data-client-id]').forEach(wrap => {
+      const id = wrap.getAttribute('data-client-id');
+      const card = wrap.querySelector('.client-card');
+      if (!card) return;
+      if (swipeAbiertoId === id) card.style.transform = `translateX(-${SWIPE_ABRE_PX}px)`;
+
+      let startX = 0, startY = 0, dx = 0, dragging = false, decidido = false, esHorizontal = false;
+
+      card.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX; startY = e.touches[0].clientY;
+        dx = 0; dragging = true; decidido = false; esHorizontal = false;
+        card.style.transition = 'none';
+      }, { passive: true });
+
+      card.addEventListener('touchmove', (e) => {
+        if (!dragging) return;
+        const x = e.touches[0].clientX, y = e.touches[0].clientY;
+        const deltaX = x - startX, deltaY = y - startY;
+        if (!decidido) {
+          if (Math.abs(deltaX) > 8 || Math.abs(deltaY) > 8) {
+            decidido = true;
+            esHorizontal = Math.abs(deltaX) > Math.abs(deltaY);
+          }
         }
-      });
+        if (!esHorizontal) return;
+        e.preventDefault();
+        const base = swipeAbiertoId === id ? -SWIPE_ABRE_PX : 0;
+        dx = Math.min(0, Math.max(-SWIPE_ABRE_PX - 24, base + deltaX));
+        card.style.transform = `translateX(${dx}px)`;
+      }, { passive: false });
+
+      card.addEventListener('touchend', (e) => {
+        if (!dragging) return;
+        dragging = false;
+        const eraAbierta = swipeAbiertoId === id;
+        card.style.transition = 'transform 180ms ease';
+        if (decidido && esHorizontal) {
+          if (dx <= -SWIPE_UMBRAL_PX) {
+            card.style.transform = `translateX(-${SWIPE_ABRE_PX}px)`;
+            swipeAbiertoId = id;
+          } else {
+            card.style.transform = '';
+            if (eraAbierta) swipeAbiertoId = null;
+          }
+        } else if (eraAbierta && Math.abs(dx) < 4) {
+          // Toque simple sobre una tarjeta ya abierta: la cierra en vez de
+          // disparar los botones de adentro.
+          card.style.transform = '';
+          swipeAbiertoId = null;
+          e.preventDefault();
+        }
+      }, { passive: false });
     });
 
     const btnBuscarEnargas = root.querySelector('#btn-buscar-enargas');
