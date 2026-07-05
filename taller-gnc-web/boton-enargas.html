@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Botón copiador para ENARGAS — Estelita</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 0 60px; background: #F4F6FA; color: #1A2333;
+    font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    line-height: 1.55;
+  }
+  .header {
+    background: #1D5BD8; color: #fff; padding: 26px 20px 34px;
+    border-radius: 0 0 28px 28px; text-align: center;
+  }
+  .header h1 { margin: 0; font-size: 22px; }
+  .header p { margin: 8px auto 0; font-size: 14px; opacity: 0.9; max-width: 480px; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 20px 16px; }
+  .card {
+    background: #fff; border-radius: 18px; padding: 18px;
+    box-shadow: 0 2px 10px rgba(20,40,90,0.07); margin-bottom: 16px;
+  }
+  .card h2 { margin: 0 0 10px; font-size: 17px; color: #1D5BD8; }
+  ol { margin: 0; padding-left: 22px; }
+  li { margin-bottom: 12px; font-size: 15px; }
+  li b { color: #1A2333; }
+  .btn-copiar {
+    display: block; width: 100%; background: #1D5BD8; color: #fff; border: none;
+    border-radius: 14px; padding: 16px; font-size: 16px; font-weight: 700;
+    cursor: pointer; box-shadow: 0 4px 12px rgba(29,91,216,0.3);
+  }
+  .btn-copiar:active { transform: scale(0.98); }
+  .ok-msg { text-align: center; color: #157A44; font-weight: 700; margin-top: 10px; display: none; }
+  .bookmarklet {
+    display: inline-block; background: #E8EFFC; color: #1D5BD8; font-weight: 700;
+    padding: 12px 18px; border-radius: 12px; text-decoration: none; font-size: 15px;
+  }
+  .nota { font-size: 13px; color: #6B7688; }
+  .uso {
+    background: #E1F5EA; border-radius: 14px; padding: 14px 16px; color: #157A44;
+    font-size: 14.5px;
+  }
+  code { background: #EEF2F9; padding: 2px 6px; border-radius: 6px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Botón copiador para ENARGAS</h1>
+  <p>Se instala una sola vez. Después, en la página de ENARGAS, un solo toque copia todo el resultado y te devuelve al trámite.</p>
+</div>
+<div class="wrap">
+
+  <div class="card">
+    <h2>En el celular (Chrome)</h2>
+    <ol>
+      <li>Tocá este botón para copiar el código:
+        <br><br>
+        <button type="button" class="btn-copiar" id="btn-copiar-codigo">COPIAR CÓDIGO DEL BOTÓN</button>
+        <div class="ok-msg" id="ok-msg">✔ Código copiado</div>
+      </li>
+      <li>Tocá los <b>3 puntitos (⋮)</b> arriba a la derecha y tocá la <b>estrella ☆</b> — esta página queda guardada como marcador.</li>
+      <li>Otra vez <b>⋮ → Marcadores</b>, buscá esta página, mantenela apretada y elegí <b>Editar</b>.</li>
+      <li>Cambiale el <b>nombre</b> a: <code>copiar</code><br>
+      Borrá todo lo que está en la <b>dirección (URL)</b> y <b>pegá</b> el código que copiaste en el paso 1. Guardá.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>Cómo se usa (cada vez)</h2>
+    <div class="uso">
+      En la página de ENARGAS, con el resultado a la vista: tocá la <b>barra de dirección</b> de arriba, escribí <b>copiar</b> y tocá el marcador <b>copiar</b> que aparece.<br><br>
+      ¡Eso es todo! Se copia el resultado completo, la pestaña se cierra sola y al volver al trámite de Estelita los datos se cargan automáticamente.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>En la computadora</h2>
+    <p style="font-size:14.5px;">Arrastrá este botón hasta la barra de marcadores (debajo de la barra de dirección):</p>
+    <p style="text-align:center;"><a class="bookmarklet" id="bookmarklet-link" href="#">➤ Copiar para Estelita</a></p>
+    <p class="nota">Si no ves la barra de marcadores, apretá Ctrl+Shift+B. Después, en la página de ENARGAS, hacés clic en ese marcador y listo.</p>
+  </div>
+
+  <p class="nota" style="text-align:center;">Esto es opcional: seleccionar y copiar a mano sigue funcionando igual que siempre.</p>
+</div>
+
+<script>
+  // El código del "botón": selecciona todo el texto de la página, lo copia
+  // y cierra la pestaña (si la pestaña la abrió Estelita). Sin tildes
+  // directas adentro — van como \u00XX para que el código sobreviva el
+  // viaje por el campo URL del marcador.
+  var CODIGO = "javascript:(async()=>{var t=document.body.innerText;try{await navigator.clipboard.writeText(t)}catch(e){var r=document.createRange();r.selectNodeContents(document.body);var s=getSelection();s.removeAllRanges();s.addRange(r);document.execCommand('copy')}try{window.close()}catch(e){}setTimeout(function(){alert('Listo, ya se copi\\u00f3 todo. Volv\\u00e9 a la app Estelita para continuar el tr\\u00e1mite.')},300)})()";
+
+  document.getElementById('bookmarklet-link').setAttribute('href', CODIGO);
+  document.getElementById('bookmarklet-link').addEventListener('click', function(e){ e.preventDefault(); });
+
+  document.getElementById('btn-copiar-codigo').addEventListener('click', async function(){
+    try {
+      await navigator.clipboard.writeText(CODIGO);
+      document.getElementById('ok-msg').style.display = 'block';
+    } catch (e) {
+      prompt('Copialo a mano (mantené apretado y Copiar):', CODIGO);
+    }
+  });
+</script>
+</body>
+</html>
