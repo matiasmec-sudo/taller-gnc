@@ -77,6 +77,14 @@ window.storage = {
   gap: 16px; flex-wrap: wrap; margin-bottom: 28px;
 }
 #gnc-app .brand { display: flex; align-items: baseline; gap: 10px; }
+#gnc-app .menu-wrap { position: relative; align-self: center; }
+#gnc-app .menu-dropdown {
+  position: absolute; top: 100%; left: 0; margin-top: 6px; z-index: 20;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 190px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+}
+#gnc-app .menu-dropdown .btn { width: 100%; text-align: left; justify-content: flex-start; }
 #gnc-app .brand .tag {
   font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
   color: var(--flame); border: 1px solid var(--flame-dim);
@@ -273,6 +281,10 @@ window.storage = {
 #gnc-app .equipo-operacion { color: var(--warn) !important; }
 #gnc-app .equipo-operacion select {
   border-color: var(--warn); background: rgba(242,169,59,0.1); color: var(--warn); font-weight: 600;
+}
+#gnc-app .campo-obligatorio { color: var(--warn) !important; }
+#gnc-app .campo-obligatorio input {
+  border-color: var(--warn); background: rgba(242,169,59,0.08);
 }
 #gnc-app details.otros-equipos { margin-top: 14px; border: 1px dashed var(--line); border-radius: 8px; padding: 10px 14px; }
 #gnc-app details.otros-equipos summary { cursor: pointer; font-family: var(--mono); font-size: 12px; color: var(--flame); text-transform: uppercase; letter-spacing: 1px; }
@@ -1184,7 +1196,7 @@ window.storage = {
         <label>N° de Documento
           <input type="text" id="f-dni" value="${escapeHtml(c.dni)}" placeholder="Ej: 30123456">
         </label>
-        <label>Teléfono (con código de país, sin +)
+        <label class="campo-obligatorio">Teléfono (con código de país, sin +) *
           <input type="tel" id="f-telefono" value="${escapeHtml(c.telefono)}" placeholder="Ej: 5492235551234">
         </label>
       </div>
@@ -1254,7 +1266,7 @@ window.storage = {
         </label>
       </div>
       <div class="form-actions">
-        <button class="btn btn-primary" id="btn-save-doc">${existing ? 'Guardar cambios' : 'Agregar cliente'}</button>
+        <button class="btn btn-primary" id="btn-save-doc">${existing ? 'Guardar cambios' : 'Continuar con el trámite'}</button>
         <button class="btn btn-ghost" id="btn-cancel-doc">${existing ? 'Cerrar' : 'Cancelar'}</button>
       </div>
     </div>`;
@@ -1477,6 +1489,7 @@ window.storage = {
   let currentQuery = '';
   let showForm = false;
   let showBulkImport = false;
+  let menuOpen = false;
   let tramitesOpenFor = null;
   let addingTramite = false;
   let bulkImportRows = [];
@@ -1786,6 +1799,13 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       <div class="wrap">
         <div class="topbar">
           <div class="brand">
+            <div class="menu-wrap">
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-menu">☰</button>
+              ${menuOpen ? `<div class="menu-dropdown">
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-import">+ Importar clientes</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-export-csv">Exportar CSV</button>
+              </div>` : ''}
+            </div>
             <span class="tag">ESTELITA</span>
             <input class="taller-name-input" id="taller-input" value="${escapeHtml(tallerNombre)}">
             <button type="button" class="license-link" id="btn-toggle-taller-config">Configurar datos del taller</button>
@@ -1807,9 +1827,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
         <div class="controls">
           <input class="search-input" type="text" id="search-input" placeholder="Buscar por nombre o patente..." value="${escapeHtml(currentQuery)}">
-          <button class="btn btn-primary" id="btn-new">+ Nuevo cliente</button>
-          <button class="btn btn-ghost" id="btn-import">+ Importar clientes</button>
-          <button class="btn btn-ghost" id="btn-export-csv">Exportar CSV</button>
+          <button class="btn btn-primary" id="btn-new">+ Nuevo trámite</button>
         </div>
 
         ${showBulkImport ? bulkImportPanel() : ''}
@@ -1921,12 +1939,23 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       render();
     });
 
+    const btnToggleMenu = root.querySelector('#btn-toggle-menu');
+    if (btnToggleMenu) btnToggleMenu.addEventListener('click', () => {
+      menuOpen = !menuOpen;
+      render();
+    });
+
     const btnExportCsv = root.querySelector('#btn-export-csv');
-    if (btnExportCsv) btnExportCsv.addEventListener('click', exportClientesCSV);
+    if (btnExportCsv) btnExportCsv.addEventListener('click', () => {
+      menuOpen = false;
+      exportClientesCSV();
+      render();
+    });
 
     const btnImport = root.querySelector('#btn-import');
     if (btnImport) btnImport.addEventListener('click', () => {
       showForm = false; editingId = null;
+      menuOpen = false;
       showBulkImport = !showBulkImport;
       bulkImportRows = []; bulkImportSkip = new Set();
       render();
@@ -2019,11 +2048,17 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     if (btnSaveDoc) btnSaveDoc.addEventListener('click', async () => {
       const nombre = root.querySelector('#f-nombre').value.trim();
       if (!nombre) { alert('Poné al menos el nombre del cliente.'); return; }
+      const esAltaNueva = !editingId;
+      const telefono = root.querySelector('#f-telefono').value.trim();
+      if (esAltaNueva && !telefono) {
+        alert('El teléfono es obligatorio para poder iniciar el trámite — completalo antes de continuar.');
+        return;
+      }
       const data = {
         nombre,
         dni: root.querySelector('#f-dni').value.trim(),
         tipo_documento: root.querySelector('#f-tipo-documento').value,
-        telefono: root.querySelector('#f-telefono').value.trim(),
+        telefono,
         domicilio: root.querySelector('#f-domicilio').value.trim(),
         numero: root.querySelector('#f-numero').value.trim(),
         piso: root.querySelector('#f-piso').value.trim(),
@@ -2063,11 +2098,25 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       }
 
       showForm = false;
-      editingId = null; editMode = null;
       enargasPasteOpen = false;
       clienteDraft = null;
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
+
+      if (esAltaNueva) {
+        // "Continuar con el trámite": el cliente recién creado queda
+        // abierto directo en la solapa Trámite, en vez de volver a la lista.
+        const cliente = clientes.find(x => x.id === clientId);
+        editingId = clientId;
+        editMode = 'tramite';
+        addingTramite = true;
+        currentSignature = null;
+        tramiteDraftEquipo = blankEquipo(cliente ? cliente.ultimoEquipoConocido : null);
+      } else {
+        editingId = null; editMode = null;
+      }
       render();
+      const panel = root.querySelector('#form-panel');
+      if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
 
     const btnCancelDoc = root.querySelector('#btn-cancel-doc');
@@ -2103,14 +2152,18 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     root.querySelectorAll('[data-tramite]').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-tramite');
+        const cliente = clientes.find(x => x.id === id);
+        if (!cliente || !cliente.telefono || !cliente.telefono.trim()) {
+          alert('Este cliente no tiene teléfono cargado. Andá a "Documentación" y completalo antes de iniciar un trámite.');
+          return;
+        }
         editingId = id;
         editMode = 'tramite';
         showForm = false;
         addingTramite = true;
         currentSignature = null;
         enargasEqPasteOpen = false;
-        const cliente = clientes.find(x => x.id === id);
-        tramiteDraftEquipo = blankEquipo(cliente ? cliente.ultimoEquipoConocido : null);
+        tramiteDraftEquipo = blankEquipo(cliente.ultimoEquipoConocido);
         render();
         const panel = root.querySelector('#form-panel');
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2348,6 +2401,10 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       if (!editingId) return;
       const idx = clientes.findIndex(c => c.id === editingId);
       if (idx === -1) return;
+      if (!clientes[idx].telefono || !clientes[idx].telefono.trim()) {
+        alert('Este cliente no tiene teléfono cargado. Andá a "Documentación" y completalo antes de guardar el trámite.');
+        return;
+      }
       const tipo = root.querySelector('#t-tipo').value;
       const fecha = root.querySelector('#t-fecha').value;
       if (!fecha) { alert('Poné una fecha para el trámite.'); return; }
