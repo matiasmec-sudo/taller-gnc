@@ -689,6 +689,7 @@ Documentación para realizar la renovación:
     ready = true;
     render();
     iniciarAvisoPendientesDiario();
+    await procesarCompartidoORestaurar();
   }
 
   // Aviso simple (no requiere servidor ni push real): mientras la pestaña
@@ -2371,21 +2372,14 @@ Documentación para realizar la renovación:
   // app intenta leer el portapapeles y cargar los datos sola.
   let esperandoEnargas = false;
 
-  // Al volver de la pestaña de ENARGAS: si el portapapeles tiene algo que
+  // Carga un texto de ENARGAS por el mismo camino que un pegado manual, si
   // parece un resultado de la consulta (2 o más datos reconocidos — así una
-  // patente suelta o cualquier otra cosa copiada no dispara nada), se abre
-  // la caja de pegado y se carga solo. El navegador puede pedir permiso de
-  // lectura del portapapeles la primera vez.
-  window.addEventListener('focus', async () => {
-    if (!esperandoEnargas) return;
-    if (!showForm && !editingId) { esperandoEnargas = false; return; }
-    if (!navigator.clipboard || !navigator.clipboard.readText) return;
-    let texto = '';
-    try { texto = await navigator.clipboard.readText(); } catch (e) { return; }
-    if (!texto || !texto.trim()) return;
+  // patente suelta o cualquier otra cosa copiada no dispara nada).
+  function cargarTextoEnargas(texto) {
+    if (!texto || !texto.trim()) return false;
     const parsed = parseEnargasText(texto);
     const señales = parsed.found.length + (parsed.equipo ? 1 : 0) + (parsed.obleaActual ? 1 : 0);
-    if (señales < 2) return; // no parece un resultado de ENARGAS, seguimos esperando
+    if (señales < 2) return false;
     esperandoEnargas = false;
     enargasPasteOpen = true;
     // Antes de redibujar, rescatar lo que se haya tipeado y todavía no se
@@ -2399,7 +2393,77 @@ Documentación para realizar la renovación:
       // "paste" de la caja aplica los datos y cierra la caja solo).
       ta.dispatchEvent(new Event('paste'));
     }
+    return true;
+  }
+
+  // Al volver de la pestaña de ENARGAS: si el portapapeles tiene algo que
+  // parece un resultado de la consulta, se carga solo. El navegador puede
+  // pedir permiso de lectura del portapapeles la primera vez.
+  window.addEventListener('focus', async () => {
+    if (!esperandoEnargas) return;
+    if (!showForm && !editingId) { esperandoEnargas = false; return; }
+    if (!navigator.clipboard || !navigator.clipboard.readText) return;
+    let texto = '';
+    try { texto = await navigator.clipboard.readText(); } catch (e) { return; }
+    cargarTextoEnargas(texto);
   });
+
+  // Borrador del asistente en localStorage: se guarda al salir hacia
+  // ENARGAS, para que el trámite sobreviva si Android mata la app mientras
+  // el usuario está en la otra pestaña, o si vuelve vía "Compartir" (el
+  // share target relanza la app y el estado en memoria se pierde).
+  const WIZARD_SNAPSHOT_KEY = 'gnc_wizard_snapshot_v1';
+  function guardarSnapshotWizard() {
+    try {
+      localStorage.setItem(WIZARD_SNAPSHOT_KEY, JSON.stringify({
+        ts: Date.now(),
+        editingId, showForm, wizardStep, editingTramiteId,
+        clienteDraft, tramiteDraftEquipo, tramiteDraftCampos, currentSignature,
+      }));
+    } catch (e) { /* localStorage lleno: seguimos sin snapshot */ }
+  }
+  function limpiarSnapshotWizard() {
+    try { localStorage.removeItem(WIZARD_SNAPSHOT_KEY); } catch (e) { /* ok */ }
+  }
+
+  // Al abrir la app: si venimos de un "Compartir" de Android (query
+  // ?compartido=...) o el asistente quedó a medias yendo a ENARGAS,
+  // restaurar el borrador y cargar el texto compartido.
+  async function procesarCompartidoORestaurar() {
+    const params = new URLSearchParams(window.location.search);
+    const compartido = params.get('compartido') || '';
+    if (params.has('compartido') || params.has('compartido_titulo') || params.has('compartido_url')) {
+      // Limpiar la URL para que un reload no re-aplique lo mismo.
+      try { history.replaceState(null, '', window.location.pathname); } catch (e) { /* ok */ }
+    }
+
+    let snap = null;
+    try { snap = JSON.parse(localStorage.getItem(WIZARD_SNAPSHOT_KEY) || 'null'); } catch (e) { /* ok */ }
+    const snapFresco = snap && snap.ts && (Date.now() - snap.ts) < 60 * 60 * 1000;
+
+    // Restaurar el asistente si no hay uno abierto y el borrador es reciente.
+    if (snapFresco && !showForm && !editingId && (snap.showForm || snap.editingId)) {
+      editingId = snap.editingId || null;
+      showForm = !!snap.showForm;
+      wizardStep = snap.wizardStep || 1;
+      editingTramiteId = snap.editingTramiteId || null;
+      clienteDraft = snap.clienteDraft || null;
+      tramiteDraftEquipo = snap.tramiteDraftEquipo || null;
+      tramiteDraftCampos = snap.tramiteDraftCampos || null;
+      currentSignature = snap.currentSignature || null;
+      esperandoEnargas = !compartido; // si ya llegó texto compartido, no hay que esperar el portapapeles
+      render();
+    }
+
+    if (compartido) {
+      if (showForm || editingId) {
+        const cargado = cargarTextoEnargas(compartido);
+        if (!cargado) await customAlert('Recibimos lo que compartiste, pero no parece un resultado de la consulta de ENARGAS. Fijate de seleccionar todo el texto del detalle antes de compartir.');
+      } else {
+        await customAlert('Recibimos el resultado de ENARGAS, pero no hay ningún trámite abierto. Abrí el trámite del cliente y volvé a compartirlo, o pegalo con el botón "Pegar resultado".');
+      }
+    }
+  }
   let reminderBannerOpen = false;
   const scanFiles = { 'foto1': null, 'foto2': null };
   let currentSignature = null;
@@ -3196,6 +3260,8 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       tramiteDraftCampos = null;
       editingTramiteId = null;
       currentSignature = null;
+      esperandoEnargas = false;
+      limpiarSnapshotWizard();
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
     }
 
@@ -3393,10 +3459,17 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       if (patente && navigator.clipboard && navigator.clipboard.writeText) {
         try {
           await navigator.clipboard.writeText(patente);
-          if (hint) { hint.style.display = 'block'; hint.textContent = `Copiamos "${patente}" al portapapeles. En la página de ENARGAS: pegala en el campo Dominio y buscá. Cuando aparezca el resultado, mantené apretado sobre el texto → Seleccionar todo → Copiar, y volvé acá: los datos se cargan solos.`; }
+          if (hint) { hint.style.display = 'block'; hint.textContent = `Copiamos "${patente}" al portapapeles. En la página de ENARGAS: pegala en el campo Dominio y buscá. Cuando aparezca el resultado: mantené apretado sobre el texto → Seleccionar todo → Compartir → elegí Estelita, y los datos se cargan solos. (También sirve Copiar y volver acá.)`; }
         } catch (e) { console.error('No se pudo copiar la patente', e); }
       }
       esperandoEnargas = true;
+      // Guardar el borrador: si Android mata la app mientras estamos en
+      // ENARGAS, o si volvemos vía "Compartir" (que relanza la app), el
+      // trámite se restaura tal como quedó.
+      syncClienteDraftFromDOM();
+      syncEquipoFromDOM();
+      syncTramiteCamposFromDOM();
+      guardarSnapshotWizard();
       // window.open (en vez de un <a target="_blank">) para que abra en una
       // pestaña/ventana nueva de verdad incluso instalado como app en el
       // celular, donde un link común a veces navega en la misma ventana.
@@ -3461,8 +3534,11 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
       if (aplicados.length > 0) {
         // Se reconoció algo: la caja ya cumplió su función, se cierra sola
-        // en vez de esperar a que la cierren a mano.
+        // en vez de esperar a que la cierren a mano. El borrador persistido
+        // se actualiza con los datos recién aplicados, así una recarga o un
+        // cierre de la app no los pierde antes de guardar.
         enargasPasteOpen = false;
+        guardarSnapshotWizard();
         render();
       } else {
         render();
