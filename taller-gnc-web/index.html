@@ -1553,6 +1553,56 @@ Documentación para realizar la renovación:
     return hayAlgo ? { regulador, cilindro, valvula } : null;
   }
 
+  // Aplica un resultado de ENARGAS ya parseado (del pegado de texto o de la
+  // lectura de una captura con IA) sobre los borradores del asistente.
+  // Devuelve la lista de campos aplicados. Todo se aplica sobre el borrador
+  // (nunca directo a los <input> ni al cliente guardado) para no pisar lo
+  // que ya se tipeó y todavía no se guardó — se persiste recién al guardar.
+  function aplicarParsedEnargas(parsed) {
+    const aplicados = (parsed.found || []).slice();
+
+    syncClienteDraftFromDOM();
+    if (!clienteDraft) clienteDraft = blankClienteBase();
+    const campos = {
+      patente: parsed.patente ? String(parsed.patente).toUpperCase() : null,
+      marca: parsed.marca, modelo: parsed.modelo, uso: parsed.uso,
+      fecha_oblea: parsed.fecha_oblea, anio: parsed.anio,
+    };
+    Object.entries(campos).forEach(([key, val]) => { if (val) clienteDraft[key] = val; });
+
+    if (!tramiteDraftEquipo) tramiteDraftEquipo = blankEquipo();
+    if (!tramiteDraftCampos) tramiteDraftCampos = blankTramiteCampos(null);
+    if (parsed.obleaActual) {
+      tramiteDraftCampos.obleaAnterior = parsed.obleaActual;
+      aplicados.push('N° Oblea anterior');
+    }
+    if (parsed.equipo) {
+      // Se aplica directo al equipo del trámite que se está armando (paso
+      // 2) — la consulta al SIC se hace una sola vez acá, en el paso 1.
+      if (parsed.equipo.regulador.codigo || parsed.equipo.regulador.serie) {
+        Object.assign(tramiteDraftEquipo.regulador, parsed.equipo.regulador);
+        aplicados.push('Regulador');
+      }
+      if (parsed.equipo.cilindro.codigo || parsed.equipo.cilindro.serie) {
+        Object.assign(tramiteDraftEquipo.cilindros[0], parsed.equipo.cilindro);
+        aplicados.push('Cilindro');
+      }
+      if (parsed.equipo.valvula.codigo || parsed.equipo.valvula.serie) {
+        Object.assign(tramiteDraftEquipo.valvulas[0], parsed.equipo.valvula);
+        aplicados.push('Válvula');
+      }
+      // También se cachea en el cliente para que la próxima vez que se le
+      // inicie un trámite, el equipo ya venga precargado sin pegar de nuevo.
+      clienteDraft.ultimoEquipoConocido = {
+        regulador: { ...tramiteDraftEquipo.regulador },
+        cilindros: tramiteDraftEquipo.cilindros.map(c => ({ ...c })),
+        valvulas: tramiteDraftEquipo.valvulas.map(v => ({ ...v })),
+        otros: JSON.parse(JSON.stringify(tramiteDraftEquipo.otros)),
+      };
+    }
+    return aplicados;
+  }
+
   function enargasPasteBox(entrando) {
     return `<div class="agent-box ${entrando ? 'panel-entrando' : ''}" style="grid-column: 1/-1;">
       <button type="button" class="btn btn-primary" id="btn-pegar-enargas" style="width:100%; font-size:15px; margin-bottom:10px;">📋 PEGAR LO COPIADO DE ENARGAS</button>
@@ -1726,8 +1776,11 @@ Documentación para realizar la renovación:
           <button type="button" class="btn btn-agent" id="btn-buscar-enargas" data-patente="${escapeHtml(c.patente)}" style="flex:2; min-width:180px; font-size:14px;">🔎 Buscar en ENARGAS ↗</button>
           <button type="button" class="btn btn-ghost" id="btn-toggle-enargas-paste" style="flex:1; min-width:120px;">${enargasPasteOpen ? 'Cerrar' : '📋 Pegar resultado'}</button>
         </div>
-        <div style="grid-column: 1/-1; margin-top:-4px;">
-          <a class="license-link" href="boton-enargas.html" target="_blank" rel="noopener">¿Copiar el resultado con un solo botón? Instalalo acá (una sola vez)</a>
+        <div style="grid-column: 1/-1;">
+          <button type="button" class="btn btn-primary" id="btn-captura-enargas" style="width:100%; font-size:15px;">📸 Leer captura de ENARGAS con IA</button>
+          <input type="file" id="captura-enargas-input" accept="image/*" multiple style="display:none;">
+          <div class="agent-hint" style="margin-top:6px;">Sacá captura de pantalla del resultado en ENARGAS (si es largo, sacá 2 o 3) y tocá este botón para elegirlas — la IA completa los datos sola.</div>
+          <div id="captura-enargas-status"></div>
         </div>
         <div id="enargas-copy-hint" class="agent-hint" style="display:none; grid-column: 1/-1;"></div>
         ${enargasPasteOpen ? enargasPasteBox(enargasEntrando) : ''}
@@ -3459,7 +3512,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       if (patente && navigator.clipboard && navigator.clipboard.writeText) {
         try {
           await navigator.clipboard.writeText(patente);
-          if (hint) { hint.style.display = 'block'; hint.textContent = `Copiamos "${patente}" al portapapeles. En la página de ENARGAS: pegala en el campo Dominio y buscá. Cuando aparezca el resultado: mantené apretado sobre el texto → Seleccionar todo → Compartir → elegí Estelita, y los datos se cargan solos. (También sirve Copiar y volver acá.)`; }
+          if (hint) { hint.style.display = 'block'; hint.textContent = `Copiamos "${patente}" al portapapeles. En la página de ENARGAS: pegala en el campo Dominio y buscá. Con el resultado a la vista, sacá captura de pantalla, volvé acá y tocá "📸 Leer captura de ENARGAS". (También podés Seleccionar todo → Copiar o Compartir → Estelita.)`; }
         } catch (e) { console.error('No se pudo copiar la patente', e); }
       }
       esperandoEnargas = true;
@@ -3487,50 +3540,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       const textarea = root.querySelector('#enargas-paste-text');
       if (!textarea || !textarea.value.trim()) return;
       const parsed = parseEnargasText(textarea.value || '');
-      const aplicados = parsed.found.slice();
-
-      // Todo se aplica sobre el borrador (nunca directo a los <input> ni al
-      // cliente guardado) para no pisar lo que ya se tipeó y todavía no se
-      // guardó — se persiste recién cuando se toca "Guardar cambios".
-      syncClienteDraftFromDOM();
-      if (!clienteDraft) clienteDraft = blankClienteBase();
-      const campos = {
-        patente: parsed.patente ? String(parsed.patente).toUpperCase() : null,
-        marca: parsed.marca, modelo: parsed.modelo, uso: parsed.uso,
-        fecha_oblea: parsed.fecha_oblea, anio: parsed.anio,
-      };
-      Object.entries(campos).forEach(([key, val]) => { if (val) clienteDraft[key] = val; });
-
-      if (!tramiteDraftEquipo) tramiteDraftEquipo = blankEquipo();
-      if (!tramiteDraftCampos) tramiteDraftCampos = blankTramiteCampos(null);
-      if (parsed.obleaActual) {
-        tramiteDraftCampos.obleaAnterior = parsed.obleaActual;
-        aplicados.push('N° Oblea anterior');
-      }
-      if (parsed.equipo) {
-        // Se aplica directo al equipo del trámite que se está armando (paso
-        // 2) — la consulta al SIC se hace una sola vez acá, en el paso 1.
-        if (parsed.equipo.regulador.codigo || parsed.equipo.regulador.serie) {
-          Object.assign(tramiteDraftEquipo.regulador, parsed.equipo.regulador);
-          aplicados.push('Regulador');
-        }
-        if (parsed.equipo.cilindro.codigo || parsed.equipo.cilindro.serie) {
-          Object.assign(tramiteDraftEquipo.cilindros[0], parsed.equipo.cilindro);
-          aplicados.push('Cilindro');
-        }
-        if (parsed.equipo.valvula.codigo || parsed.equipo.valvula.serie) {
-          Object.assign(tramiteDraftEquipo.valvulas[0], parsed.equipo.valvula);
-          aplicados.push('Válvula');
-        }
-        // También se cachea en el cliente para que la próxima vez que se le
-        // inicie un trámite, el equipo ya venga precargado sin pegar de nuevo.
-        clienteDraft.ultimoEquipoConocido = {
-          regulador: { ...tramiteDraftEquipo.regulador },
-          cilindros: tramiteDraftEquipo.cilindros.map(c => ({ ...c })),
-          valvulas: tramiteDraftEquipo.valvulas.map(v => ({ ...v })),
-          otros: JSON.parse(JSON.stringify(tramiteDraftEquipo.otros)),
-        };
-      }
+      const aplicados = aplicarParsedEnargas(parsed);
 
       if (aplicados.length > 0) {
         // Se reconoció algo: la caja ya cumplió su función, se cierra sola
@@ -3574,6 +3584,98 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       const ta = root.querySelector('#enargas-paste-text');
       if (ta) { ta.value = texto; aplicarEnargasDocumentacion(); }
     });
+
+    // Lectura con IA de capturas de pantalla del resultado de ENARGAS — el
+    // camino más fácil en el celular: sacar captura no requiere seleccionar
+    // ni copiar nada. Usa el mismo endpoint con licencia que la lectura de
+    // documentos (gasta crédito de IA por lectura).
+    const btnCapturaEnargas = root.querySelector('#btn-captura-enargas');
+    const capturaInput = root.querySelector('#captura-enargas-input');
+    if (btnCapturaEnargas && capturaInput) {
+      btnCapturaEnargas.addEventListener('click', () => capturaInput.click());
+      capturaInput.addEventListener('change', async () => {
+        const files = Array.from(capturaInput.files).slice(0, 3);
+        if (!files.length) return;
+        const status = root.querySelector('#captura-enargas-status');
+        btnCapturaEnargas.disabled = true;
+        if (status) { status.className = 'agent-result'; status.innerHTML = '<span class="gnc-loading-row"><span class="gnc-spinner"></span> Leyendo la captura con IA...</span>'; }
+        try {
+          const content = [];
+          for (const f of files) {
+            const dataUrl = await compressImageFile(f);
+            const parts = dataUrlParts(dataUrl);
+            if (parts) content.push({ type: 'image', source: { type: 'base64', media_type: parts.mediaType, data: parts.base64 } });
+          }
+          content.push({ type: 'text', text: `Estas capturas de pantalla muestran la página "Detalle de la operación" del SIC de ENARGAS (consulta por dominio de un vehículo a GNC, Argentina). Extraé los datos y respondé SOLO con un objeto JSON válido, sin texto adicional ni markdown, con esta forma exacta:
+{"dominio":"patente o null","marca":"o null","modelo":"o null","anio":"aaaa o null","uso":"o null","fecha_vencimiento_oblea":"dd/mm/aaaa o null","oblea_actual":"numero de la oblea actual o null","regulador":{"codigo":"codigo de homologacion, ej TT01, o null","serie":"numero de serie o null"},"cilindro":{"codigo":"o null","serie":"o null","crpc":"sigla o material del CRPC o null","fecha_fabricacion":"mm/aaaa o null","fecha_crpc":"mm/aaaa o null"},"valvula":{"codigo":"o null","serie":"o null"}}
+IMPORTANTE: los datos del vehículo están en la sección "Datos del Vehículo" — NO uses los datos del PEC ni del Taller (tienen etiquetas parecidas). Los códigos y series del equipo salen de las tablas de Regulador, Cilindro y Válvula del Cilindro. Si un dato no aparece o no se lee con confianza, poné null. No inventes datos.` });
+
+          const response = await fetch('/api/read-docs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, messages: [{ role: 'user', content }], license: localStorage.getItem(LICENSE_KEY) })
+          });
+          if (response.status === 403) throw new Error('El código de licencia no es válido. Tocá "Cambiar código de licencia" arriba para corregirlo.');
+          const data = await response.json();
+          if (!response.ok || data.type === 'error') {
+            const msg = (data.error && data.error.message) ? data.error.message : JSON.stringify(data).slice(0, 300);
+            throw new Error(`API (${response.status}): ${msg}`);
+          }
+          const textBlock = (data.content || []).find(b => b.type === 'text');
+          if (!textBlock) throw new Error('La respuesta no trajo texto.');
+          let d;
+          try { d = JSON.parse(textBlock.text.replace(/```json|```/g, '').trim()); }
+          catch (e2) { throw new Error('No pude interpretar la lectura — probá con una captura más nítida.'); }
+
+          // Convertir el JSON de la IA a la misma forma que produce
+          // parseEnargasText, para aplicarlo por el camino ya probado.
+          const mmYYYY = (v) => { const m = String(v || '').match(/(\d{1,2})\s*\/\s*(\d{2,4})/); return m ? { mes: m[1], anio: m[2].length <= 2 ? '20' + m[2] : m[2] } : null; };
+          let fechaObleaIso = null;
+          const mV = String(d.fecha_vencimiento_oblea || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+          if (mV) { let dd = mV[1], mm = mV[2], yy = mV[3]; if (yy.length === 2) yy = '20' + yy; fechaObleaIso = `${yy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`; }
+          const found = [];
+          if (d.dominio) found.push('Patente');
+          if (d.marca) found.push('Marca');
+          if (d.modelo) found.push('Modelo');
+          if (d.anio) found.push('Año');
+          if (d.uso) found.push('Uso');
+          if (fechaObleaIso) found.push('Vencimiento Oblea');
+          const regulador = { codigo: (d.regulador && d.regulador.codigo) || '', serie: (d.regulador && d.regulador.serie) || '' };
+          const cil = { codigo: (d.cilindro && d.cilindro.codigo) || '', serie: (d.cilindro && d.cilindro.serie) || '' };
+          if (d.cilindro && d.cilindro.crpc) cil.crpc = d.cilindro.crpc;
+          const fFab = mmYYYY(d.cilindro && d.cilindro.fecha_fabricacion);
+          if (fFab) { cil.fabricadoMes = fFab.mes; cil.fabricadoAnio = fFab.anio; }
+          const fCrpc = mmYYYY(d.cilindro && d.cilindro.fecha_crpc);
+          if (fCrpc) { cil.revisadoMes = fCrpc.mes; cil.revisadoAnio = fCrpc.anio; }
+          const valvula = { codigo: (d.valvula && d.valvula.codigo) || '', serie: (d.valvula && d.valvula.serie) || '' };
+          const hayEquipo = [regulador, cil, valvula].some(e => e.codigo || e.serie);
+          const parsed = {
+            patente: d.dominio || null, marca: d.marca || null, modelo: d.modelo || null,
+            uso: d.uso || null, anio: d.anio ? String(d.anio) : null,
+            fecha_oblea: fechaObleaIso, obleaActual: d.oblea_actual || null,
+            equipo: hayEquipo ? { regulador, cilindro: cil, valvula } : null,
+            found,
+          };
+          const aplicados = aplicarParsedEnargas(parsed);
+          if (!aplicados.length) throw new Error('La IA no encontró datos de ENARGAS en esa captura — fijate que se vea el detalle de la operación.');
+          enargasPasteOpen = false;
+          guardarSnapshotWizard();
+          render();
+          await customAlert('Datos cargados desde la captura: ' + aplicados.join(', ') + '. Revisalos y corregí lo que haga falta antes de guardar.', 'Lectura lista');
+        } catch (e) {
+          console.error(e);
+          const st = root.querySelector('#captura-enargas-status');
+          if (st) { st.className = 'agent-result err'; st.textContent = 'Error: ' + (e.message || 'no se pudo leer la captura'); }
+        } finally {
+          const btn = root.querySelector('#btn-captura-enargas');
+          if (btn) btn.disabled = false;
+          const inp = root.querySelector('#captura-enargas-input');
+          if (inp) inp.value = '';
+          const st = root.querySelector('#captura-enargas-status');
+          if (st && !st.classList.contains('err')) { st.className = ''; st.textContent = ''; }
+        }
+      });
+    }
 
 
     const btnAddCilindro = root.querySelector('#btn-add-cilindro');
