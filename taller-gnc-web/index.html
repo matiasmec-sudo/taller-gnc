@@ -4,14 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Estelita</title>
-<meta name="theme-color" content="#0F1620">
+<meta name="theme-color" content="#1D5BD8">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
-  html, body { margin:0; padding:0; background:#0F1620; }
+  html, body { margin:0; padding:0; background:#F4F6FA; }
 </style>
 </head>
 <body>
@@ -44,20 +44,21 @@ window.storage = {
 <div id="gnc-app"></div>
 <style>
 #gnc-app {
-  --bg: #0F1620;
-  --surface: #182230;
-  --surface-alt: #1F2C3C;
-  --line: #2B3A4C;
-  --flame: #3FA9F5;
-  --flame-dim: #2C7BB5;
-  --warn: #F2A93B;
-  --danger: #E3543A;
-  --ok: #4FB477;
-  --text: #E9F1F6;
-  --text-muted: #8CA0AC;
-  --mono: 'IBM Plex Mono', 'Courier New', monospace;
-  --sans: 'IBM Plex Sans', -apple-system, sans-serif;
-  --display: 'Oswald', 'Arial Narrow', sans-serif;
+  --bg: #F4F6FA;
+  --surface: #FFFFFF;
+  --surface-alt: #EEF2F9;
+  --line: #E3E8F0;
+  --flame: #1D5BD8;
+  --flame-dim: #7FA3E8;
+  --warn: #DF8B00;
+  --danger: #D93B2B;
+  --ok: #1E9E5A;
+  --text: #1A2333;
+  --text-muted: #6B7688;
+  --sombra: 0 2px 10px rgba(20,40,90,0.07);
+  --mono: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --sans: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --display: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
 
   font-family: var(--sans);
   color: var(--text);
@@ -71,20 +72,23 @@ window.storage = {
 
 #gnc-app .wrap { max-width: 980px; margin: 0 auto; padding: 24px 20px 60px; }
 
-/* HEADER */
+/* HEADER — banner azul con puntas redondeadas (estilo La Caja) */
 #gnc-app .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 16px; flex-wrap: wrap; margin-bottom: 28px;
+  gap: 16px; flex-wrap: wrap;
+  background: var(--flame); color: #fff;
+  margin: -24px -20px 0; padding: 22px 20px 52px;
+  border-radius: 0 0 28px 28px;
 }
 #gnc-app .brand { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; min-width: 0; }
 #gnc-app .menu-wrap { position: relative; align-self: center; }
 #gnc-app .menu-dropdown {
   position: absolute; top: 100%; left: 0; margin-top: 6px; z-index: 20;
-  background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
   padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 190px;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+  box-shadow: 0 8px 24px rgba(20,40,90,0.18);
 }
-#gnc-app .menu-dropdown .btn { width: 100%; text-align: left; justify-content: flex-start; }
+#gnc-app .menu-dropdown .btn { width: 100%; text-align: left; justify-content: flex-start; color: var(--text); border-color: transparent; }
 #gnc-app .menu-badge {
   position: absolute; top: -6px; right: -6px; background: var(--danger); color: #fff;
   border-radius: 999px; font-size: 10px; line-height: 1; padding: 3px 5px; font-weight: 700;
@@ -95,35 +99,45 @@ window.storage = {
   padding: 1px 6px; font-weight: 700; margin-left: 4px;
 }
 #gnc-app .brand .tag {
-  font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
-  color: var(--flame); border: 1px solid var(--flame-dim);
-  padding: 3px 7px; border-radius: 3px; text-transform: uppercase;
+  font-family: var(--sans); font-size: 11px; letter-spacing: 3px; font-weight: 700;
+  color: #fff; border: none; background: rgba(255,255,255,0.18);
+  padding: 4px 12px; border-radius: 999px; text-transform: uppercase;
 }
 #gnc-app h1 {
-  font-family: var(--display); font-weight: 600; font-size: 26px;
-  letter-spacing: 0.5px; margin: 0; text-transform: uppercase;
+  font-family: var(--display); font-weight: 700; font-size: 24px;
+  letter-spacing: 0.2px; margin: 0;
 }
 #gnc-app .taller-name-input {
-  background: transparent; border: none; border-bottom: 1px dashed var(--line);
-  color: var(--text); font-family: var(--display); font-size: 26px;
-  text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 0;
+  background: transparent; border: none; border-bottom: 1px dashed rgba(255,255,255,0.45);
+  color: #fff; font-family: var(--display); font-weight: 700; font-size: 24px;
+  letter-spacing: 0.2px; padding: 2px 0;
   width: 260px; max-width: 100%; outline: none;
 }
-#gnc-app .taller-name-input:focus { border-bottom-color: var(--flame); }
+#gnc-app .taller-name-input:focus { border-bottom-color: #fff; }
 @media (max-width: 480px) {
   #gnc-app .taller-name-input { flex: 1 1 100%; font-size: 20px; }
 }
+/* Botones y links dentro del banner azul, en blanco */
+#gnc-app .topbar .btn-ghost { color: rgba(255,255,255,0.9); border-color: rgba(255,255,255,0.4); }
+#gnc-app .topbar .btn-ghost:hover { color: #fff; border-color: #fff; background: rgba(255,255,255,0.12); }
+#gnc-app .topbar .menu-dropdown .btn-ghost { color: var(--text); border-color: transparent; }
+#gnc-app .topbar .menu-dropdown .btn-ghost:hover { color: var(--flame); background: var(--surface-alt); }
+#gnc-app .topbar .license-link { color: rgba(255,255,255,0.75); }
+#gnc-app .topbar .license-link:hover { color: #fff; }
 
-/* GAUGE */
-#gnc-app .gauge-box {
-  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
-  padding: 18px 22px; display: flex; align-items: center; gap: 18px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+/* RESUMEN — tarjetas flotantes que pisan el banner azul */
+#gnc-app .resumen-chips {
+  display: flex; gap: 10px; margin: -32px 0 18px; position: relative; z-index: 2;
 }
-#gnc-app .gauge-svg { width: 100px; height: 62px; flex-shrink: 0; }
-#gnc-app .gauge-legend { display: flex; flex-direction: column; gap: 4px; font-family: var(--mono); font-size: 12px; }
-#gnc-app .gauge-legend div { display: flex; align-items: center; gap: 6px; }
-#gnc-app .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+#gnc-app .chip {
+  flex: 1; background: var(--surface); border-radius: 16px; padding: 12px 8px;
+  text-align: center; box-shadow: 0 4px 14px rgba(20,40,90,0.10);
+}
+#gnc-app .chip .chip-num { font-size: 22px; font-weight: 800; line-height: 1.2; }
+#gnc-app .chip .chip-lbl { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+#gnc-app .chip-danger .chip-num { color: var(--danger); }
+#gnc-app .chip-warn .chip-num { color: var(--warn); }
+#gnc-app .chip-ok .chip-num { color: var(--ok); }
 
 /* CONTROLS */
 #gnc-app .controls {
@@ -132,35 +146,35 @@ window.storage = {
 #gnc-app input[type="text"], #gnc-app input[type="tel"], #gnc-app input[type="date"],
 #gnc-app input[type="month"], #gnc-app select, #gnc-app textarea {
   background: var(--surface); border: 1px solid var(--line); color: var(--text);
-  border-radius: 6px; padding: 9px 11px; font-family: var(--sans); font-size: 14px;
+  border-radius: 12px; padding: 9px 13px; font-family: var(--sans); font-size: 14px;
   outline: none; transition: border-color .15s ease, box-shadow .15s ease;
 }
 #gnc-app textarea { width: 100%; resize: vertical; min-height: 90px; font-family: var(--mono); font-size: 12.5px; }
 #gnc-app input:focus, #gnc-app select:focus, #gnc-app textarea:focus {
-  border-color: var(--flame); box-shadow: 0 0 0 3px rgba(63,169,245,0.15);
+  border-color: var(--flame); box-shadow: 0 0 0 3px rgba(29,91,216,0.15);
 }
-#gnc-app .search-input { flex: 1; min-width: 180px; }
+#gnc-app .search-input { flex: 1; min-width: 180px; border-radius: 14px; box-shadow: 0 2px 8px rgba(20,40,90,0.06); }
 #gnc-app .btn {
-  font-family: var(--sans); font-weight: 600; font-size: 13px; letter-spacing: 0.3px;
-  border-radius: 6px; padding: 10px 16px; border: 1px solid transparent; cursor: pointer;
+  font-family: var(--sans); font-weight: 700; font-size: 13px; letter-spacing: 0.2px;
+  border-radius: 12px; padding: 10px 16px; border: 1px solid transparent; cursor: pointer;
   min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   transition: transform .08s ease, filter .12s ease, background-color .15s ease, border-color .15s ease;
 }
-#gnc-app .btn:active { transform: scale(0.96); filter: brightness(0.85); }
-#gnc-app .btn-primary { background: var(--flame); color: #05202F; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+#gnc-app .btn:active { transform: scale(0.96); filter: brightness(0.9); }
+#gnc-app .btn-primary { background: var(--flame); color: #fff; box-shadow: 0 4px 12px rgba(29,91,216,0.30); }
 #gnc-app .btn-primary:hover { filter: brightness(1.08); }
-#gnc-app .btn-primary:active { filter: brightness(0.8); }
+#gnc-app .btn-primary:active { filter: brightness(0.9); }
 #gnc-app .btn-ghost { background: transparent; border-color: var(--line); color: var(--text-muted); }
-#gnc-app .btn-ghost:hover { color: var(--text); border-color: var(--flame-dim); background: rgba(63,169,245,0.08); }
-#gnc-app .btn-ghost:active { background: rgba(63,169,245,0.18); }
-#gnc-app .btn-wa { background: #1F3A2E; color: #7EE0A8; border-color: #2C5942; font-size: 12px; padding: 7px 10px; }
-#gnc-app .btn-wa:hover { filter: brightness(1.15); }
-#gnc-app .btn-danger-outline { background: transparent; color: var(--danger); border-color: #5A2C22; font-size: 12px; padding: 7px 10px; }
+#gnc-app .btn-ghost:hover { color: var(--flame); border-color: var(--flame-dim); background: rgba(29,91,216,0.06); }
+#gnc-app .btn-ghost:active { background: rgba(29,91,216,0.12); }
+#gnc-app .btn-wa { background: #E1F5EA; color: #157A44; border-color: transparent; font-size: 12px; padding: 7px 10px; }
+#gnc-app .btn-wa:hover { filter: brightness(0.97); }
+#gnc-app .btn-danger-outline { background: #FDE8E5; color: #C0281A; border-color: transparent; font-size: 12px; padding: 7px 10px; }
 #gnc-app .btn-danger-solid { background: var(--danger); color: #fff; border-color: var(--danger); font-size: 13px; }
 #gnc-app .btn-danger-solid:hover { filter: brightness(1.1); }
-#gnc-app .btn-danger-solid:active { filter: brightness(0.82); }
-#gnc-app .btn-agent { background: var(--surface-alt); color: var(--flame); border-color: var(--flame-dim); font-size: 12px; padding: 7px 10px; }
-#gnc-app .btn-agent:hover { filter: brightness(1.2); }
+#gnc-app .btn-danger-solid:active { filter: brightness(0.9); }
+#gnc-app .btn-agent { background: var(--flame); color: #fff; border-color: transparent; font-size: 12px; padding: 7px 10px; }
+#gnc-app .btn-agent:hover { filter: brightness(1.08); }
 #gnc-app .btn-sm { font-size: 12px; padding: 7px 10px; }
 #gnc-app #btn-toggle-menu { min-width: 44px; }
 #gnc-app input[type="text"], #gnc-app input[type="tel"],
@@ -176,12 +190,12 @@ window.storage = {
 
 /* FORM PANEL */
 #gnc-app .panel {
-  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
-  padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 18px;
+  padding: 20px; margin-bottom: 20px; box-shadow: var(--sombra);
 }
 #gnc-app .panel h2 {
-  font-family: var(--display); font-size: 16px; text-transform: uppercase;
-  letter-spacing: 1px; margin: 0 0 14px; color: var(--flame);
+  font-family: var(--display); font-size: 16px; font-weight: 800;
+  letter-spacing: 0.3px; margin: 0 0 14px; color: var(--flame);
 }
 #gnc-app .panel h2.panel-h2-sticky {
   position: sticky; top: 0; z-index: 5; background: var(--surface);
@@ -192,9 +206,9 @@ window.storage = {
   color: var(--text-muted); margin-top: 4px;
 }
 #gnc-app .panel h3 {
-  font-family: var(--display); font-size: 13px; text-transform: uppercase;
+  font-family: var(--display); font-size: 13px; text-transform: uppercase; font-weight: 700;
   letter-spacing: 1px; margin: 18px 0 10px; color: var(--text-muted);
-  border-top: 1px dashed var(--line); padding-top: 14px;
+  border-top: 1px solid var(--line); padding-top: 14px;
 }
 #gnc-app .panel h3.vehiculo-heading {
   font-size: 16px; color: var(--flame); border-top: 2px solid var(--flame-dim);
@@ -211,8 +225,8 @@ window.storage = {
 }
 #gnc-app .agent-box label { display: block; font-family: var(--mono); font-size: 11px; color: var(--flame); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
 #gnc-app .agent-hint { font-size: 11.5px; color: var(--text-muted); margin-top: 8px; line-height: 1.5; }
-#gnc-app .agent-result { font-family: var(--mono); font-size: 12px; margin-top: 10px; padding: 10px; border-radius: 6px; background: rgba(63,169,245,0.08); border: 1px solid var(--flame-dim); }
-#gnc-app .agent-result.err { background: rgba(227,84,58,0.1); border-color: #5A2C22; color: var(--danger); }
+#gnc-app .agent-result { font-family: var(--mono); font-size: 12px; margin-top: 10px; padding: 10px; border-radius: 12px; background: rgba(29,91,216,0.06); border: 1px solid var(--flame-dim); }
+#gnc-app .agent-result.err { background: #FDE8E5; border-color: #F0B4AB; color: #C0281A; }
 
 /* SCAN BOX (fotos DNI / Cedula) */
 #gnc-app .scan-box {
@@ -271,32 +285,57 @@ window.storage = {
 @keyframes gncModalFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes gncModalPop { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .gnc-modal-overlay {
-  position: fixed; inset: 0; background: rgba(5,10,16,0.62); z-index: 500;
+  position: fixed; inset: 0; background: rgba(20,35,60,0.45); z-index: 500;
   display: flex; align-items: center; justify-content: center; padding: 20px;
-  animation: gncModalFade 150ms ease-out; font-family: var(--mono, 'IBM Plex Mono', monospace);
+  animation: gncModalFade 150ms ease-out; font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 .gnc-modal-overlay.closing { animation: gncModalFade 150ms ease-in reverse; }
 .gnc-modal-box {
-  width: 100%; max-width: 320px; background: var(--surface, #182230);
-  border: 1px solid var(--line, #2B3A4C); border-radius: 10px; padding: 18px;
-  box-shadow: 0 12px 32px rgba(0,0,0,0.45); animation: gncModalPop 180ms ease-out;
-  color: var(--text, #E9F1F6);
+  width: 100%; max-width: 320px; background: #FFFFFF;
+  border: 1px solid #E3E8F0; border-radius: 18px; padding: 18px;
+  box-shadow: 0 12px 32px rgba(20,40,90,0.22); animation: gncModalPop 180ms ease-out;
+  color: #1A2333;
 }
 .gnc-modal-overlay.closing .gnc-modal-box { animation: gncModalPop 150ms ease-in reverse; }
 .gnc-modal-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
 .gnc-modal-icon {
   width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  font-family: var(--display, 'Oswald', sans-serif); font-size: 15px; font-weight: 600;
-  background: rgba(63,169,245,0.14); color: var(--flame, #3FA9F5);
+  font-family: inherit; font-size: 15px; font-weight: 700;
+  background: rgba(29,91,216,0.12); color: #1D5BD8;
 }
-.gnc-modal-box.danger .gnc-modal-icon { background: rgba(227,84,58,0.14); color: var(--danger, #E3543A); }
+.gnc-modal-box.danger .gnc-modal-icon { background: #FDE8E5; color: #C0281A; }
 .gnc-modal-title {
-  font-family: var(--display, 'Oswald', sans-serif); font-size: 14px; text-transform: uppercase;
-  letter-spacing: 0.5px; margin-bottom: 4px;
+  font-family: inherit; font-size: 14px; font-weight: 800;
+  letter-spacing: 0.2px; margin-bottom: 4px;
 }
-.gnc-modal-msg { font-size: 12.5px; color: var(--text-muted, #8CA0AC); line-height: 1.5; }
+.gnc-modal-msg { font-size: 12.5px; color: #6B7688; line-height: 1.5; }
 .gnc-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+/* Los modales viven fuera de #gnc-app, así que sus botones necesitan
+   estilos propios (si no, quedan con el look gris nativo del navegador). */
+.gnc-modal-box .btn {
+  font-family: inherit; font-weight: 700; font-size: 13px; letter-spacing: 0.2px;
+  border-radius: 12px; padding: 9px 16px; border: 1px solid transparent;
+  cursor: pointer; min-height: 40px; background: transparent;
+}
+.gnc-modal-box .btn:active { transform: scale(0.96); }
+.gnc-modal-box .btn-primary { background: #1D5BD8; color: #fff; }
+.gnc-modal-box .btn-danger-solid { background: #D93B2B; color: #fff; }
+.gnc-modal-box .btn-ghost { border-color: #E3E8F0; color: #6B7688; }
+.gnc-modal-box .btn-ghost:hover { color: #1D5BD8; border-color: #7FA3E8; }
+.gnc-modal-box select, .gnc-modal-box input {
+  background: #fff; border: 1px solid #E3E8F0; color: #1A2333;
+  border-radius: 12px; padding: 9px 13px; font-family: inherit; font-size: 14px;
+  width: 100%; min-height: 44px; box-sizing: border-box; outline: none;
+}
+.gnc-modal-box select:focus, .gnc-modal-box input:focus {
+  border-color: #1D5BD8; box-shadow: 0 0 0 3px rgba(29,91,216,0.15);
+}
+.gnc-modal-box .form-grid { display: grid; gap: 12px; }
+.gnc-modal-box .form-grid label {
+  display: flex; flex-direction: column; gap: 5px;
+  font-size: 12px; color: #6B7688; font-weight: 600;
+}
 
 /* BOTON FLOTANTE (FAB) — solo en mobile, alternativa al boton de arriba */
 #gnc-app .fab-nuevo-tramite { display: none; }
@@ -304,32 +343,57 @@ window.storage = {
   #gnc-app .fab-nuevo-tramite {
     display: flex; align-items: center; justify-content: center;
     position: fixed; bottom: 20px; right: 20px; width: 58px; height: 58px;
-    border-radius: 50%; background: var(--flame); color: #05202F; font-size: 28px;
-    font-weight: 600; border: none; box-shadow: 0 4px 16px rgba(63,169,245,0.45);
+    border-radius: 50%; background: var(--flame); color: #fff; font-size: 28px;
+    font-weight: 400; border: none; box-shadow: 0 6px 18px rgba(29,91,216,0.40);
     z-index: 40; cursor: pointer; line-height: 1;
   }
   #gnc-app .fab-nuevo-tramite:active { transform: scale(0.92); filter: brightness(0.85); }
 }
-#gnc-app .client-card-wrap { position: relative; margin-bottom: 12px; border-radius: 8px; overflow: hidden; }
+
+/* BARRA DE NAVEGACION INFERIOR — solo en mobile (estilo app) */
+#gnc-app .bottom-nav { display: none; }
+@media (max-width: 720px) {
+  #gnc-app .bottom-nav {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
+    background: var(--surface); border-top: 1px solid var(--line);
+    padding: 6px 0 max(10px, env(safe-area-inset-bottom));
+    box-shadow: 0 -2px 10px rgba(20,40,90,0.06);
+  }
+  #gnc-app .bottom-nav .bn-item {
+    flex: 1; background: none; border: none; cursor: pointer; padding: 4px 0;
+    font-family: var(--sans); font-size: 11px; font-weight: 600; color: var(--text-muted);
+    display: flex; flex-direction: column; align-items: center; gap: 2px; position: relative;
+  }
+  #gnc-app .bottom-nav .bn-item.activo { color: var(--flame); }
+  #gnc-app .bottom-nav .bn-ico { font-size: 19px; line-height: 1.2; }
+  #gnc-app .bottom-nav .bn-badge {
+    position: absolute; top: -2px; right: calc(50% - 24px);
+    background: var(--danger); color: #fff; font-size: 10px; font-weight: 800;
+    border-radius: 999px; padding: 1px 6px;
+  }
+  #gnc-app .wrap { padding-bottom: 120px; }
+  #gnc-app .fab-nuevo-tramite { bottom: 86px; }
+}
+#gnc-app .client-card-wrap { position: relative; margin-bottom: 14px; border-radius: 18px; overflow: hidden; }
 #gnc-app .client-card {
-  background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--line);
-  border-radius: 8px; padding: 16px 18px; position: relative; z-index: 1;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.25); transition: box-shadow .15s ease;
+  background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--line);
+  border-radius: 18px; padding: 16px 18px; position: relative; z-index: 1;
+  box-shadow: var(--sombra); transition: box-shadow .15s ease;
   touch-action: pan-y;
 }
-#gnc-app .client-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,0.35); }
+#gnc-app .client-card:hover { box-shadow: 0 6px 18px rgba(20,40,90,0.13); }
 #gnc-app .client-swipe-delete {
-  position: absolute; inset: 0; z-index: 0; border: none; border-radius: 8px;
-  background: var(--danger); color: #fff; font-family: var(--mono); font-weight: 600; font-size: 13px;
+  position: absolute; inset: 0; z-index: 0; border: none; border-radius: 18px;
+  background: var(--danger); color: #fff; font-family: var(--sans); font-weight: 700; font-size: 13px;
   display: flex; align-items: center; justify-content: flex-end; padding-right: 24px; cursor: pointer;
 }
 #gnc-app .client-card.st-danger { border-left-color: var(--danger); }
 #gnc-app .client-card.st-warn { border-left-color: var(--warn); }
 #gnc-app .client-card.st-ok { border-left-color: var(--ok); }
 #gnc-app .client-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
-#gnc-app .client-patente { font-family: var(--display); font-size: 22px; letter-spacing: 1px; }
-#gnc-app .client-modelo { font-family: var(--mono); font-size: 13px; color: var(--text); margin-top: 2px; }
-#gnc-app .client-name { font-family: var(--mono); font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+#gnc-app .client-patente { font-family: var(--display); font-weight: 800; font-size: 21px; letter-spacing: 1px; }
+#gnc-app .client-modelo { font-family: var(--sans); font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+#gnc-app .client-name { font-family: var(--sans); font-size: 13px; font-weight: 600; color: var(--text); margin-top: 4px; }
 #gnc-app .client-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 #gnc-app .client-detalle { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
 #gnc-app .client-detalle-grid {
@@ -340,21 +404,21 @@ window.storage = {
 #gnc-app .docs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
 @media (max-width: 640px) { #gnc-app .docs { grid-template-columns: 1fr; } }
 #gnc-app .doc-row {
-  background: var(--surface-alt); border-radius: 6px; padding: 10px 12px;
+  background: var(--surface-alt); border-radius: 12px; padding: 10px 12px;
   display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
   transition: background-color .15s ease;
 }
-#gnc-app .doc-row:hover { background: #24334570; }
+#gnc-app .doc-row:hover { background: #E4EBF7; }
 #gnc-app .doc-label { font-family: var(--mono); font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
 #gnc-app .doc-date { font-family: var(--mono); font-size: 13px; }
 #gnc-app .doc-sub { font-family: var(--mono); font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
 #gnc-app .badge {
-  font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
-  padding: 2px 7px; border-radius: 20px; font-weight: 600;
+  font-family: var(--sans); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 3px 9px; border-radius: 999px; font-weight: 700;
 }
-#gnc-app .badge-danger { background: rgba(227,84,58,0.18); color: var(--danger); }
-#gnc-app .badge-warn { background: rgba(242,169,59,0.18); color: var(--warn); }
-#gnc-app .badge-ok { background: rgba(79,180,119,0.18); color: var(--ok); }
+#gnc-app .badge-danger { background: #FDE8E5; color: #C0281A; }
+#gnc-app .badge-warn { background: #FCF1DC; color: #B36F00; }
+#gnc-app .badge-ok { background: #E1F5EA; color: #157A44; }
 
 #gnc-app .hidden { display: none !important; }
 #gnc-app .loading {
@@ -375,7 +439,7 @@ window.storage = {
 /* TRAMITES */
 #gnc-app .tramites-list { display: flex; flex-direction: column; gap: 8px; }
 #gnc-app .tramite-row {
-  background: var(--surface-alt); border-radius: 6px; padding: 10px 12px;
+  background: var(--surface-alt); border-radius: 12px; padding: 10px 12px;
   display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
 }
 #gnc-app .tramite-row select { font-size: 11px; padding: 5px 7px; }
@@ -710,38 +774,6 @@ window.storage = {
   async function saveTallerConfig() {
     try { await window.storage.set(TALLER_CONFIG_KEY, JSON.stringify(tallerConfig), false); }
     catch (e) { console.error('Error guardando configuración del taller', e); }
-  }
-
-  function gaugeSVG(counts) {
-    const total = counts.danger + counts.warn + counts.ok || 1;
-    const segs = [
-      { val: counts.danger, color: 'var(--danger)' },
-      { val: counts.warn, color: 'var(--warn)' },
-      { val: counts.ok, color: 'var(--ok)' }
-    ];
-    const cx = 50, cy = 55, r = 42;
-    let startAngle = 180;
-    let arcs = '';
-    segs.forEach(s => {
-      const sweep = (s.val / total) * 180;
-      const endAngle = startAngle - sweep;
-      const toRad = a => (a * Math.PI) / 180;
-      const x1 = cx + r * Math.cos(toRad(startAngle));
-      const y1 = cy - r * Math.sin(toRad(startAngle));
-      const x2 = cx + r * Math.cos(toRad(endAngle));
-      const y2 = cy - r * Math.sin(toRad(endAngle));
-      const largeArc = sweep > 180 ? 1 : 0;
-      if (s.val > 0) {
-        arcs += `<path d="M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 0 ${x2} ${y2}" stroke="${s.color}" stroke-width="10" fill="none" stroke-linecap="butt"/>`;
-      }
-      startAngle = endAngle;
-    });
-    return `<svg class="gauge-svg" viewBox="0 0 100 62" xmlns="http://www.w3.org/2000/svg">
-      <path d="M 8 55 A 42 42 0 0 1 92 55" stroke="var(--line)" stroke-width="10" fill="none"/>
-      ${arcs}
-      <text x="50" y="50" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="16" fill="var(--text)">${counts.danger + counts.warn}</text>
-      <text x="50" y="60" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="7" fill="var(--text-muted)">A REVISAR</text>
-    </svg>`;
   }
 
   function computeCounts() {
@@ -1178,10 +1210,10 @@ window.storage = {
   // solo texto — usado en la lista de clientes, historial y pendientes.
   function emptyIconSvg() {
     return `<svg width="56" height="56" viewBox="0 0 56 56" fill="none" aria-hidden="true">
-      <rect x="10" y="20" width="30" height="20" rx="3" stroke="#3FA9F5" stroke-width="2"/>
-      <circle cx="41" cy="30" r="6" stroke="#F2A93B" stroke-width="2"/>
-      <path d="M15 20V15a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v5" stroke="#3FA9F5" stroke-width="2"/>
-      <path d="M20 28h8" stroke="#8CA0AC" stroke-width="2" stroke-linecap="round"/>
+      <rect x="10" y="20" width="30" height="20" rx="3" stroke="#1D5BD8" stroke-width="2"/>
+      <circle cx="41" cy="30" r="6" stroke="#DF8B00" stroke-width="2"/>
+      <path d="M15 20V15a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v5" stroke="#1D5BD8" stroke-width="2"/>
+      <path d="M20 28h8" stroke="#6B7688" stroke-width="2" stroke-linecap="round"/>
     </svg>`;
   }
 
@@ -2491,7 +2523,7 @@ window.storage = {
   // cada fin de trazo y se restaura acá mismo si ya había algo dibujado.
   function attachSignaturePad(canvas) {
     const ctx = canvas.getContext('2d');
-    ctx.strokeStyle = '#E9F1F6';
+    ctx.strokeStyle = '#1A2333';
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -2733,14 +2765,12 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
             <button type="button" class="license-link" id="btn-toggle-taller-config">Configurar datos del taller</button>
             <button type="button" class="license-link" id="btn-change-license">Cambiar código de licencia</button>
           </div>
-          <div class="gauge-box">
-            ${gaugeSVG(counts)}
-            <div class="gauge-legend">
-              <div><span class="dot" style="background:var(--danger)"></span> ${counts.danger} vencido(s)</div>
-              <div><span class="dot" style="background:var(--warn)"></span> ${counts.warn} por vencer (≤${WARN_DAYS}d)</div>
-              <div><span class="dot" style="background:var(--ok)"></span> ${counts.ok} al día</div>
-            </div>
-          </div>
+        </div>
+
+        <div class="resumen-chips">
+          <div class="chip chip-danger"><div class="chip-num">${counts.danger}</div><div class="chip-lbl">Vencidos</div></div>
+          <div class="chip chip-warn"><div class="chip-num">${counts.warn}</div><div class="chip-lbl">Por vencer (${WARN_DAYS}d)</div></div>
+          <div class="chip chip-ok"><div class="chip-num">${counts.ok}</div><div class="chip-lbl">Al día</div></div>
         </div>
 
         ${showTallerConfig ? tallerConfigPanel(entrando.tallerConfig) : ''}
@@ -2769,6 +2799,12 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
           : list.map(clientCard).join('')}
       </div>
       ${algunPanelAbierto ? '' : '<button type="button" class="fab-nuevo-tramite" id="btn-fab-nuevo" aria-label="Nuevo trámite">+</button>'}
+      <div class="bottom-nav">
+        <button type="button" class="bn-item ${!showPendientes && !showHistorial && !showTallerConfig ? 'activo' : ''}" data-nav="inicio"><span class="bn-ico">🏠</span>Inicio</button>
+        <button type="button" class="bn-item ${showPendientes ? 'activo' : ''}" data-nav="pendientes">${pendCount ? `<span class="bn-badge">${pendCount}</span>` : ''}<span class="bn-ico">📋</span>Pendientes</button>
+        <button type="button" class="bn-item ${showHistorial ? 'activo' : ''}" data-nav="historial"><span class="bn-ico">🕓</span>Historial</button>
+        <button type="button" class="bn-item ${showTallerConfig ? 'activo' : ''}" data-nav="config"><span class="bn-ico">⚙️</span>Mi taller</button>
+      </div>
     `;
 
     attachEvents();
@@ -2806,6 +2842,21 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         saveTaller();
       });
     }
+
+    // Barra de navegación inferior (mobile). Solo abre/cierra los paneles de
+    // consulta — a propósito no toca el wizard ni las fotos, para no perder
+    // datos a medio cargar si se toca un botón sin querer.
+    root.querySelectorAll('[data-nav]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const destino = btn.dataset.nav;
+        showPendientes = destino === 'pendientes' ? !showPendientes : false;
+        showHistorial = destino === 'historial' ? !showHistorial : false;
+        showTallerConfig = destino === 'config' ? !showTallerConfig : false;
+        menuOpen = false;
+        render();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    });
 
     const btnToggleReminder = root.querySelector('#btn-toggle-reminder');
     if (btnToggleReminder) btnToggleReminder.addEventListener('click', () => {
