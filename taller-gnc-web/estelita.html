@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estelita — La app para talleres de GNC</title>
+<meta name="description" content="Estelita arma la ficha técnica oficial del ENARGAS, la envía al PEC por WhatsApp con la firma del cliente y las fotos de la documentación, y te avisa qué clientes vencen este mes. Todo desde tu celular.">
+<link rel="icon" href="icon-192.png">
+<meta property="og:title" content="Estelita — La app para talleres de GNC">
+<meta property="og:description" content="Ficha técnica oficial lista para el PEC, consulta ENARGAS por patente y avisos de vencimiento por WhatsApp. Probala gratis desde tu celular.">
+<meta property="og:image" content="https://taller-gnc.vercel.app/icon-512.png">
+<meta property="og:url" content="https://taller-gnc.vercel.app/estelita.html">
+<meta property="og:type" content="website">
+<style>
+  :root {
+    --azul: #1D5BD8;
+    --azul-oscuro: #123C8F;
+    --azul-noche: #0C2A66;
+    --celeste: #EAF1FE;
+    --celeste-borde: #CCDCF8;
+    --fondo: #F4F6FA;
+    --blanco: #FFFFFF;
+    --tinta: #16233B;
+    --tinta-suave: #5A6B85;
+    --linea: #E3E8F0;
+    --verde: #1E9E5A;
+    --naranja: #E8842C;
+    --radio: 16px;
+    --sombra: 0 10px 30px rgba(18, 60, 143, .10);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    background: var(--fondo);
+    color: var(--tinta);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  img { max-width: 100%; display: block; }
+  a { color: inherit; }
+  .contenedor { max-width: 1080px; margin: 0 auto; padding: 0 22px; }
+
+  /* ---------- Botones ---------- */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    font-size: 17px; font-weight: 700; text-decoration: none;
+    padding: 15px 28px; border-radius: 999px; transition: transform .15s, box-shadow .15s, background .15s;
+    border: 2px solid transparent;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn-primario { background: var(--azul); color: #fff; box-shadow: 0 8px 22px rgba(29, 91, 216, .35); }
+  .btn-primario:hover { background: var(--azul-oscuro); box-shadow: 0 10px 26px rgba(29, 91, 216, .45); }
+  .btn-claro { background: #fff; color: var(--azul-oscuro); border-color: var(--celeste-borde); }
+  .btn-claro:hover { border-color: var(--azul); }
+  .btn-blanco { background: #fff; color: var(--azul-oscuro); }
+  .btn-blanco:hover { background: var(--celeste); }
+
+  /* ---------- Barra superior ---------- */
+  .nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(255, 255, 255, .92); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--linea);
+  }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; padding: 12px 22px; max-width: 1080px; margin: 0 auto; }
+  .marca { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .marca img { width: 40px; height: 40px; border-radius: 10px; }
+  .marca b { font-size: 20px; letter-spacing: 2.5px; color: var(--azul-oscuro); }
+  .nav .btn { padding: 10px 20px; font-size: 15px; }
+  .nav-links { display: flex; gap: 22px; align-items: center; }
+  .nav-links a.enlace { text-decoration: none; color: var(--tinta-suave); font-weight: 600; font-size: 15px; }
+  .nav-links a.enlace:hover { color: var(--azul); }
+  @media (max-width: 720px) { .nav-links a.enlace { display: none; } }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    background: linear-gradient(160deg, var(--azul-noche) 0%, var(--azul-oscuro) 45%, var(--azul) 100%);
+    color: #fff; overflow: hidden; position: relative;
+  }
+  .hero::after {
+    content: ""; position: absolute; inset: 0;
+    background: radial-gradient(900px 400px at 85% 15%, rgba(255,255,255,.10), transparent 60%);
+    pointer-events: none;
+  }
+  .hero-inner {
+    display: grid; grid-template-columns: 1.15fr .85fr; gap: 40px; align-items: center;
+    padding: 72px 22px 84px; max-width: 1080px; margin: 0 auto; position: relative; z-index: 1;
+  }
+  .hero h1 { font-size: 46px; line-height: 1.12; letter-spacing: -.5px; }
+  .hero h1 span { color: #9FC0FF; }
+  .hero p.baja { font-size: 19px; margin-top: 18px; color: #D7E4FF; max-width: 480px; }
+  .hero-acciones { display: flex; gap: 14px; margin-top: 30px; flex-wrap: wrap; }
+  .hero-nota { margin-top: 16px; font-size: 14px; color: #A9C3F5; }
+  .chip-fila { display: flex; gap: 10px; margin-top: 26px; flex-wrap: wrap; }
+  .chip {
+    background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.22);
+    padding: 6px 14px; border-radius: 999px; font-size: 13.5px; font-weight: 600; color: #E4EDFF;
+  }
+  @media (max-width: 860px) {
+    .hero-inner { grid-template-columns: 1fr; padding: 48px 22px 40px; }
+    .hero h1 { font-size: 34px; }
+    .telefono-zona { justify-self: center; margin-top: 8px; }
+  }
+
+  /* ---------- Mockup de teléfono ---------- */
+  .telefono-zona { display: flex; justify-content: center; }
+  .telefono {
+    width: 300px; background: #0B1730; border-radius: 38px; padding: 12px;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, .40), 0 0 0 2px rgba(255,255,255,.08);
+    transform: rotate(2.5deg);
+  }
+  .pantalla { background: var(--fondo); border-radius: 28px; overflow: hidden; }
+  .p-top { background: #fff; padding: 14px 14px 10px; border-bottom: 1px solid var(--linea); display: flex; align-items: center; gap: 8px; }
+  .p-top img { width: 26px; height: 26px; border-radius: 7px; }
+  .p-top b { font-size: 13px; letter-spacing: 2px; color: var(--azul-oscuro); }
+  .p-buscar {
+    margin: 12px; background: #fff; border: 1.5px solid var(--celeste-borde); border-radius: 12px;
+    padding: 9px 12px; font-size: 12px; color: var(--tinta-suave); display: flex; align-items: center; gap: 8px;
+  }
+  .p-card { background: #fff; border: 1px solid var(--linea); border-radius: 14px; margin: 0 12px 12px; padding: 13px 14px; box-shadow: 0 4px 14px rgba(18,60,143,.07); }
+  .p-patente { font-size: 21px; font-weight: 800; letter-spacing: 1.5px; color: var(--tinta); }
+  .p-modelo { font-size: 12.5px; color: var(--tinta-suave); margin-top: 2px; }
+  .p-badges { display: flex; gap: 6px; margin-top: 9px; }
+  .p-badge { font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px; }
+  .p-badge.ok { background: #E3F6EC; color: var(--verde); }
+  .p-badge.warn { background: #FDF0E1; color: var(--naranja); }
+  .p-botones { display: flex; gap: 7px; margin-top: 11px; }
+  .p-btn { font-size: 11px; font-weight: 700; padding: 7px 12px; border-radius: 9px; }
+  .p-btn.azul { background: var(--azul); color: #fff; }
+  .p-btn.borde { border: 1.5px solid var(--celeste-borde); color: var(--azul-oscuro); }
+  .p-btn.verde { background: #E3F6EC; color: var(--verde); }
+  .p-fab {
+    position: relative; margin: -6px 14px 14px auto; width: 44px; height: 44px; border-radius: 50%;
+    background: var(--azul); color: #fff; font-size: 26px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 18px rgba(29,91,216,.4);
+  }
+
+  /* ---------- Secciones ---------- */
+  section { padding: 72px 0; }
+  .titulo-seccion { text-align: center; max-width: 640px; margin: 0 auto 46px; }
+  .titulo-seccion h2 { font-size: 32px; letter-spacing: -.3px; color: var(--tinta); }
+  .titulo-seccion p { color: var(--tinta-suave); font-size: 17px; margin-top: 10px; }
+  .kicker {
+    display: inline-block; font-size: 13px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--azul); background: var(--celeste); border: 1px solid var(--celeste-borde);
+    padding: 4px 14px; border-radius: 999px; margin-bottom: 14px;
+  }
+
+  /* ---------- Funciones ---------- */
+  .grilla { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  @media (max-width: 860px) { .grilla { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .grilla { grid-template-columns: 1fr; } }
+  .tarjeta {
+    background: #fff; border: 1px solid var(--linea); border-radius: var(--radio);
+    padding: 26px 24px; box-shadow: var(--sombra);
+  }
+  .tarjeta .icono {
+    width: 48px; height: 48px; border-radius: 13px; background: var(--celeste);
+    display: flex; align-items: center; justify-content: center; margin-bottom: 16px;
+  }
+  .tarjeta .icono svg { width: 26px; height: 26px; stroke: var(--azul); }
+  .tarjeta h3 { font-size: 18px; margin-bottom: 8px; }
+  .tarjeta p { font-size: 14.5px; color: var(--tinta-suave); }
+
+  /* ---------- Cómo funciona ---------- */
+  .pasos { background: #fff; border-top: 1px solid var(--linea); border-bottom: 1px solid var(--linea); }
+  .pasos-grilla { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; }
+  @media (max-width: 760px) { .pasos-grilla { grid-template-columns: 1fr; } }
+  .paso { text-align: center; padding: 0 10px; }
+  .paso .numero {
+    width: 54px; height: 54px; border-radius: 50%; margin: 0 auto 16px;
+    background: var(--azul); color: #fff; font-size: 24px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 20px rgba(29,91,216,.3);
+  }
+  .paso h3 { font-size: 18.5px; margin-bottom: 8px; }
+  .paso p { font-size: 15px; color: var(--tinta-suave); }
+
+  /* ---------- Planilla ---------- */
+  .planilla-seccion .contenedor { display: grid; grid-template-columns: .9fr 1.1fr; gap: 48px; align-items: center; }
+  @media (max-width: 860px) { .planilla-seccion .contenedor { grid-template-columns: 1fr; } }
+  .hoja {
+    background: #fff; border: 1px solid #C9D4E6; border-radius: 6px; padding: 18px;
+    box-shadow: 0 24px 50px rgba(18,60,143,.16); transform: rotate(-1.5deg); max-width: 380px; margin: 0 auto;
+  }
+  .hoja .h-titulo { border: 2px solid var(--tinta); text-align: center; font-size: 11px; font-weight: 800; letter-spacing: 1px; padding: 5px; }
+  .hoja .h-fila { display: flex; gap: 6px; margin-top: 8px; }
+  .hoja .h-caja { flex: 1; border: 1px solid #B9C6DC; border-radius: 3px; height: 26px; position: relative; }
+  .hoja .h-caja::after { content: attr(data-l); position: absolute; top: 2px; left: 5px; font-size: 6.5px; color: #8DA0BE; font-weight: 700; letter-spacing: .5px; }
+  .hoja .h-caja.llena::before { content: attr(data-v); position: absolute; bottom: 2px; left: 5px; font-size: 9px; font-weight: 700; color: var(--tinta); }
+  .hoja .h-firma { margin-top: 10px; border: 1px solid #B9C6DC; border-radius: 3px; padding: 6px 8px 4px; display: flex; justify-content: space-between; align-items: flex-end; }
+  .hoja .h-firma .garabato { font-family: "Segoe Script", "Comic Sans MS", cursive; font-size: 16px; color: var(--azul-oscuro); transform: rotate(-4deg); }
+  .hoja .h-firma small { font-size: 6.5px; color: #8DA0BE; font-weight: 700; }
+  .hoja .h-sello { margin-top: 10px; text-align: center; font-size: 8px; font-weight: 800; color: var(--verde); border: 1.5px dashed var(--verde); border-radius: 4px; padding: 4px; letter-spacing: 1px; }
+  .lista-ticks { list-style: none; margin-top: 22px; }
+  .lista-ticks li { display: flex; gap: 12px; margin-bottom: 14px; font-size: 16px; align-items: flex-start; }
+  .lista-ticks .tick {
+    flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; background: #E3F6EC; color: var(--verde);
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; margin-top: 2px;
+  }
+
+  /* ---------- Privacidad banda ---------- */
+  .banda {
+    background: var(--celeste); border-top: 1px solid var(--celeste-borde); border-bottom: 1px solid var(--celeste-borde);
+    padding: 34px 0; text-align: center;
+  }
+  .banda p { font-size: 17px; color: var(--azul-oscuro); font-weight: 600; max-width: 720px; margin: 0 auto; }
+
+  /* ---------- Instalar ---------- */
+  .instalar { background: linear-gradient(160deg, var(--azul-oscuro), var(--azul)); color: #fff; }
+  .instalar .contenedor { display: grid; grid-template-columns: 1.1fr .9fr; gap: 48px; align-items: center; }
+  @media (max-width: 860px) { .instalar .contenedor { grid-template-columns: 1fr; text-align: center; } .instalar ol { text-align: left; } }
+  .instalar h2 { font-size: 32px; }
+  .instalar p.baja { color: #D7E4FF; font-size: 17px; margin-top: 12px; }
+  .instalar ol { margin: 22px 0 0 20px; font-size: 16.5px; display: grid; gap: 10px; color: #EAF1FF; }
+  .instalar .btn { margin-top: 28px; }
+  .qr-caja {
+    background: #fff; border-radius: 22px; padding: 26px; text-align: center; color: var(--tinta);
+    box-shadow: 0 24px 50px rgba(0,0,0,.25); max-width: 320px; margin: 0 auto;
+  }
+  .qr-caja img { width: 220px; height: 220px; margin: 0 auto; }
+  .qr-caja b { display: block; margin-top: 12px; font-size: 16px; color: var(--azul-oscuro); }
+  .qr-caja small { color: var(--tinta-suave); font-size: 13px; }
+
+  /* ---------- Contacto ---------- */
+  .contacto { text-align: center; }
+  .contacto .tarjeta-contacto {
+    background: #fff; border: 1px solid var(--linea); border-radius: 22px; box-shadow: var(--sombra);
+    max-width: 640px; margin: 0 auto; padding: 44px 34px;
+  }
+  .contacto h2 { font-size: 28px; }
+  .contacto p { color: var(--tinta-suave); margin-top: 10px; font-size: 16.5px; }
+  .contacto-acciones { display: flex; gap: 14px; justify-content: center; margin-top: 26px; flex-wrap: wrap; }
+  .btn-wsp { background: #1FAF5A; color: #fff; box-shadow: 0 8px 22px rgba(31,175,90,.35); }
+  .btn-wsp:hover { background: #178F49; }
+
+  /* ---------- Pie ---------- */
+  footer { padding: 34px 0 44px; text-align: center; color: var(--tinta-suave); font-size: 14px; }
+  footer .marca { justify-content: center; margin-bottom: 10px; }
+  footer .marca img { width: 30px; height: 30px; }
+  footer .marca b { font-size: 16px; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a class="marca" href="#">
+      <img src="icon-192.png" alt="Estelita">
+      <b>ESTELITA</b>
+    </a>
+    <div class="nav-links">
+      <a class="enlace" href="#funciones">Funciones</a>
+      <a class="enlace" href="#como-funciona">Cómo funciona</a>
+      <a class="enlace" href="#instalar">Instalar</a>
+      <a class="btn btn-primario" href="https://taller-gnc.vercel.app" target="_blank" rel="noopener">Abrir Estelita</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div>
+      <h1>El taller de GNC,<br><span>sin papeles ni vueltas.</span></h1>
+      <p class="baja">Estelita arma la ficha técnica oficial, la manda al PEC por WhatsApp con la firma del cliente y las fotos de la documentación, y te avisa qué clientes vencen este mes.</p>
+      <div class="hero-acciones">
+        <a class="btn btn-blanco" href="https://taller-gnc.vercel.app" target="_blank" rel="noopener">Probar Estelita</a>
+        <a class="btn btn-primario" style="border-color: rgba(255,255,255,.4);" href="#instalar">Instalar en el celular</a>
+      </div>
+      <div class="chip-fila">
+        <span class="chip">Planilla oficial ENARGAS</span>
+        <span class="chip">Firma en pantalla</span>
+        <span class="chip">Consulta por patente</span>
+        <span class="chip">Sin instalación complicada</span>
+      </div>
+    </div>
+    <div class="telefono-zona">
+      <div class="telefono">
+        <div class="pantalla">
+          <div class="p-top"><img src="icon-192.png" alt=""><b>ESTELITA</b></div>
+          <div class="p-buscar">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5A6B85" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            Buscá por patente o nombre…
+          </div>
+          <div class="p-card">
+            <div class="p-patente">AB 123 CD</div>
+            <div class="p-modelo">Fiat Siena EL 1.4 · 2015</div>
+            <div class="p-badges">
+              <span class="p-badge ok">Oblea al día</span>
+              <span class="p-badge warn">P. hidráulica 08/2026</span>
+            </div>
+            <div class="p-botones">
+              <span class="p-btn azul">Inicio de trámite</span>
+              <span class="p-btn verde">WhatsApp</span>
+            </div>
+          </div>
+          <div class="p-card" style="opacity:.65;">
+            <div class="p-patente">AC 987 XT</div>
+            <div class="p-modelo">VW Gol Trend · 2018</div>
+            <div class="p-badges">
+              <span class="p-badge warn">Oblea vence este mes</span>
+            </div>
+            <div class="p-botones">
+              <span class="p-btn azul">Inicio de trámite</span>
+              <span class="p-btn borde">Documentación</span>
+            </div>
+          </div>
+          <div class="p-fab">+</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="funciones">
+  <div class="contenedor">
+    <div class="titulo-seccion">
+      <span class="kicker">Funciones</span>
+      <h2>Todo lo que hacés a mano, lo hace Estelita</h2>
+      <p>Pensada por gente de taller, para el trabajo real de todos los días.</p>
+    </div>
+    <div class="grilla">
+      <div class="tarjeta">
+        <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M7 3h8l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4h4M9 12h7M9 15.5h7M9 8.5h3"/></svg></div>
+        <h3>Ficha técnica oficial</h3>
+        <p>Genera el PDF con el modelo oficial del ENARGAS (ANEXO I — Res. 2603/02), completo y prolijo, listo para el PEC.</p>
+      </div>
+      <div class="tarjeta">
+        <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.5L4 20l1.1-4.4A8.5 8.5 0 1 1 21 11.5z"/></svg></div>
+        <h3>Envío al PEC por WhatsApp</h3>
+        <p>Un toque y la ficha sale por WhatsApp con la firma del cliente y las fotos de la documentación, todo en un solo archivo.</p>
+      </div>
+      <div class="tarjeta">
+        <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
+        <h3>Consulta ENARGAS por patente</h3>
+        <p>Con la patente, los datos del vehículo y del equipo (regulador, cilindro, válvula) se cargan solos desde la consulta oficial.</p>
+      </div>
+      <div class="tarjeta">
+        <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></div>
+        <h3>Avisos de vencimiento</h3>
+        <p>Cada mes, Estelita te muestra qué clientes vencen y te deja el mensaje de WhatsApp armado para avisarles en un toque.</p>
+      </div>
+      <div class="tarjeta">
+        <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M4 8a2 2 0 0 1 2-2h2l1.5-2h5L16 6h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z"/><circle cx="12" cy="12.5" r="3.5"/></svg></div>
+        <h3>Documentación en fotos</h3>
+        <p>Sacale una foto al DNI, la cédula y la tarjeta de GNC: quedan guardadas con el cliente y la IA lee los datos por vos.</p>
+      </div>
+      <div class="tarjeta">
+        <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4.5"/></svg></div>
+        <h3>Tus datos, en tu equipo</h3>
+        <p>Los datos de tus clientes quedan guardados en tu propio celular o computadora. No se suben a ninguna nube.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="pasos" id="como-funciona">
+  <div class="contenedor">
+    <div class="titulo-seccion">
+      <span class="kicker">Cómo funciona</span>
+      <h2>Un trámite completo en tres pasos</h2>
+    </div>
+    <div class="pasos-grilla">
+      <div class="paso">
+        <div class="numero">1</div>
+        <h3>Cargá la patente</h3>
+        <p>Buscá el vehículo en ENARGAS desde la app: los datos del auto y del equipo de GNC se completan solos.</p>
+      </div>
+      <div class="paso">
+        <div class="numero">2</div>
+        <h3>El cliente firma en pantalla</h3>
+        <p>Elegís el tipo de trámite, revisás el equipo y el cliente firma con el dedo, directo en tu celular.</p>
+      </div>
+      <div class="paso">
+        <div class="numero">3</div>
+        <h3>Enviá la ficha al PEC</h3>
+        <p>Estelita arma el PDF oficial con firma y fotos, y lo manda por WhatsApp. Listo, trámite despachado.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="planilla-seccion">
+  <div class="contenedor">
+    <div>
+      <div class="hoja">
+        <div class="h-titulo">FICHA TÉCNICA DEL EQUIPO PARA GNC</div>
+        <div class="h-fila">
+          <div class="h-caja llena" data-l="DOMINIO" data-v="AB 123 CD"></div>
+          <div class="h-caja llena" data-l="MARCA" data-v="FIAT"></div>
+          <div class="h-caja llena" data-l="AÑO" data-v="2015"></div>
+        </div>
+        <div class="h-fila">
+          <div class="h-caja llena" data-l="PROPIETARIO" data-v="JUAN PÉREZ" style="flex:2;"></div>
+          <div class="h-caja llena" data-l="DNI" data-v="30.111.222"></div>
+        </div>
+        <div class="h-fila">
+          <div class="h-caja llena" data-l="REGULADOR — CÓDIGO" data-v="RG01"></div>
+          <div class="h-caja llena" data-l="N° SERIE" data-v="R-5540"></div>
+        </div>
+        <div class="h-fila">
+          <div class="h-caja llena" data-l="CILINDRO — CÓDIGO" data-v="TT01"></div>
+          <div class="h-caja llena" data-l="N° SERIE" data-v="156824"></div>
+          <div class="h-caja llena" data-l="CRPC" data-v="CR-99"></div>
+        </div>
+        <div class="h-firma">
+          <span class="garabato">Juan Pérez</span>
+          <small>FIRMA DEL PROPIETARIO</small>
+        </div>
+        <div class="h-sello">PDF LISTO PARA ENVIAR AL PEC</div>
+      </div>
+    </div>
+    <div>
+      <span class="kicker">La planilla, resuelta</span>
+      <h2 style="font-size:30px;">La misma ficha que llenás a mano, hecha sola</h2>
+      <ul class="lista-ticks">
+        <li><span class="tick">✓</span><span>Sigue el <b>modelo oficial del ENARGAS</b> (ANEXO I — Documento N° 3, Resolución 2603/2002).</span></li>
+        <li><span class="tick">✓</span><span>Los datos del cliente, el vehículo y el equipo <b>se completan una sola vez</b> y quedan para el próximo trámite.</span></li>
+        <li><span class="tick">✓</span><span>La <b>firma del propietario</b> va directo en el PDF, dibujada en la pantalla del celular.</span></li>
+        <li><span class="tick">✓</span><span>Las <b>fotos de la documentación</b> viajan en el mismo archivo: el PEC recibe todo junto.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<div class="banda">
+  <div class="contenedor">
+    <p>Sin abonos por cliente, sin sistemas complicados, sin cambiar tu forma de trabajar: Estelita se maneja como WhatsApp.</p>
+  </div>
+</div>
+
+<section class="instalar" id="instalar">
+  <div class="contenedor">
+    <div>
+      <span class="kicker" style="background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.3); color:#fff;">Instalar</span>
+      <h2>Llevala en el bolsillo</h2>
+      <p class="baja">Estelita se instala desde el navegador, sin pasar por el Play Store. En dos minutos la tenés como una app más en tu celular.</p>
+      <ol>
+        <li>Escaneá el código QR con la cámara del celular (o tocá el botón de abajo).</li>
+        <li>Se abre Estelita en Chrome.</li>
+        <li>Tocá el menú <b>☰</b> y elegí <b>“Instalar app”</b>. Listo: te queda el ícono en la pantalla de inicio.</li>
+      </ol>
+      <a class="btn btn-blanco" href="https://taller-gnc.vercel.app" target="_blank" rel="noopener">Abrir Estelita ahora</a>
+    </div>
+    <div>
+      <div class="qr-caja">
+        <img src="qr-estelita.png" alt="Código QR para abrir Estelita">
+        <b>Escaneame con la cámara</b>
+        <small>taller-gnc.vercel.app</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="contacto" id="contacto">
+  <div class="contenedor">
+    <div class="tarjeta-contacto">
+      <h2>¿La querés en tu taller?</h2>
+      <p>Escribinos y te damos tu <b>código de licencia</b> para activar Estelita, con una demo por videollamada si la necesitás.</p>
+      <div class="contacto-acciones">
+        <a class="btn btn-wsp" id="btn-contacto-wsp" href="#" style="display:none;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.1 14.1c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.5-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1.1-1.4-1.1-2.7s.7-1.9.9-2.2c.2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.4.2.5.7 1.8.8 1.9.1.1.1.3 0 .4-.1.2-.1.3-.3.5l-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.6-.1.2-.2.7-.8.9-1.1.2-.3.4-.2.6-.1.2.1 1.5.7 1.7.8.3.1.4.2.5.3 0 .2 0 .7-.2 1.3z"/></svg>
+          Consultar por WhatsApp
+        </a>
+        <a class="btn btn-primario" href="mailto:matiasmec@hotmail.com?subject=Quiero%20Estelita%20en%20mi%20taller&body=Hola!%20Quiero%20saber%20m%C3%A1s%20de%20Estelita%20para%20mi%20taller%20de%20GNC.">Consultar por correo</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="marca">
+    <img src="icon-192.png" alt="">
+    <b>ESTELITA</b>
+  </div>
+  <div>La app para talleres de GNC · Hecha en Mar del Plata, Argentina</div>
+</footer>
+
+<script>
+  // Número de WhatsApp para consultas comerciales (formato internacional, solo
+  // dígitos, ej: 5492235550000). Si está vacío, el botón queda oculto y solo
+  // se muestra el contacto por correo.
+  const WHATSAPP_CONTACTO = '';
+  if (WHATSAPP_CONTACTO) {
+    const b = document.getElementById('btn-contacto-wsp');
+    b.href = 'https://wa.me/' + WHATSAPP_CONTACTO + '?text=' + encodeURIComponent('Hola! Quiero saber más de Estelita para mi taller de GNC.');
+    b.style.display = 'inline-flex';
+  }
+</script>
+
+</body>
+</html>
