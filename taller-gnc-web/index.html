@@ -85,6 +85,15 @@ window.storage = {
   box-shadow: 0 4px 14px rgba(0,0,0,0.45);
 }
 #gnc-app .menu-dropdown .btn { width: 100%; text-align: left; justify-content: flex-start; }
+#gnc-app .menu-badge {
+  position: absolute; top: -6px; right: -6px; background: var(--danger); color: #fff;
+  border-radius: 999px; font-size: 10px; line-height: 1; padding: 3px 5px; font-weight: 700;
+  min-width: 15px; text-align: center;
+}
+#gnc-app .menu-badge-inline {
+  background: var(--danger); color: #fff; border-radius: 999px; font-size: 10px;
+  padding: 1px 6px; font-weight: 700; margin-left: 4px;
+}
 #gnc-app .brand .tag {
   font-family: var(--mono); font-size: 11px; letter-spacing: 2px;
   color: var(--flame); border: 1px solid var(--flame-dim);
@@ -154,6 +163,10 @@ window.storage = {
   font-family: var(--display); font-size: 16px; text-transform: uppercase;
   letter-spacing: 1px; margin: 0 0 14px; color: var(--flame);
 }
+#gnc-app .panel h2.panel-h2-sticky {
+  position: sticky; top: 0; z-index: 5; background: var(--surface);
+  margin: -20px -20px 14px; padding: 16px 20px 10px; border-bottom: 1px solid var(--line);
+}
 #gnc-app .panel h3 {
   font-family: var(--display); font-size: 13px; text-transform: uppercase;
   letter-spacing: 1px; margin: 18px 0 10px; color: var(--text-muted);
@@ -190,6 +203,11 @@ window.storage = {
   border: 1px solid var(--line); border-radius: 6px; padding: 8px; width: 100%;
 }
 #gnc-app .scan-thumb { width: 100%; height: 70px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); display: none; }
+#gnc-app .scan-slot-buttons { display: flex; gap: 6px; }
+#gnc-app .scan-slot-buttons label.btn {
+  flex: 1; text-align: center; justify-content: center; cursor: pointer;
+  font-family: inherit; font-size: 12px; text-transform: none; letter-spacing: normal; color: inherit;
+}
 #gnc-app .scan-actions { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
 #gnc-app .scan-status { font-family: var(--mono); font-size: 12px; color: var(--text-muted); }
 #gnc-app .scan-status.ok { color: var(--ok); }
@@ -211,9 +229,16 @@ window.storage = {
 #gnc-app .client-card.st-warn { border-left-color: var(--warn); }
 #gnc-app .client-card.st-ok { border-left-color: var(--ok); }
 #gnc-app .client-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
-#gnc-app .client-name { font-family: var(--display); font-size: 18px; text-transform: uppercase; letter-spacing: 0.4px; }
-#gnc-app .client-meta { font-family: var(--mono); font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+#gnc-app .client-patente { font-family: var(--display); font-size: 22px; letter-spacing: 1px; }
+#gnc-app .client-modelo { font-family: var(--mono); font-size: 13px; color: var(--text); margin-top: 2px; }
+#gnc-app .client-name { font-family: var(--mono); font-size: 11px; color: var(--text-muted); margin-top: 4px; }
 #gnc-app .client-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+#gnc-app .client-detalle { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+#gnc-app .client-detalle-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 16px; font-size: 12px; margin-bottom: 10px;
+}
+@media (max-width: 640px) { #gnc-app .client-detalle-grid { grid-template-columns: 1fr; } }
+#gnc-app .client-detalle-grid .doc-label { display: block; margin-bottom: 2px; }
 #gnc-app .docs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
 @media (max-width: 640px) { #gnc-app .docs { grid-template-columns: 1fr; } }
 #gnc-app .doc-row {
@@ -300,6 +325,21 @@ window.storage = {
   const LICENSE_KEY = 'gnc_license_code';
   const TALLER_CONFIG_KEY = 'gnc_taller_config_v1';
 
+  // Chrome/Android dispara este evento cuando la app cumple los requisitos
+  // para instalarse (manifest + service worker ya están OK) — lo guardamos
+  // para poder mostrar un botón propio "Instalar app" en vez de depender de
+  // que el usuario encuentre la opción en el menú del navegador. En iPhone
+  // Safari no existe este evento — ahí instalar es siempre manual (Compartir
+  // → Agregar a pantalla de inicio).
+  let deferredInstallPrompt = null;
+  let showInstallButton = false;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    showInstallButton = true;
+    if (typeof render === 'function' && ready) render();
+  });
+
   const TALLER_CONFIG_DEFAULT = {
     razonSocial: '', direccion: '', cuit: '',
     tecnicoNombre: '', tecnicoMatricula: '',
@@ -314,6 +354,9 @@ window.storage = {
   let editingId = null;
   let editMode = null; // 'documentacion' | 'tramite'
   let ready = false;
+  // Ids de clientes cuya tarjeta tiene el detalle (datos + historial de
+  // trámites) desplegado — no hace falta entrar a editar solo para mirar.
+  const clientesExpandidos = new Set();
 
   root.innerHTML = '<div class="loading">Cargando datos del taller...</div>';
 
@@ -418,6 +461,14 @@ window.storage = {
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   }
 
+  // Link de WhatsApp genérico (no atado a oblea/prueba) para contactar al
+  // cliente por cualquier motivo desde su tarjeta.
+  function waLinkGeneral(cliente) {
+    const phone = cleanPhone(cliente.telefono);
+    const msg = `Hola ${cliente.nombre}! Te escribimos de ${tallerNombre}.`;
+    return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  }
+
   async function loadData() {
     try {
       const res = await window.storage.get(STORAGE_KEY, false);
@@ -434,6 +485,38 @@ window.storage = {
     if (migrateClientes()) await saveClientes();
     ready = true;
     render();
+    iniciarAvisoPendientesDiario();
+  }
+
+  // Aviso simple (no requiere servidor ni push real): mientras la pestaña
+  // esté abierta, revisa cada minuto si es de lunes a sábado a partir de
+  // las 15hs y todavía no se avisó hoy — si hay trámites pendientes,
+  // dispara una notificación del navegador. Si se cierra la app antes de
+  // esa hora, ese día no llega el aviso (limitación conocida y aceptada:
+  // hace falta push real + servidor propio para avisar con la app cerrada).
+  const AVISO_PENDIENTES_KEY = 'gnc_pendientes_notif_fecha';
+  let avisoPendientesInterval = null;
+  function chequearAvisoPendientesDiario() {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const ahora = new Date();
+    if (ahora.getDay() === 0) return; // domingo no
+    if (ahora.getHours() < 15) return;
+    const hoyISO = ahora.toISOString().slice(0, 10);
+    if (localStorage.getItem(AVISO_PENDIENTES_KEY) === hoyISO) return;
+    const cantidad = pendientesItems().length;
+    if (cantidad === 0) return;
+    try {
+      new Notification('Estelita', {
+        body: `Tenés ${cantidad} trámite(s) pendiente(s) de enviar al PEC.`,
+        icon: 'icon-192.png',
+      });
+    } catch (e) { /* algunos navegadores no soportan "new Notification" directo */ }
+    localStorage.setItem(AVISO_PENDIENTES_KEY, hoyISO);
+  }
+  function iniciarAvisoPendientesDiario() {
+    if (avisoPendientesInterval) return;
+    chequearAvisoPendientesDiario();
+    avisoPendientesInterval = setInterval(chequearAvisoPendientesDiario, 60000);
   }
 
   // Suma campos nuevos (tramites, ultimoAvisoMes, notas) a clientes guardados
@@ -470,7 +553,7 @@ window.storage = {
   const OPERACION_OPCIONES = [
     { value: '', label: '-- Elegí --' },
     { value: 'montaje', label: 'Montaje' },
-    { value: 'sigue', label: 'Sigue' },
+    { value: 'sigue', label: 'Sin Cambios' },
     { value: 'desmontaje', label: 'Desmontaje' },
     { value: 'baja', label: 'Baja' },
   ];
@@ -595,16 +678,26 @@ window.storage = {
     </div>`;
   }
 
-  function incompletosBanner() {
+  // Últimos trámites (uno por cliente) que todavía no quedaron "enviado" —
+  // usado tanto para el contador chico del menú como para el panel de
+  // "Trámites pendientes".
+  function pendientesItems() {
     const items = [];
     clientes.forEach(c => {
       const lt = latestTramite(c);
       if (lt && lt.estadoPec !== 'enviado') items.push({ cliente: c, tramite: lt });
     });
-    if (!items.length) return '';
-    return `<div class="panel incompletos-banner">
-      <h2>⚠ ${items.length} trámite(s) sin enviar o incompletos</h2>
-      <div class="tramites-list">
+    return items;
+  }
+
+  function pendientesPanel() {
+    const items = pendientesItems();
+    const notifSoportado = typeof Notification !== 'undefined';
+    const notifPermiso = notifSoportado ? Notification.permission : 'unsupported';
+    return `<div class="panel incompletos-banner" id="pendientes-panel">
+      <h2 style="margin-top:0;">⚠ ${items.length} trámite(s) sin enviar o incompletos</h2>
+      ${notifPermiso === 'default' ? '<div class="agent-hint"><button type="button" class="btn btn-ghost btn-sm" id="btn-activar-avisos">Activar aviso diario (lun. a sáb. 15hs)</button></div>' : notifPermiso === 'denied' ? '<div class="agent-hint">Los avisos están bloqueados en el navegador — para activarlos, habilitá las notificaciones para este sitio desde la configuración del navegador.</div>' : notifPermiso === 'granted' ? '<div class="agent-hint">✓ Aviso diario activado (lun. a sáb. 15hs, mientras tengas la app abierta).</div>' : ''}
+      ${items.length ? `<div class="tramites-list">
         ${items.map(({ cliente, tramite }) => `
           <div class="tramite-row">
             <div>
@@ -615,6 +708,9 @@ window.storage = {
             <span class="badge ${tramite.estadoPec === 'incompleto' ? 'badge-danger' : 'badge-warn'}">${ESTADO_PEC_LABELS[tramite.estadoPec]}</span>
             <button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${cliente.id}" data-editar-tramite-id="${tramite.id}">Editar</button>
           </div>`).join('')}
+      </div>` : `<div class="empty">No hay trámites pendientes ni incompletos.</div>`}
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="btn-close-pendientes">Cerrar</button>
       </div>
     </div>`;
   }
@@ -917,13 +1013,16 @@ window.storage = {
   function clientCard(c) {
     const s = worstStatus(c);
     const cls = s.level === 'danger' ? 'st-danger' : s.level === 'warn' ? 'st-warn' : 'st-ok';
+    const expandido = clientesExpandidos.has(c.id);
     return `<div class="client-card ${cls}">
       <div class="client-top">
         <div>
-          <div class="client-name">${escapeHtml(c.nombre)}</div>
-          <div class="client-meta">Patente ${escapeHtml(c.patente || 's/d')} ${(c.marca || c.modelo) ? '· ' + escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) : ''} ${c.telefono ? '· ' + escapeHtml(c.telefono) : ''} ${c.tramites.length ? `· ${c.tramites.length} trámite(s)` : ''}</div>
+          <div class="client-patente">${escapeHtml(c.patente || 'SIN PATENTE')}</div>
+          <div class="client-modelo">${escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) || 'Sin marca/modelo'}${c.anio ? ' · ' + escapeHtml(c.anio) : ''}</div>
+          <div class="client-name">${escapeHtml(c.nombre)}${c.telefono ? ' · ' + escapeHtml(c.telefono) : ''}</div>
         </div>
         <div class="client-actions">
+          ${c.telefono ? `<a class="btn btn-wa" target="_blank" rel="noopener" href="${waLinkGeneral(c)}">WhatsApp</a>` : ''}
           <button class="btn btn-ghost" data-doc="${c.id}">Documentación</button>
           <button class="btn btn-agent" data-tramite="${c.id}">Trámite</button>
           <button class="btn btn-danger-outline" data-delete="${c.id}">Eliminar</button>
@@ -933,6 +1032,25 @@ window.storage = {
         ${docRowOblea(c)}
         ${docRowPH(c)}
       </div>
+      <div class="form-actions" style="margin-top:10px;">
+        <button type="button" class="btn btn-ghost btn-sm" data-toggle-detalle="${c.id}">${expandido ? 'Ocultar detalle' : `Ver datos y trámites${c.tramites.length ? ` (${c.tramites.length})` : ''}`}</button>
+      </div>
+      ${expandido ? clientDetalleExpandido(c) : ''}
+    </div>`;
+  }
+
+  // Vista de solo lectura de los datos personales/vehículo + historial de
+  // trámites, desplegable desde la tarjeta sin tener que entrar a editar.
+  function clientDetalleExpandido(c) {
+    const rows = c.tramites.slice().sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).map(t => tramiteRow(c.id, t)).join('');
+    return `<div class="client-detalle">
+      <div class="client-detalle-grid">
+        <div><span class="doc-label">Documento</span><div>${escapeHtml([c.tipo_documento, c.dni].filter(Boolean).join(' ')) || '—'}</div></div>
+        <div><span class="doc-label">Domicilio</span><div>${escapeHtml([c.domicilio, c.numero].filter(Boolean).join(' ')) || '—'}${c.piso ? ' - ' + escapeHtml(c.piso) : ''}</div></div>
+        <div><span class="doc-label">Localidad</span><div>${escapeHtml([c.ciudad, c.provincia].filter(Boolean).join(', ')) || '—'}${c.cpa ? ' (CPA ' + escapeHtml(c.cpa) + ')' : ''}</div></div>
+        <div><span class="doc-label">Uso del vehículo</span><div>${escapeHtml(c.uso) || '—'}${c.inyeccion ? ' · Inyección ' + escapeHtml(c.inyeccion) : ''}</div></div>
+      </div>
+      ${c.tramites.length ? `<h4>Historial de trámites</h4><div class="tramites-list">${rows}</div>` : '<p class="scan-sub">Todavía no tiene trámites cargados.</p>'}
     </div>`;
   }
 
@@ -1038,7 +1156,7 @@ window.storage = {
     // que es inequívocamente del vehículo: patente, marca, modelo, uso.
     const generic = parseAgentText(text);
     const out = {
-      fecha_oblea: null, fecha_crpc: null, anio: null,
+      fecha_oblea: null, fecha_crpc: null, anio: null, obleaActual: null,
       nombre: null, dni: null, domicilio: null, provincia: null, ciudad: null, tipo_vehiculo: null,
       patente: generic.patente, marca: generic.marca, modelo: generic.modelo, uso: generic.uso,
       found: [], rawText: text,
@@ -1055,6 +1173,11 @@ window.storage = {
       out.fecha_oblea = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
       out.found.push(`Vencimiento Oblea: ${d}/${m}/${y}`);
     }
+
+    // Formato asumido — todavía no vimos un pegado real con este campo, así
+    // que si no matchea, se puede seguir cargando a mano sin problema.
+    const mOblea = text.match(/oblea\s*actual\D{0,10}(\d{4,9})/i) || text.match(/n[uú]mero\s*de\s*oblea\D{0,10}(\d{4,9})/i);
+    if (mOblea) { out.obleaActual = mOblea[1]; out.found.push(`Oblea actual: ${mOblea[1]}`); }
 
     const mAnio = text.match(/a[nñ]o[:\s]*\n?\s*(\d{4})/i);
     if (mAnio) { out.anio = mAnio[1]; out.found.push(`Año: ${mAnio[1]}`); }
@@ -1127,11 +1250,11 @@ window.storage = {
   function enargasPasteBox() {
     return `<div class="agent-box" style="grid-column: 1/-1;">
       <label>Pegá acá lo que te muestra la consulta de ENARGAS</label>
-      <textarea id="enargas-paste-text" placeholder="Pegá el resultado de la consulta por dominio..."></textarea>
+      <textarea id="enargas-paste-text" placeholder="Pegá el resultado de la consulta por dominio... (se carga solo al pegar)"></textarea>
       <div class="form-actions">
         <button type="button" class="btn btn-primary btn-sm" id="btn-apply-enargas">Aplicar al formulario</button>
       </div>
-      <div class="agent-hint">Todavía estamos mejorando esta función — puede que no reconozca todos los datos automáticamente. Si no completa algo, cargalo a mano.</div>
+      <div class="agent-hint">Con pegar alcanza — se completa solo. Todavía estamos mejorando esta función, puede que no reconozca todos los datos automáticamente; si no completa algo, cargalo a mano.</div>
       <div id="enargas-paste-result"></div>
     </div>`;
   }
@@ -1148,7 +1271,10 @@ window.storage = {
         ${slots.map(s => `
         <div class="scan-slot">
           <label>${s.label}</label>
-          <input type="file" accept="image/*" id="scan-${s.key}">
+          <div class="scan-slot-buttons">
+            <label class="btn btn-primary btn-sm">📷 Tomar foto<input type="file" accept="image/*" capture="environment" id="scan-${s.key}" style="display:none;"></label>
+            <label class="btn btn-ghost btn-sm">🖼 Galería<input type="file" accept="image/*" id="scan-${s.key}-galeria" style="display:none;"></label>
+          </div>
           <img class="scan-thumb" id="thumb-${s.key}" style="display:${scanFiles[s.key] ? 'block' : 'none'}; height:130px;" src="${scanFiles[s.key] || ''}">
           ${scanFiles[s.key] ? `<button type="button" class="btn btn-ghost btn-sm" data-remove-photo="${s.key}">Quitar foto</button>` : ''}
         </div>`).join('')}
@@ -1269,7 +1395,7 @@ window.storage = {
   function documentacionPanel(existing) {
     const c = clienteDraft || existing || blankClienteBase();
     return `<div class="panel" id="form-panel">
-      <h2 style="margin-top:0;">${existing ? 'Documentación — ' + escapeHtml(c.nombre) : 'Nuevo cliente'}</h2>
+      <h2 class="panel-h2-sticky">${existing ? 'Documentación — ' + escapeHtml(c.nombre) : 'Nuevo cliente'}</h2>
       ${scanBox()}
       ${datosPersonalesYDomicilioFields(c)}
       <h3>Vehículo</h3>
@@ -1315,7 +1441,7 @@ window.storage = {
   function tramitePanel(existing) {
     const c = existing;
     return `<div class="panel" id="form-panel">
-      <h2 style="margin-top:0;">Trámite — ${escapeHtml(c.nombre)}</h2>
+      <h2 class="panel-h2-sticky">Trámite — ${escapeHtml(c.nombre)}</h2>
       ${tramitesSection(c)}
       <div class="form-actions">
         <button class="btn btn-ghost" id="btn-close-tramite-panel">Cerrar</button>
@@ -1834,11 +1960,11 @@ window.storage = {
       <div id="enargas-eq-copy-hint" class="agent-hint" style="display:none;"></div>
       ${enargasEqPasteOpen ? `<div class="agent-box">
         <label>Pegá acá el "Detalle de la operación" del SIC</label>
-        <textarea id="enargas-eq-paste-text" placeholder="Pegá el resultado de la consulta..."></textarea>
+        <textarea id="enargas-eq-paste-text" placeholder="Pegá el resultado de la consulta... (se carga solo al pegar)"></textarea>
         <div class="form-actions">
           <button type="button" class="btn btn-primary btn-sm" id="btn-apply-enargas-eq">Aplicar al equipo</button>
         </div>
-        <div class="agent-hint">Completa regulador, cilindro y válvula, y también la fecha de la prueba hidráulica.</div>
+        <div class="agent-hint">Con pegar alcanza — completa regulador, cilindro, válvula, N° de oblea y la fecha de la prueba hidráulica.</div>
         <div id="enargas-eq-paste-result"></div>
       </div>` : ''}
       ${reguladorFields(eq)}
@@ -1853,22 +1979,24 @@ window.storage = {
 
   function tramiteAddForm(c, t) {
     const eq = tramiteDraftEquipo;
+    if (!tramiteDraftCampos) tramiteDraftCampos = blankTramiteCampos(t);
+    const d = tramiteDraftCampos;
     return `<div class="agent-box" id="tramite-add-box">
       <label>${t ? 'Editando trámite' : 'Nuevo trámite'}</label>
       <div class="form-grid">
         <label>Tipo
           <select id="t-tipo">
-            ${TRAMITE_TIPOS.map(opt => `<option value="${opt.value}" ${t && t.tipo === opt.value ? 'selected' : ''}>${opt.label}</option>`).join('')}
+            ${TRAMITE_TIPOS.map(opt => `<option value="${opt.value}" ${d.tipo === opt.value ? 'selected' : ''}>${opt.label}</option>`).join('')}
           </select>
         </label>
         <label>Fecha
-          <input type="date" id="t-fecha" value="${t ? escapeHtml(t.fecha) : new Date().toISOString().slice(0,10)}">
+          <input type="date" id="t-fecha" value="${escapeHtml(d.fecha)}">
         </label>
         <label>N° Oblea anterior
-          <input type="text" id="t-oblea-anterior" value="${t ? escapeHtml(t.obleaAnterior || '') : ''}" placeholder="Oblea que tenía el vehículo">
+          <input type="text" id="t-oblea-anterior" value="${escapeHtml(d.obleaAnterior)}" placeholder="Oblea que tenía el vehículo">
         </label>
         <label>N° Oblea nueva
-          <input type="text" id="t-oblea-nueva" value="${t ? escapeHtml(t.obleaNueva || '') : ''}" placeholder="Si este trámite entrega una oblea nueva">
+          <input type="text" id="t-oblea-nueva" value="${escapeHtml(d.obleaNueva)}" placeholder="Si este trámite entrega una oblea nueva">
         </label>
       </div>
       <p class="agent-hint">Vehículo: ${escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) || 'sin marca/modelo cargado'} — Patente ${escapeHtml(c.patente || 's/d')}</p>
@@ -1876,17 +2004,17 @@ window.storage = {
       ${equipoSection(eq, c)}
 
       <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Observaciones adicionales</label>
-      <textarea id="t-detalle" placeholder="Cualquier detalle que no entre en los campos de arriba...">${t ? escapeHtml(t.detalle || '') : ''}</textarea>
+      <textarea id="t-detalle" placeholder="Cualquier detalle que no entre en los campos de arriba...">${escapeHtml(d.detalle)}</textarea>
       <div class="form-grid" style="margin-top:10px;">
         <label>Estado
           <select id="t-estado">
-            <option value="pendiente" ${!t || t.estadoPec === 'pendiente' ? 'selected' : ''}>Pendiente</option>
-            <option value="enviado" ${t && t.estadoPec === 'enviado' ? 'selected' : ''}>Enviado al PEC</option>
-            <option value="incompleto" ${t && t.estadoPec === 'incompleto' ? 'selected' : ''}>Incompleto</option>
+            <option value="pendiente" ${d.estado === 'pendiente' ? 'selected' : ''}>Pendiente</option>
+            <option value="enviado" ${d.estado === 'enviado' ? 'selected' : ''}>Enviado al PEC</option>
+            <option value="incompleto" ${d.estado === 'incompleto' ? 'selected' : ''}>Incompleto</option>
           </select>
         </label>
         <label>Motivo (si quedó incompleto)
-          <input type="text" id="t-motivo" value="${t ? escapeHtml(t.motivoIncompleto || '') : ''}" placeholder="Ej: falta firma del propietario">
+          <input type="text" id="t-motivo" value="${escapeHtml(d.motivo)}" placeholder="Ej: falta firma del propietario">
         </label>
       </div>
       <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Firma del propietario</label>
@@ -1923,6 +2051,7 @@ window.storage = {
   let showForm = false;
   let showBulkImport = false;
   let showHistorial = false;
+  let showPendientes = false;
   let menuOpen = false;
   let tramitesOpenFor = null;
   let addingTramite = false;
@@ -1938,6 +2067,35 @@ window.storage = {
   const scanFiles = { 'foto1': null, 'foto2': null };
   let currentSignature = null;
   let tramiteDraftEquipo = null;
+  // Borrador de los campos "sueltos" del trámite (tipo/fecha/observaciones/
+  // estado/motivo/oblea) que no viven en tramiteDraftEquipo — mismo problema
+  // y misma solución que clienteDraft: sin esto, cualquier render() a mitad
+  // de carga (ej. al abrir o aplicar la caja de pegado de ENARGAS) borraba
+  // lo que ya se había tipeado, porque tramiteAddForm() se reconstruye desde
+  // el trámite GUARDADO (o en blanco si es nuevo), no desde el DOM.
+  let tramiteDraftCampos = null;
+  function blankTramiteCampos(t) {
+    return {
+      tipo: (t && t.tipo) || TRAMITE_TIPOS[0].value,
+      fecha: (t && t.fecha) || new Date().toISOString().slice(0, 10),
+      detalle: (t && t.detalle) || '',
+      estado: (t && t.estadoPec) || 'pendiente',
+      motivo: (t && t.motivoIncompleto) || '',
+      obleaAnterior: (t && t.obleaAnterior) || '',
+      obleaNueva: (t && t.obleaNueva) || '',
+    };
+  }
+  const TRAMITE_DRAFT_CAMPOS_IDS = {
+    tipo: 't-tipo', fecha: 't-fecha', detalle: 't-detalle', estado: 't-estado',
+    motivo: 't-motivo', obleaAnterior: 't-oblea-anterior', obleaNueva: 't-oblea-nueva',
+  };
+  function syncTramiteCamposFromDOM() {
+    if (!tramiteDraftCampos) return;
+    Object.entries(TRAMITE_DRAFT_CAMPOS_IDS).forEach(([key, id]) => {
+      const el = root.querySelector('#' + id);
+      if (el) tramiteDraftCampos[key] = el.value;
+    });
+  }
   // Borrador del cliente que se está dando de alta/editando en Documentación.
   // Sin esto, cualquier render() a mitad de carga (ej. al aplicar un pegado
   // de ENARGAS) reconstruía el formulario desde el último cliente GUARDADO,
@@ -2125,20 +2283,25 @@ window.storage = {
   function setupScanBox() {
     const slots = ['foto1', 'foto2'];
     slots.forEach(slot => {
-      const input = root.querySelector(`#scan-${slot}`);
-      if (!input) return;
-      input.addEventListener('change', async () => {
-        const file = input.files[0];
-        if (!file) return;
-        try {
-          const dataUrl = await compressImageFile(file);
-          scanFiles[slot] = dataUrl;
-        } catch (e) {
-          alert('No se pudo procesar esa foto, probá con otra.');
-          return;
-        }
-        syncClienteDraftFromDOM();
-        render();
+      // Dos inputs por slot — "Tomar foto" (con capture, abre la cámara
+      // directo) y "Galería" (sin capture, para elegir una foto ya
+      // existente) — comparten el mismo manejo una vez elegido el archivo.
+      ['', '-galeria'].forEach(sufijo => {
+        const input = root.querySelector(`#scan-${slot}${sufijo}`);
+        if (!input) return;
+        input.addEventListener('change', async () => {
+          const file = input.files[0];
+          if (!file) return;
+          try {
+            const dataUrl = await compressImageFile(file);
+            scanFiles[slot] = dataUrl;
+          } catch (e) {
+            alert('No se pudo procesar esa foto, probá con otra.');
+            return;
+          }
+          syncClienteDraftFromDOM();
+          render();
+        });
       });
     });
     const btnScan = root.querySelector('#btn-scan');
@@ -2245,17 +2408,20 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     const counts = computeCounts();
     const list = currentQuery.trim() ? sortedFiltered(currentQuery) : [];
     const editing = editingId ? clientes.find(c => c.id === editingId) : null;
+    const pendCount = pendientesItems().length;
 
     root.innerHTML = `
       <div class="wrap">
         <div class="topbar">
           <div class="brand">
             <div class="menu-wrap">
-              <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-menu">☰</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-menu" style="position:relative;">☰${pendCount ? `<span class="menu-badge">${pendCount}</span>` : ''}</button>
               ${menuOpen ? `<div class="menu-dropdown">
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-pendientes">Trámites pendientes${pendCount ? ` <span class="menu-badge-inline">${pendCount}</span>` : ''}</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-historial">Historial de trámites</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-import">+ Importar clientes</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-export-csv">Exportar CSV</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-historial">Historial de trámites</button>
+                ${showInstallButton ? `<button type="button" class="btn btn-ghost btn-sm" id="btn-install-app">📲 Instalar app</button>` : ''}
               </div>` : ''}
             </div>
             <span class="tag">ESTELITA</span>
@@ -2275,7 +2441,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
         ${showTallerConfig ? tallerConfigPanel() : ''}
         ${reminderBanner()}
-        ${incompletosBanner()}
+        ${showPendientes ? pendientesPanel() : ''}
 
         <div class="controls">
           <input class="search-input" type="text" id="search-input" placeholder="Buscar por nombre o patente..." value="${escapeHtml(currentQuery)}">
@@ -2406,6 +2572,18 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       render();
     });
 
+    const btnInstallApp = root.querySelector('#btn-install-app');
+    if (btnInstallApp) btnInstallApp.addEventListener('click', async () => {
+      menuOpen = false;
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt = null;
+        showInstallButton = false;
+      }
+      render();
+    });
+
     const btnExportCsv = root.querySelector('#btn-export-csv');
     if (btnExportCsv) btnExportCsv.addEventListener('click', () => {
       menuOpen = false;
@@ -2427,7 +2605,32 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       showForm = false; editingId = null;
       menuOpen = false;
       showBulkImport = false;
+      showPendientes = false;
       showHistorial = !showHistorial;
+      render();
+    });
+
+    const btnPendientes = root.querySelector('#btn-pendientes');
+    if (btnPendientes) btnPendientes.addEventListener('click', () => {
+      showForm = false; editingId = null;
+      menuOpen = false;
+      showBulkImport = false;
+      showHistorial = false;
+      showPendientes = !showPendientes;
+      render();
+    });
+
+    const btnClosePendientes = root.querySelector('#btn-close-pendientes');
+    if (btnClosePendientes) btnClosePendientes.addEventListener('click', () => {
+      showPendientes = false;
+      render();
+    });
+
+    const btnActivarAvisos = root.querySelector('#btn-activar-avisos');
+    if (btnActivarAvisos) btnActivarAvisos.addEventListener('click', async () => {
+      try {
+        await Notification.requestPermission();
+      } catch (e) { /* navegador viejo con la API basada en callback */ }
       render();
     });
 
@@ -2450,6 +2653,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         editingTramiteId = tramiteId;
         currentSignature = tramite.firma || null;
         tramiteDraftEquipo = normalizarEquipoOtros(JSON.parse(JSON.stringify(tramite.equipo || blankEquipo(cliente.ultimoEquipoConocido))));
+        tramiteDraftCampos = blankTramiteCampos(tramite);
         render();
         const panel = root.querySelector('#form-panel');
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2606,6 +2810,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         addingTramite = true;
         currentSignature = null;
         tramiteDraftEquipo = blankEquipo(cliente ? cliente.ultimoEquipoConocido : null);
+        tramiteDraftCampos = blankTramiteCampos(null);
       } else {
         editingId = null; editMode = null;
       }
@@ -2658,6 +2863,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         addingTramite = true;
         currentSignature = null;
         editingTramiteId = null;
+        tramiteDraftCampos = blankTramiteCampos(null);
         enargasEqPasteOpen = false;
         tramiteDraftEquipo = blankEquipo(cliente.ultimoEquipoConocido);
         render();
@@ -2672,8 +2878,18 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       addingTramite = false;
       currentSignature = null;
       tramiteDraftEquipo = null;
+      tramiteDraftCampos = null;
       editingTramiteId = null;
       render();
+    });
+
+    root.querySelectorAll('[data-toggle-detalle]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-toggle-detalle');
+        if (clientesExpandidos.has(id)) clientesExpandidos.delete(id);
+        else clientesExpandidos.add(id);
+        render();
+      });
     });
 
     root.querySelectorAll('[data-delete]').forEach(btn => {
@@ -2721,9 +2937,9 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       render();
     });
 
-    const btnApplyEnargas = root.querySelector('#btn-apply-enargas');
-    if (btnApplyEnargas) btnApplyEnargas.addEventListener('click', () => {
+    function aplicarEnargasDocumentacion() {
       const textarea = root.querySelector('#enargas-paste-text');
+      if (!textarea || !textarea.value.trim()) return;
       const parsed = parseEnargasText(textarea.value || '');
       const aplicados = parsed.found.slice();
 
@@ -2771,7 +2987,14 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
           nuevoResultBox.textContent = 'Aplicado: ' + aplicados.join(' · ') + ' — no te olvides de tocar "Guardar cambios" para que quede guardado.';
         }
       }
-    });
+    }
+    const btnApplyEnargas = root.querySelector('#btn-apply-enargas');
+    if (btnApplyEnargas) btnApplyEnargas.addEventListener('click', aplicarEnargasDocumentacion);
+    const textareaEnargasDoc = root.querySelector('#enargas-paste-text');
+    // Pegar ya alcanza para cargar los datos — no hace falta tocar
+    // "Aplicar" aparte. El setTimeout espera a que el navegador termine de
+    // insertar el texto pegado en el campo antes de leer su valor.
+    if (textareaEnargasDoc) textareaEnargasDoc.addEventListener('paste', () => setTimeout(aplicarEnargasDocumentacion, 0));
 
     const btnBuscarEnargasEq = root.querySelector('#btn-buscar-enargas-eq');
     if (btnBuscarEnargasEq) btnBuscarEnargasEq.addEventListener('click', async () => {
@@ -2789,16 +3012,22 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
     const btnToggleEnargasEq = root.querySelector('#btn-toggle-enargas-eq-paste');
     if (btnToggleEnargasEq) btnToggleEnargasEq.addEventListener('click', () => {
+      syncTramiteCamposFromDOM();
       enargasEqPasteOpen = !enargasEqPasteOpen;
       render();
     });
 
-    const btnApplyEnargasEq = root.querySelector('#btn-apply-enargas-eq');
-    if (btnApplyEnargasEq) btnApplyEnargasEq.addEventListener('click', async () => {
+    async function aplicarEnargasEquipo() {
       const textarea = root.querySelector('#enargas-eq-paste-text');
+      if (!textarea || !textarea.value.trim()) return;
       const parsed = parseEnargasText(textarea.value || '');
       const aplicados = [];
       syncEquipoFromDOM();
+      syncTramiteCamposFromDOM();
+      if (parsed.obleaActual && tramiteDraftCampos) {
+        tramiteDraftCampos.obleaAnterior = parsed.obleaActual;
+        aplicados.push('N° Oblea anterior');
+      }
       if (parsed.equipo) {
         if (parsed.equipo.regulador.codigo || parsed.equipo.regulador.serie) {
           Object.assign(tramiteDraftEquipo.regulador, parsed.equipo.regulador);
@@ -2843,7 +3072,11 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
           nuevoResultBox.textContent = 'Aplicado: ' + aplicados.join(' · ');
         }
       }
-    });
+    }
+    const btnApplyEnargasEq = root.querySelector('#btn-apply-enargas-eq');
+    if (btnApplyEnargasEq) btnApplyEnargasEq.addEventListener('click', aplicarEnargasEquipo);
+    const textareaEnargasEq = root.querySelector('#enargas-eq-paste-text');
+    if (textareaEnargasEq) textareaEnargasEq.addEventListener('paste', () => setTimeout(aplicarEnargasEquipo, 0));
 
     const btnAddTramite = root.querySelector('#btn-add-tramite');
     if (btnAddTramite) btnAddTramite.addEventListener('click', () => {
@@ -2852,6 +3085,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       editingTramiteId = null;
       const cliente = editingId ? clientes.find(x => x.id === editingId) : null;
       tramiteDraftEquipo = addingTramite ? blankEquipo(cliente ? cliente.ultimoEquipoConocido : null) : null;
+      tramiteDraftCampos = addingTramite ? blankTramiteCampos(null) : null;
       render();
     });
 
@@ -2860,6 +3094,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       addingTramite = false;
       currentSignature = null;
       tramiteDraftEquipo = null;
+      tramiteDraftCampos = null;
       editingTramiteId = null;
       render();
     });
@@ -2867,6 +3102,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     const btnAddCilindro = root.querySelector('#btn-add-cilindro');
     if (btnAddCilindro) btnAddCilindro.addEventListener('click', () => {
       syncEquipoFromDOM();
+      syncTramiteCamposFromDOM();
       tramiteDraftEquipo.cilindros.push({ codigo: '', serie: '', periodicidad: '5', nuevoUsado: 'usado', fabricadoMes: '', fabricadoAnio: '', revisadoMes: '', revisadoAnio: '', crpc: '', msdb: '' });
       render();
     });
@@ -2874,6 +3110,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     root.querySelectorAll('[data-remove-cilindro]').forEach(btn => {
       btn.addEventListener('click', () => {
         syncEquipoFromDOM();
+        syncTramiteCamposFromDOM();
         const i = Number(btn.getAttribute('data-remove-cilindro'));
         if (tramiteDraftEquipo.cilindros.length > 1) tramiteDraftEquipo.cilindros.splice(i, 1);
         render();
@@ -2883,6 +3120,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     const btnAddValvula = root.querySelector('#btn-add-valvula');
     if (btnAddValvula) btnAddValvula.addEventListener('click', () => {
       syncEquipoFromDOM();
+      syncTramiteCamposFromDOM();
       tramiteDraftEquipo.valvulas.push({ codigo: '', serie: '', msb: '' });
       render();
     });
@@ -2890,6 +3128,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     root.querySelectorAll('[data-remove-valvula]').forEach(btn => {
       btn.addEventListener('click', () => {
         syncEquipoFromDOM();
+        syncTramiteCamposFromDOM();
         const i = Number(btn.getAttribute('data-remove-valvula'));
         if (tramiteDraftEquipo.valvulas.length > 1) tramiteDraftEquipo.valvulas.splice(i, 1);
         render();
@@ -2954,6 +3193,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       addingTramite = false;
       currentSignature = null;
       tramiteDraftEquipo = null;
+      tramiteDraftCampos = null;
       editingTramiteId = null;
       render();
       return savedId;
