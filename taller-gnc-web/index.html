@@ -140,19 +140,30 @@ window.storage = {
 #gnc-app .btn {
   font-family: var(--sans); font-weight: 600; font-size: 13px; letter-spacing: 0.3px;
   border-radius: 6px; padding: 10px 16px; border: 1px solid transparent; cursor: pointer;
+  min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   transition: transform .08s ease, filter .12s ease, background-color .15s ease, border-color .15s ease;
 }
-#gnc-app .btn:active { transform: scale(0.97); }
+#gnc-app .btn:active { transform: scale(0.96); filter: brightness(0.85); }
 #gnc-app .btn-primary { background: var(--flame); color: #05202F; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
 #gnc-app .btn-primary:hover { filter: brightness(1.08); }
+#gnc-app .btn-primary:active { filter: brightness(0.8); }
 #gnc-app .btn-ghost { background: transparent; border-color: var(--line); color: var(--text-muted); }
 #gnc-app .btn-ghost:hover { color: var(--text); border-color: var(--flame-dim); background: rgba(63,169,245,0.08); }
+#gnc-app .btn-ghost:active { background: rgba(63,169,245,0.18); }
 #gnc-app .btn-wa { background: #1F3A2E; color: #7EE0A8; border-color: #2C5942; font-size: 12px; padding: 7px 10px; }
 #gnc-app .btn-wa:hover { filter: brightness(1.15); }
 #gnc-app .btn-danger-outline { background: transparent; color: var(--danger); border-color: #5A2C22; font-size: 12px; padding: 7px 10px; }
+#gnc-app .btn-danger-solid { background: var(--danger); color: #fff; border-color: var(--danger); font-size: 13px; }
+#gnc-app .btn-danger-solid:hover { filter: brightness(1.1); }
+#gnc-app .btn-danger-solid:active { filter: brightness(0.82); }
 #gnc-app .btn-agent { background: var(--surface-alt); color: var(--flame); border-color: var(--flame-dim); font-size: 12px; padding: 7px 10px; }
 #gnc-app .btn-agent:hover { filter: brightness(1.2); }
 #gnc-app .btn-sm { font-size: 12px; padding: 7px 10px; }
+#gnc-app #btn-toggle-menu { min-width: 44px; }
+#gnc-app input[type="text"], #gnc-app input[type="tel"],
+#gnc-app input[type="date"], #gnc-app input[type="month"],
+#gnc-app select { min-height: 44px; }
+#gnc-app input[type="checkbox"] { width: 20px; height: 20px; }
 
 /* FORM PANEL */
 #gnc-app .panel {
@@ -222,6 +233,70 @@ window.storage = {
 #gnc-app .empty {
   text-align: center; padding: 50px 20px; color: var(--text-muted);
   border: 1px dashed var(--line); border-radius: 10px; font-family: var(--mono); font-size: 13px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+#gnc-app .empty svg { opacity: 0.55; }
+
+/* ANIMACION DE ENTRADA — solo se aplica cuando un panel recién se abre (ver
+   prevPanelState en render()), no en cada re-render mientras sigue abierto,
+   para no repetir la animación por cambios chicos adentro. */
+@keyframes gncPanelIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+#gnc-app .panel-entrando { animation: gncPanelIn 190ms ease-out; }
+
+/* CARGA */
+@keyframes gncSpin { to { transform: rotate(360deg); } }
+#gnc-app .gnc-spinner {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 3px solid var(--line); border-top-color: var(--flame);
+  animation: gncSpin 0.8s linear infinite; flex-shrink: 0;
+}
+#gnc-app .gnc-loading-row { display: flex; align-items: center; gap: 10px; }
+
+/* MODAL PROPIO (reemplaza alert/confirm nativos) */
+@keyframes gncModalFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes gncModalPop { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.gnc-modal-overlay {
+  position: fixed; inset: 0; background: rgba(5,10,16,0.62); z-index: 500;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  animation: gncModalFade 150ms ease-out; font-family: var(--mono, 'IBM Plex Mono', monospace);
+}
+.gnc-modal-overlay.closing { animation: gncModalFade 150ms ease-in reverse; }
+.gnc-modal-box {
+  width: 100%; max-width: 320px; background: var(--surface, #182230);
+  border: 1px solid var(--line, #2B3A4C); border-radius: 10px; padding: 18px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.45); animation: gncModalPop 180ms ease-out;
+  color: var(--text, #E9F1F6);
+}
+.gnc-modal-overlay.closing .gnc-modal-box { animation: gncModalPop 150ms ease-in reverse; }
+.gnc-modal-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+.gnc-modal-icon {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--display, 'Oswald', sans-serif); font-size: 15px; font-weight: 600;
+  background: rgba(63,169,245,0.14); color: var(--flame, #3FA9F5);
+}
+.gnc-modal-box.danger .gnc-modal-icon { background: rgba(227,84,58,0.14); color: var(--danger, #E3543A); }
+.gnc-modal-title {
+  font-family: var(--display, 'Oswald', sans-serif); font-size: 14px; text-transform: uppercase;
+  letter-spacing: 0.5px; margin-bottom: 4px;
+}
+.gnc-modal-msg { font-size: 12.5px; color: var(--text-muted, #8CA0AC); line-height: 1.5; }
+.gnc-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+
+/* BOTON FLOTANTE (FAB) — solo en mobile, alternativa al boton de arriba */
+#gnc-app .fab-nuevo-tramite { display: none; }
+@media (max-width: 720px) {
+  #gnc-app .fab-nuevo-tramite {
+    display: flex; align-items: center; justify-content: center;
+    position: fixed; bottom: 20px; right: 20px; width: 58px; height: 58px;
+    border-radius: 50%; background: var(--flame); color: #05202F; font-size: 28px;
+    font-weight: 600; border: none; box-shadow: 0 4px 16px rgba(63,169,245,0.45);
+    z-index: 40; cursor: pointer; line-height: 1;
+  }
+  #gnc-app .fab-nuevo-tramite:active { transform: scale(0.92); filter: brightness(0.85); }
 }
 #gnc-app .client-card {
   background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--line);
@@ -263,7 +338,10 @@ window.storage = {
 #gnc-app .badge-ok { background: rgba(79,180,119,0.18); color: var(--ok); }
 
 #gnc-app .hidden { display: none !important; }
-#gnc-app .loading { text-align: center; padding: 40px; color: var(--text-muted); font-family: var(--mono); font-size: 12px; }
+#gnc-app .loading {
+  text-align: center; padding: 40px; color: var(--text-muted); font-family: var(--mono); font-size: 12px;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+}
 
 /* ACTIVATION SCREEN */
 #gnc-app .activation-wrap { max-width: 420px; padding-top: 80px; }
@@ -363,8 +441,12 @@ window.storage = {
   // Ids de clientes cuya tarjeta tiene el detalle (datos + historial de
   // trámites) desplegado — no hace falta entrar a editar solo para mirar.
   const clientesExpandidos = new Set();
+  // Snapshot del estado de los paneles en el render anterior — se usa para
+  // saber si un panel "recién se abrió" (y animarlo) o si sigue abierto
+  // desde antes (y no repetir la animación).
+  let prevPanelState = {};
 
-  root.innerHTML = '<div class="loading">Cargando datos del taller...</div>';
+  root.innerHTML = '<div class="loading"><span class="gnc-spinner"></span> Cargando datos del taller...</div>';
 
   function showActivationScreen() {
     root.innerHTML = `
@@ -696,11 +778,11 @@ window.storage = {
     return items;
   }
 
-  function pendientesPanel() {
+  function pendientesPanel(entrando) {
     const items = pendientesItems();
     const notifSoportado = typeof Notification !== 'undefined';
     const notifPermiso = notifSoportado ? Notification.permission : 'unsupported';
-    return `<div class="panel incompletos-banner" id="pendientes-panel">
+    return `<div class="panel incompletos-banner ${entrando ? 'panel-entrando' : ''}" id="pendientes-panel">
       <h2 style="margin-top:0;">⚠ ${items.length} trámite(s) sin enviar o incompletos</h2>
       ${notifPermiso === 'default' ? '<div class="agent-hint"><button type="button" class="btn btn-ghost btn-sm" id="btn-activar-avisos">Activar aviso diario (lun. a sáb. 15hs)</button></div>' : notifPermiso === 'denied' ? '<div class="agent-hint">Los avisos están bloqueados en el navegador — para activarlos, habilitá las notificaciones para este sitio desde la configuración del navegador.</div>' : notifPermiso === 'granted' ? '<div class="agent-hint">✓ Aviso diario activado (lun. a sáb. 15hs, mientras tengas la app abierta).</div>' : ''}
       ${items.length ? `<div class="tramites-list">
@@ -714,7 +796,7 @@ window.storage = {
             <span class="badge ${tramite.estadoPec === 'incompleto' ? 'badge-danger' : 'badge-warn'}">${ESTADO_PEC_LABELS[tramite.estadoPec]}</span>
             <button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${cliente.id}" data-editar-tramite-id="${tramite.id}">Editar</button>
           </div>`).join('')}
-      </div>` : `<div class="empty">No hay trámites pendientes ni incompletos.</div>`}
+      </div>` : `<div class="empty">${emptyIconSvg()}No hay trámites pendientes ni incompletos.</div>`}
       <div class="form-actions">
         <button type="button" class="btn btn-ghost" id="btn-close-pendientes">Cerrar</button>
       </div>
@@ -732,9 +814,9 @@ window.storage = {
     return items;
   }
 
-  function historialPanel() {
+  function historialPanel(entrando) {
     const items = todosTramites();
-    return `<div class="panel" id="historial-panel">
+    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="historial-panel">
       <h2 style="margin-top:0;">Historial de trámites</h2>
       ${items.length ? `<div class="tramites-list">
         ${items.map(({ cliente, tramite }) => `
@@ -747,7 +829,7 @@ window.storage = {
             <span class="badge ${tramite.estadoPec === 'enviado' ? 'badge-ok' : tramite.estadoPec === 'incompleto' ? 'badge-danger' : 'badge-warn'}">${ESTADO_PEC_LABELS[tramite.estadoPec]}</span>
             ${tramite.estadoPec !== 'enviado' ? `<button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${cliente.id}" data-editar-tramite-id="${tramite.id}">Editar</button>` : ''}
           </div>`).join('')}
-      </div>` : `<div class="empty">Todavía no hay trámites cargados.</div>`}
+      </div>` : `<div class="empty">${emptyIconSvg()}Todavía no hay trámites cargados.</div>`}
       <div class="form-actions">
         <button type="button" class="btn btn-ghost" id="btn-close-historial">Cerrar</button>
       </div>
@@ -876,11 +958,11 @@ window.storage = {
     return Array.from(byPatente.values());
   }
 
-  function bulkImportPanel() {
+  function bulkImportPanel(entrando) {
     const rows = bulkImportRows;
     const existentes = new Set(clientes.map(c => (c.patente || '').toUpperCase()));
     const previewRows = rows.slice(0, 50);
-    return `<div class="panel" id="bulk-import-panel">
+    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="bulk-import-panel">
       <h2>Importar clientes</h2>
       <p class="scan-sub">Subí un archivo CSV, o pegá directamente las filas (patente, teléfono, fecha) en la caja de texto. Funciona con o sin encabezados.</p>
       <input type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values,text/plain" id="bulk-import-file">
@@ -939,6 +1021,76 @@ window.storage = {
 
   function escapeHtml(str) {
     return (str || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // Modal propio con la estética de la app, para no depender de los
+  // alert()/confirm() nativos del navegador (se ven genéricos y no se
+  // pueden estilizar). Se monta directo en document.body — no pasa por el
+  // render() principal — así no depende del estado de la app ni se pierde
+  // si algo dispara un re-render mientras está abierto.
+  function mostrarModal({ titulo, mensaje, danger, botones }) {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'gnc-modal-overlay';
+      overlay.innerHTML = `
+        <div class="gnc-modal-box ${danger ? 'danger' : ''}">
+          <div class="gnc-modal-head">
+            <div class="gnc-modal-icon">${danger ? '!' : 'i'}</div>
+            <div>
+              <div class="gnc-modal-title">${escapeHtml(titulo)}</div>
+              <div class="gnc-modal-msg">${escapeHtml(mensaje)}</div>
+            </div>
+          </div>
+          <div class="gnc-modal-actions"></div>
+        </div>`;
+      const acciones = overlay.querySelector('.gnc-modal-actions');
+      function cerrar(valor) {
+        overlay.classList.add('closing');
+        setTimeout(() => { overlay.remove(); resolve(valor); }, 150);
+      }
+      botones.forEach(b => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm ' + (b.variant === 'danger' ? 'btn-danger-solid' : b.variant === 'primary' ? 'btn-primary' : 'btn-ghost');
+        btn.textContent = b.label;
+        btn.addEventListener('click', () => cerrar(b.value));
+        acciones.appendChild(btn);
+      });
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(false); });
+      document.addEventListener('keydown', function onEsc(e) {
+        if (e.key === 'Escape') { document.removeEventListener('keydown', onEsc); cerrar(false); }
+      });
+      document.body.appendChild(overlay);
+    });
+  }
+
+  function customAlert(mensaje, titulo) {
+    return mostrarModal({
+      titulo: titulo || 'Aviso', mensaje, danger: false,
+      botones: [{ label: 'Entendido', value: true, variant: 'primary' }],
+    });
+  }
+
+  function customConfirm(mensaje, opts) {
+    opts = opts || {};
+    return mostrarModal({
+      titulo: opts.titulo || 'Confirmar', mensaje, danger: !!opts.danger,
+      botones: [
+        { label: opts.cancelLabel || 'Cancelar', value: false, variant: 'ghost' },
+        { label: opts.okLabel || 'Confirmar', value: true, variant: opts.danger ? 'danger' : 'primary' },
+      ],
+    });
+  }
+
+  // Ícono simple (tanque + manómetro) para que los estados vacíos no sean
+  // solo texto — usado en la lista de clientes, historial y pendientes.
+  function emptyIconSvg() {
+    return `<svg width="56" height="56" viewBox="0 0 56 56" fill="none" aria-hidden="true">
+      <rect x="10" y="20" width="30" height="20" rx="3" stroke="#3FA9F5" stroke-width="2"/>
+      <circle cx="41" cy="30" r="6" stroke="#F2A93B" stroke-width="2"/>
+      <path d="M15 20V15a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v5" stroke="#3FA9F5" stroke-width="2"/>
+      <path d="M20 28h8" stroke="#8CA0AC" stroke-width="2" stroke-linecap="round"/>
+    </svg>`;
   }
 
   // Escapa un valor para CSV: neutraliza caracteres que Excel/Sheets podría
@@ -1253,8 +1405,8 @@ window.storage = {
     return hayAlgo ? { regulador, cilindro, valvula } : null;
   }
 
-  function enargasPasteBox() {
-    return `<div class="agent-box" style="grid-column: 1/-1;">
+  function enargasPasteBox(entrando) {
+    return `<div class="agent-box ${entrando ? 'panel-entrando' : ''}" style="grid-column: 1/-1;">
       <label>Pegá acá lo que te muestra la consulta de ENARGAS</label>
       <textarea id="enargas-paste-text" placeholder="Pegá el resultado de la consulta por dominio... (se carga solo al pegar)"></textarea>
       <div class="form-actions">
@@ -1268,13 +1420,13 @@ window.storage = {
   // Galería de solo lectura de las fotos ya guardadas de un cliente —
   // botón "Documentación" en la tarjeta. Separado del asistente de trámite:
   // acá solo se mira lo que ya está guardado, no se edita nada.
-  function fotosPanel(cliente) {
+  function fotosPanel(cliente, entrando) {
     if (!cliente) return '';
     const slots = [
       { key: 'foto1', label: 'Foto 1 — Documentos (lado A)' },
       { key: 'foto2', label: 'Foto 2 — Documentos (lado B)' },
     ];
-    return `<div class="panel" id="fotos-panel">
+    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="fotos-panel">
       <h2 class="panel-h2-sticky">Documentación — ${escapeHtml(cliente.nombre)}</h2>
       <div class="scan-grid" style="grid-template-columns: repeat(2, 1fr);">
         ${slots.map(s => `
@@ -1318,9 +1470,9 @@ window.storage = {
     </div>`;
   }
 
-  function tallerConfigPanel() {
+  function tallerConfigPanel(entrando) {
     const t = tallerConfig;
-    return `<div class="panel" id="taller-config-panel">
+    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="taller-config-panel">
       <h2>Configuración del taller</h2>
       <p class="scan-sub">Estos datos son fijos (no cambian de cliente en cliente) y van a completar automáticamente la planilla que se manda al PEC.</p>
       <h3 style="margin-top:0;">Taller de montaje</h3>
@@ -1382,7 +1534,7 @@ window.storage = {
 
   const WIZARD_PASOS = ['Datos y vehículo', 'Equipo GNC', 'Trámite y firma'];
 
-  function wizardPaso1(c) {
+  function wizardPaso1(c, enargasEntrando) {
     return `${scanBox()}
       <h3 style="margin-top:0;">Datos personales</h3>
       <div class="form-grid">
@@ -1426,7 +1578,7 @@ window.storage = {
           <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-enargas-paste">${enargasPasteOpen ? 'Cerrar' : 'Pegar resultado'}</button>
         </div>
         <div id="enargas-copy-hint" class="agent-hint" style="display:none; grid-column: 1/-1;"></div>
-        ${enargasPasteOpen ? enargasPasteBox() : ''}
+        ${enargasPasteOpen ? enargasPasteBox(enargasEntrando) : ''}
         <label>Marca
           <input type="text" id="f-marca" value="${escapeHtml(c.marca)}" placeholder="Ej: Chevrolet">
         </label>
@@ -1517,19 +1669,21 @@ window.storage = {
   // arma todo el alta/edición como un asistente de 3 pasos — así se
   // garantiza que cada sección quede completa antes de avanzar, en vez de
   // tener todos los campos sueltos en una sola pantalla larga.
-  function tramiteWizardPanel(existing) {
+  function tramiteWizardPanel(existing, entrando, entrandoPaso, enargasEntrando) {
     if (!clienteDraft) clienteDraft = existing ? { ...existing } : blankClienteBase();
     const c = clienteDraft;
     if (!tramiteDraftEquipo) tramiteDraftEquipo = blankEquipo(existing ? existing.ultimoEquipoConocido : null);
     if (!tramiteDraftCampos) tramiteDraftCampos = blankTramiteCampos(editingTramiteId && existing ? existing.tramites.find(t => t.id === editingTramiteId) : null);
     const titulo = existing ? escapeHtml(c.nombre || existing.nombre || 'cliente') : 'Nuevo cliente';
-    return `<div class="panel" id="form-panel">
+    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="form-panel">
       <h2 class="panel-h2-sticky">Inicio de trámite — ${titulo}
         <div class="wizard-pasos">Paso ${wizardStep} de 3 — ${WIZARD_PASOS[wizardStep - 1]}</div>
       </h2>
-      ${wizardStep === 1 ? wizardPaso1(c) : ''}
+      <div class="${entrandoPaso ? 'panel-entrando' : ''}">
+      ${wizardStep === 1 ? wizardPaso1(c, enargasEntrando) : ''}
       ${wizardStep === 2 ? wizardPaso2(tramiteDraftEquipo, c) : ''}
       ${wizardStep === 3 ? wizardPaso3(c) : ''}
+      </div>
     </div>`;
   }
 
@@ -2306,7 +2460,7 @@ window.storage = {
             const dataUrl = await compressImageFile(file);
             scanFiles[slot] = dataUrl;
           } catch (e) {
-            alert('No se pudo procesar esa foto, probá con otra.');
+            await customAlert('No se pudo procesar esa foto, probá con otra.');
             return;
           }
           syncClienteDraftFromDOM();
@@ -2330,7 +2484,7 @@ window.storage = {
     const statusEl = root.querySelector('#scan-status');
     btnScan.disabled = true;
     statusEl.className = 'scan-status';
-    statusEl.textContent = 'Leyendo documentos...';
+    statusEl.innerHTML = '<span class="gnc-loading-row"><span class="gnc-spinner"></span> Leyendo documentos...</span>';
 
     try {
       const content = [];
@@ -2407,7 +2561,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
   }
 
   function render() {
-    if (!ready) { root.innerHTML = '<div class="loading">Cargando datos del taller...</div>'; return; }
+    if (!ready) { root.innerHTML = '<div class="loading"><span class="gnc-spinner"></span> Cargando datos del taller...</div>'; return; }
     // Como el render reconstruye todo el DOM, si no restauramos el foco acá
     // cualquier campo con eventos "input" en vivo pierde el cursor en cada
     // letra que se escribe y hay que volver a clickearlo.
@@ -2419,6 +2573,28 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     const list = currentQuery.trim() ? sortedFiltered(currentQuery) : [];
     const editing = editingId ? clientes.find(c => c.id === editingId) : null;
     const pendCount = pendientesItems().length;
+    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig;
+
+    // Para que la animación de entrada de un panel se dispare solo cuando
+    // recién se abre — no en cada re-render mientras sigue abierto (ej. al
+    // agregar un cilindro, o al tipear y perder foco un campo) — comparamos
+    // contra el estado del render anterior.
+    const wizardAbierto = showForm || !!editing;
+    const entrando = {
+      wizard: wizardAbierto && !prevPanelState.wizard,
+      wizardPaso: wizardAbierto && wizardStep !== prevPanelState.wizardStep,
+      fotos: !!showFotosFor && !prevPanelState.fotos,
+      historial: showHistorial && !prevPanelState.historial,
+      pendientes: showPendientes && !prevPanelState.pendientes,
+      bulkImport: showBulkImport && !prevPanelState.bulkImport,
+      tallerConfig: showTallerConfig && !prevPanelState.tallerConfig,
+      enargasPaste: enargasPasteOpen && !prevPanelState.enargasPaste,
+    };
+    prevPanelState = {
+      wizard: wizardAbierto, wizardStep, fotos: !!showFotosFor, historial: showHistorial,
+      pendientes: showPendientes, bulkImport: showBulkImport, tallerConfig: showTallerConfig,
+      enargasPaste: enargasPasteOpen,
+    };
 
     root.innerHTML = `
       <div class="wrap">
@@ -2449,23 +2625,23 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
           </div>
         </div>
 
-        ${showTallerConfig ? tallerConfigPanel() : ''}
+        ${showTallerConfig ? tallerConfigPanel(entrando.tallerConfig) : ''}
         ${reminderBanner()}
-        ${showPendientes ? pendientesPanel() : ''}
+        ${showPendientes ? pendientesPanel(entrando.pendientes) : ''}
 
         <div class="controls">
           <input class="search-input" type="text" id="search-input" placeholder="Buscar por nombre o patente..." value="${escapeHtml(currentQuery)}">
           <button class="btn btn-primary" id="btn-new">+ Nuevo trámite</button>
         </div>
 
-        ${showBulkImport ? bulkImportPanel() : ''}
-        ${showHistorial ? historialPanel() : ''}
+        ${showBulkImport ? bulkImportPanel(entrando.bulkImport) : ''}
+        ${showHistorial ? historialPanel(entrando.historial) : ''}
 
-        ${showForm || editing ? tramiteWizardPanel(editing) : ''}
-        ${showFotosFor ? fotosPanel(clientes.find(c => c.id === showFotosFor)) : ''}
+        ${showForm || editing ? tramiteWizardPanel(editing, entrando.wizard, entrando.wizardPaso, entrando.enargasPaste) : ''}
+        ${showFotosFor ? fotosPanel(clientes.find(c => c.id === showFotosFor), entrando.fotos) : ''}
 
         ${list.length === 0
-          ? `<div class="empty">${
+          ? `<div class="empty">${emptyIconSvg()}${
               clientes.length === 0
                 ? 'Todavía no cargaste clientes. Sumá el primero con "+ Nuevo trámite".'
                 : currentQuery.trim()
@@ -2474,6 +2650,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
             }</div>`
           : list.map(clientCard).join('')}
       </div>
+      ${algunPanelAbierto ? '' : '<button type="button" class="fab-nuevo-tramite" id="btn-fab-nuevo" aria-label="Nuevo trámite">+</button>'}
     `;
 
     attachEvents();
@@ -2552,8 +2729,9 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
     const btnChangeLicense = root.querySelector('#btn-change-license');
     if (btnChangeLicense) {
-      btnChangeLicense.addEventListener('click', () => {
-        if (confirm('¿Cambiar el código de licencia? Vas a tener que ingresar un código nuevo para poder usar la lectura de fotos con IA de nuevo. Los clientes y fotos guardados no se van a borrar.')) {
+      btnChangeLicense.addEventListener('click', async () => {
+        const ok = await customConfirm('Vas a tener que ingresar un código nuevo para poder usar la lectura de fotos con IA de nuevo. Los clientes y fotos guardados no se van a borrar.', { titulo: 'Cambiar código de licencia', okLabel: 'Cambiar' });
+        if (ok) {
           localStorage.removeItem(LICENSE_KEY);
           boot();
         }
@@ -2566,8 +2744,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         render();
       });
     }
-    const btnNew = root.querySelector('#btn-new');
-    if (btnNew) btnNew.addEventListener('click', () => {
+    function iniciarNuevoTramite() {
       editingId = null; showForm = true;
       showBulkImport = false;
       enargasPasteOpen = false;
@@ -2579,6 +2756,14 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       currentSignature = null;
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
       render();
+    }
+    const btnNew = root.querySelector('#btn-new');
+    if (btnNew) btnNew.addEventListener('click', iniciarNuevoTramite);
+    const btnFabNuevo = root.querySelector('#btn-fab-nuevo');
+    if (btnFabNuevo) btnFabNuevo.addEventListener('click', () => {
+      iniciarNuevoTramite();
+      const panel = root.querySelector('#form-panel');
+      if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
     const btnToggleMenu = root.querySelector('#btn-toggle-menu');
@@ -2697,9 +2882,9 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     });
 
     const btnBulkParse = root.querySelector('#btn-bulk-parse');
-    if (btnBulkParse) btnBulkParse.addEventListener('click', () => {
+    if (btnBulkParse) btnBulkParse.addEventListener('click', async () => {
       const text = root.querySelector('#bulk-import-text').value || '';
-      if (!text.trim()) { alert('Pegá algo de texto o elegí un archivo primero.'); return; }
+      if (!text.trim()) { await customAlert('Pegá algo de texto o elegí un archivo primero.'); return; }
       applyBulkParsedRows(parseBulkImportText(text));
     });
 
@@ -2735,7 +2920,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       await saveClientes();
       showBulkImport = false; bulkImportRows = []; bulkImportSkip = new Set();
       render();
-      alert(`Se importaron ${importados} cliente(s). ${sinTelefono} sin teléfono reconocido, ${sinFecha} sin fecha de oblea reconocida — revisalos y completá lo que falte.`);
+      await customAlert(`Se importaron ${importados} cliente(s). ${sinTelefono} sin teléfono reconocido, ${sinFecha} sin fecha de oblea reconocida — revisalos y completá lo que falte.`, 'Importación completa');
     });
 
     root.querySelectorAll('[data-aviso-mes]').forEach(a => {
@@ -2782,13 +2967,13 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     });
 
     const btnWizardNext1 = root.querySelector('#btn-wizard-next-1');
-    if (btnWizardNext1) btnWizardNext1.addEventListener('click', () => {
+    if (btnWizardNext1) btnWizardNext1.addEventListener('click', async () => {
       const nombre = root.querySelector('#f-nombre').value.trim();
-      if (!nombre) { alert('Poné al menos el nombre del cliente.'); return; }
+      if (!nombre) { await customAlert('Poné al menos el nombre del cliente.'); return; }
       const telefono = root.querySelector('#f-telefono').value.trim();
-      if (!telefono) { alert('El teléfono es obligatorio para poder continuar.'); return; }
+      if (!telefono) { await customAlert('El teléfono es obligatorio para poder continuar.'); return; }
       const patente = root.querySelector('#f-patente').value.trim();
-      if (!patente) { alert('La patente es obligatoria para poder continuar.'); return; }
+      if (!patente) { await customAlert('La patente es obligatoria para poder continuar.'); return; }
       syncClienteDraftFromDOM();
       wizardStep = 2;
       render();
@@ -2872,7 +3057,8 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       btn.addEventListener('click', async () => {
         const id = btn.getAttribute('data-delete');
         const c = clientes.find(x => x.id === id);
-        if (confirm(`¿Eliminar a ${c ? c.nombre : 'este cliente'}? Esta acción no se puede deshacer.`)) {
+        const ok = await customConfirm(`¿Eliminar a ${c ? c.nombre : 'este cliente'}? Esta acción no se puede deshacer.`, { titulo: 'Eliminar cliente', danger: true, okLabel: 'Eliminar' });
+        if (ok) {
           clientes = clientes.filter(x => x.id !== id);
           if (editingId === id) cerrarWizard();
           if (showFotosFor === id) showFotosFor = null;
@@ -3029,22 +3215,22 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       syncEquipoFromDOM();
 
       const nombre = (clienteDraft.nombre || '').trim();
-      if (!nombre) { alert('Poné al menos el nombre del cliente.'); wizardStep = 1; render(); return; }
+      if (!nombre) { await customAlert('Poné al menos el nombre del cliente.'); wizardStep = 1; render(); return; }
       const telefono = (clienteDraft.telefono || '').trim();
-      if (!telefono) { alert('El teléfono es obligatorio para poder guardar.'); wizardStep = 1; render(); return; }
+      if (!telefono) { await customAlert('El teléfono es obligatorio para poder guardar.'); wizardStep = 1; render(); return; }
       const patente = (clienteDraft.patente || '').trim().toUpperCase();
-      if (!patente) { alert('La patente es obligatoria para poder guardar.'); wizardStep = 1; render(); return; }
+      if (!patente) { await customAlert('La patente es obligatoria para poder guardar.'); wizardStep = 1; render(); return; }
 
       const tipo = root.querySelector('#t-tipo').value;
       const fecha = root.querySelector('#t-fecha').value;
-      if (!fecha) { alert('Poné una fecha para el trámite.'); return; }
+      if (!fecha) { await customAlert('Poné una fecha para el trámite.'); return; }
 
       if (equipoTieneBaja(tramiteDraftEquipo)) {
         const partes = [];
         if (tramiteDraftEquipo.regulador.operacion === 'baja') partes.push('Regulador');
         tramiteDraftEquipo.cilindros.forEach((c, i) => { if (c.msdb === 'baja') partes.push(`Cilindro ${i + 1}`); });
         tramiteDraftEquipo.valvulas.forEach((v, i) => { if (v.msb === 'baja') partes.push(`Válvula ${i + 1}`); });
-        const ok = confirm(`Atención TDM: vas a dar de BAJA — ${partes.join(', ')}. ¿Confirmás que querés continuar con el trámite?`);
+        const ok = await customConfirm(`Atención TDM: vas a dar de BAJA — ${partes.join(', ')}. ¿Confirmás que querés continuar con el trámite?`, { titulo: 'Confirmar baja', danger: true, okLabel: 'Continuar' });
         if (!ok) return;
       }
 
@@ -3083,7 +3269,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         }
       } catch (e) {
         console.error('Error guardando fotos', e);
-        alert('Los datos se guardaron, pero hubo un problema guardando las fotos (puede que sean muy pesadas). Probá sacándolas de nuevo.');
+        await customAlert('Los datos se guardaron, pero hubo un problema guardando las fotos (puede que sean muy pesadas). Probá sacándolas de nuevo.');
       }
 
       const idx = clientes.findIndex(c => c.id === clientId);
@@ -3148,7 +3334,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
     const btnSendPecTramite = root.querySelector('#btn-send-pec-tramite');
     if (btnSendPecTramite) btnSendPecTramite.addEventListener('click', async () => {
-      if (!currentSignature) { alert('Falta la firma del propietario antes de enviar al PEC.'); return; }
+      if (!currentSignature) { await customAlert('Falta la firma del propietario antes de enviar al PEC.'); return; }
       const firmaParaPdf = currentSignature;
       const resultado = await guardarClienteYTramite('enviado');
       if (!resultado) return;
@@ -3160,7 +3346,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         await compartirPecPdf(blob, filename, cliente);
       } catch (e) {
         console.error(e);
-        alert('El trámite se guardó y se marcó como enviado, pero no se pudo generar el PDF: ' + (e && e.message ? e.message : e));
+        await customAlert('El trámite se guardó y se marcó como enviado, pero no se pudo generar el PDF: ' + (e && e.message ? e.message : e));
       }
     });
 
