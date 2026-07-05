@@ -1792,7 +1792,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       ? { id: activeEl.id, start: activeEl.selectionStart, end: activeEl.selectionEnd }
       : null;
     const counts = computeCounts();
-    const list = sortedFiltered(currentQuery);
+    const list = currentQuery.trim() ? sortedFiltered(currentQuery) : [];
     const editing = editingId ? clientes.find(c => c.id === editingId) : null;
 
     root.innerHTML = `
@@ -1836,7 +1836,13 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         ${editing && editMode === 'tramite' ? tramitePanel(editing) : ''}
 
         ${list.length === 0
-          ? `<div class="empty">${clientes.length === 0 ? 'Todavía no cargaste clientes. Sumá el primero con "+ Nuevo cliente".' : 'No se encontraron clientes con esa búsqueda.'}</div>`
+          ? `<div class="empty">${
+              clientes.length === 0
+                ? 'Todavía no cargaste clientes. Sumá el primero con "+ Nuevo trámite".'
+                : currentQuery.trim()
+                  ? 'No se encontraron clientes con esa búsqueda.'
+                  : 'Buscá por nombre o patente para ver los datos de un cliente.'
+            }</div>`
           : list.map(clientCard).join('')}
       </div>
     `;
