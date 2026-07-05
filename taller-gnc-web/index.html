@@ -2550,6 +2550,13 @@ Documentación para realizar la renovación:
     if (!esperandoEnargas) return;
     if (!showForm && !editingId) { esperandoEnargas = false; return; }
     if (!navigator.clipboard || !navigator.clipboard.readText) return;
+    // Solo intentar la lectura automática si el permiso ya está concedido —
+    // pedir permiso sin un toque del usuario falla siempre y puede dejar el
+    // permiso bloqueado para el sitio (rompería también el botón de pegar).
+    try {
+      const perm = await navigator.permissions.query({ name: 'clipboard-read' });
+      if (perm.state !== 'granted') return;
+    } catch (e) { /* navegador sin permissions API para clipboard: probamos igual */ }
     let texto = '';
     try { texto = await navigator.clipboard.readText(); } catch (e) { return; }
     cargarTextoEnargas(texto);
@@ -3654,6 +3661,14 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       if (!patente) { await customAlert('La patente es obligatoria.'); return; }
       const telefono = (clienteDraft.telefono || '').trim();
       if (!telefono) { await customAlert('El teléfono es obligatorio (es lo que hace funcionar los avisos de vencimiento).'); return; }
+      // Si el pegado de ENARGAS trajo la fecha de revisión del cilindro,
+      // actualizar también la Prueba Hidráulica (CRPC) del cliente — mismo
+      // criterio que usa el guardado de trámites.
+      const cil0 = tramiteDraftEquipo && tramiteDraftEquipo.cilindros && tramiteDraftEquipo.cilindros[0];
+      if (cil0 && cil0.revisadoMes && cil0.revisadoAnio) {
+        clienteDraft.fecha_crpc = `${cil0.revisadoAnio}-${String(cil0.revisadoMes).padStart(2, '0')}`;
+        if (cil0.periodicidad) clienteDraft.tipo_cilindro = cil0.periodicidad;
+      }
       clientes[idx] = { ...clientes[idx], ...clienteDraft, patente };
       // Si sacó o cambió fotos en esta pantalla, guardarlas también.
       try {
@@ -3899,19 +3914,26 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
     // apretado el campo de texto para pegar.
     const btnPegarEnargas = root.querySelector('#btn-pegar-enargas');
     if (btnPegarEnargas) btnPegarEnargas.addEventListener('click', async () => {
-      if (!navigator.clipboard || !navigator.clipboard.readText) {
-        const box = root.querySelector('#enargas-paste-result');
-        if (box) { box.className = 'agent-result err'; box.textContent = 'Este navegador no deja leer el portapapeles — pegá el texto a mano en el campo de abajo.'; }
-        return;
-      }
+      // Intento 1: leer el portapapeles directo. Chrome (sobre todo en
+      // Android) muchas veces no lo permite — en ese caso, plan B: dejar
+      // el recuadro enfocado y con instrucción clara para pegar a mano
+      // (el pegado manual dispara la carga automática igual).
       let texto = '';
-      try { texto = await navigator.clipboard.readText(); } catch (e) {
-        const box = root.querySelector('#enargas-paste-result');
-        if (box) { box.className = 'agent-result err'; box.textContent = 'No pudimos leer el portapapeles (¿permiso denegado?) — pegá el texto a mano en el campo de abajo.'; }
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        try { texto = await navigator.clipboard.readText(); } catch (e) { /* denegado, vamos al plan B */ }
+      }
+      if (texto && texto.trim()) {
+        const ta = root.querySelector('#enargas-paste-text');
+        if (ta) { ta.value = texto; aplicarEnargasDocumentacion(); }
         return;
       }
       const ta = root.querySelector('#enargas-paste-text');
-      if (ta) { ta.value = texto; aplicarEnargasDocumentacion(); }
+      const box = root.querySelector('#enargas-paste-result');
+      if (box) {
+        box.className = 'agent-result err';
+        box.textContent = 'Chrome no nos dejó leer lo copiado (pasa seguido en el celular). Hacelo así: tocá el recuadro de acá abajo, mantené apretado y elegí "Pegar" — se carga solo igual.';
+      }
+      if (ta) ta.focus();
     });
 
 
