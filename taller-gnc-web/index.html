@@ -2037,20 +2037,7 @@ window.storage = {
 
   function equipoSection(eq, c) {
     return `<h3>Datos del equipo</h3>
-      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-buscar-enargas-eq" data-patente="${escapeHtml(c.patente)}">Buscar en ENARGAS ↗</button>
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-enargas-eq-paste">${enargasEqPasteOpen ? 'Cerrar' : 'Pegar resultado del SIC'}</button>
-      </div>
-      <div id="enargas-eq-copy-hint" class="agent-hint" style="display:none;"></div>
-      ${enargasEqPasteOpen ? `<div class="agent-box">
-        <label>Pegá acá el "Detalle de la operación" del SIC</label>
-        <textarea id="enargas-eq-paste-text" placeholder="Pegá el resultado de la consulta... (se carga solo al pegar)"></textarea>
-        <div class="form-actions">
-          <button type="button" class="btn btn-primary btn-sm" id="btn-apply-enargas-eq">Aplicar al equipo</button>
-        </div>
-        <div class="agent-hint">Con pegar alcanza — completa regulador, cilindro, válvula, N° de oblea y la fecha de la prueba hidráulica.</div>
-        <div id="enargas-eq-paste-result"></div>
-      </div>` : ''}
+      <p class="agent-hint">Si ya buscaste la patente en ENARGAS en el paso 1, el regulador, los cilindros y la válvula ya están completos acá.</p>
       ${reguladorFields(eq)}
       <h3>Cilindros</h3>
       ${eq.cilindros.map((cil, i) => cilindroRow(i, cil)).join('')}
@@ -2082,7 +2069,6 @@ window.storage = {
   let bulkImportRows = [];
   let bulkImportSkip = new Set();
   let enargasPasteOpen = false;
-  let enargasEqPasteOpen = false;
   let reminderBannerOpen = false;
   const scanFiles = { 'foto1': null, 'foto2': null };
   let currentSignature = null;
@@ -2585,7 +2571,6 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       editingId = null; showForm = true;
       showBulkImport = false;
       enargasPasteOpen = false;
-      enargasEqPasteOpen = false;
       clienteDraft = blankClienteBase();
       tramiteDraftEquipo = blankEquipo(null);
       tramiteDraftCampos = blankTramiteCampos(null);
@@ -2782,7 +2767,6 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       editingId = null;
       wizardStep = 1;
       enargasPasteOpen = false;
-      enargasEqPasteOpen = false;
       clienteDraft = null;
       tramiteDraftEquipo = null;
       tramiteDraftCampos = null;
@@ -2944,84 +2928,19 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       const campos = {
         patente: parsed.patente ? String(parsed.patente).toUpperCase() : null,
         marca: parsed.marca, modelo: parsed.modelo, uso: parsed.uso,
-        fecha_oblea: parsed.fecha_oblea, fecha_crpc: parsed.fecha_crpc, anio: parsed.anio,
+        fecha_oblea: parsed.fecha_oblea, anio: parsed.anio,
       };
       Object.entries(campos).forEach(([key, val]) => { if (val) clienteDraft[key] = val; });
 
-      if (parsed.equipo) {
-        // Se guarda como "último equipo conocido" del cliente para que, al
-        // entrar a la solapa Trámite más tarde, el regulador/cilindro/
-        // válvula ya vengan completos — así con una sola consulta al SIC
-        // alcanza en vez de tener que pegarla de nuevo ahí.
-        const base = clienteDraft.ultimoEquipoConocido || blankEquipo();
-        if (parsed.equipo.regulador.codigo || parsed.equipo.regulador.serie) {
-          Object.assign(base.regulador, parsed.equipo.regulador);
-          aplicados.push('Regulador');
-        }
-        if (parsed.equipo.cilindro.codigo || parsed.equipo.cilindro.serie) {
-          Object.assign(base.cilindros[0], parsed.equipo.cilindro);
-          aplicados.push('Cilindro');
-        }
-        if (parsed.equipo.valvula.codigo || parsed.equipo.valvula.serie) {
-          Object.assign(base.valvulas[0], parsed.equipo.valvula);
-          aplicados.push('Válvula');
-        }
-        clienteDraft.ultimoEquipoConocido = base;
-      }
-
-      render();
-      const nuevoResultBox = root.querySelector('#enargas-paste-result');
-      if (nuevoResultBox) {
-        if (aplicados.length === 0) {
-          nuevoResultBox.className = 'agent-result err';
-          nuevoResultBox.textContent = 'No reconocí datos con formato conocido en ese texto — completá a mano lo que falte.';
-        } else {
-          nuevoResultBox.className = 'agent-result';
-          nuevoResultBox.textContent = 'Aplicado: ' + aplicados.join(' · ') + ' — no te olvides de tocar "Guardar cambios" para que quede guardado.';
-        }
-      }
-    }
-    const btnApplyEnargas = root.querySelector('#btn-apply-enargas');
-    if (btnApplyEnargas) btnApplyEnargas.addEventListener('click', aplicarEnargasDocumentacion);
-    const textareaEnargasDoc = root.querySelector('#enargas-paste-text');
-    // Pegar ya alcanza para cargar los datos — no hace falta tocar
-    // "Aplicar" aparte. El setTimeout espera a que el navegador termine de
-    // insertar el texto pegado en el campo antes de leer su valor.
-    if (textareaEnargasDoc) textareaEnargasDoc.addEventListener('paste', () => setTimeout(aplicarEnargasDocumentacion, 0));
-
-    const btnBuscarEnargasEq = root.querySelector('#btn-buscar-enargas-eq');
-    if (btnBuscarEnargasEq) btnBuscarEnargasEq.addEventListener('click', async () => {
-      const url = 'https://www.enargas.gob.ar/secciones/gas-natural-comprimido/consulta-dominio.php';
-      const patente = btnBuscarEnargasEq.getAttribute('data-patente');
-      const hint = root.querySelector('#enargas-eq-copy-hint');
-      if (patente && navigator.clipboard && navigator.clipboard.writeText) {
-        try {
-          await navigator.clipboard.writeText(patente);
-          if (hint) { hint.style.display = 'block'; hint.textContent = `Copiamos "${patente}" al portapapeles — pegala en el campo Dominio de esa página.`; }
-        } catch (e) { console.error('No se pudo copiar la patente', e); }
-      }
-      window.open(url, '_blank', 'noopener');
-    });
-
-    const btnToggleEnargasEq = root.querySelector('#btn-toggle-enargas-eq-paste');
-    if (btnToggleEnargasEq) btnToggleEnargasEq.addEventListener('click', () => {
-      syncTramiteCamposFromDOM();
-      enargasEqPasteOpen = !enargasEqPasteOpen;
-      render();
-    });
-
-    async function aplicarEnargasEquipo() {
-      const textarea = root.querySelector('#enargas-eq-paste-text');
-      if (!textarea || !textarea.value.trim()) return;
-      const parsed = parseEnargasText(textarea.value || '');
-      const aplicados = [];
-      syncEquipoFromDOM();
-      syncTramiteCamposFromDOM();
-      if (parsed.obleaActual && tramiteDraftCampos) {
+      if (!tramiteDraftEquipo) tramiteDraftEquipo = blankEquipo();
+      if (!tramiteDraftCampos) tramiteDraftCampos = blankTramiteCampos(null);
+      if (parsed.obleaActual) {
         tramiteDraftCampos.obleaAnterior = parsed.obleaActual;
         aplicados.push('N° Oblea anterior');
       }
       if (parsed.equipo) {
+        // Se aplica directo al equipo del trámite que se está armando (paso
+        // 2) — la consulta al SIC se hace una sola vez acá, en el paso 1.
         if (parsed.equipo.regulador.codigo || parsed.equipo.regulador.serie) {
           Object.assign(tramiteDraftEquipo.regulador, parsed.equipo.regulador);
           aplicados.push('Regulador');
@@ -3034,42 +2953,36 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
           Object.assign(tramiteDraftEquipo.valvulas[0], parsed.equipo.valvula);
           aplicados.push('Válvula');
         }
+        // También se cachea en el cliente para que la próxima vez que se le
+        // inicie un trámite, el equipo ya venga precargado sin pegar de nuevo.
+        clienteDraft.ultimoEquipoConocido = {
+          regulador: { ...tramiteDraftEquipo.regulador },
+          cilindros: tramiteDraftEquipo.cilindros.map(c => ({ ...c })),
+          valvulas: tramiteDraftEquipo.valvulas.map(v => ({ ...v })),
+          otros: JSON.parse(JSON.stringify(tramiteDraftEquipo.otros)),
+        };
       }
-      if (editingId && parsed.equipo) {
-        const idx = clientes.findIndex(x => x.id === editingId);
-        if (idx !== -1) {
-          if (parsed.equipo.cilindro.revisadoMes && parsed.equipo.cilindro.revisadoAnio) {
-            clientes[idx].fecha_crpc = `${parsed.equipo.cilindro.revisadoAnio}-${String(parsed.equipo.cilindro.revisadoMes).padStart(2, '0')}`;
-            aplicados.push('Fecha Prueba Hidráulica');
-          }
-          // Guardamos el equipo también como "último conocido" del cliente,
-          // por si la próxima vez se entra por Documentación en vez de por
-          // acá — así no hace falta pegar el resultado del SIC dos veces.
-          clientes[idx].ultimoEquipoConocido = {
-            regulador: { ...tramiteDraftEquipo.regulador },
-            cilindros: tramiteDraftEquipo.cilindros.map(c => ({ ...c })),
-            valvulas: tramiteDraftEquipo.valvulas.map(v => ({ ...v })),
-            otros: JSON.parse(JSON.stringify(tramiteDraftEquipo.otros)),
-          };
-          await saveClientes();
-        }
-      }
+
       render();
-      const nuevoResultBox = root.querySelector('#enargas-eq-paste-result');
+      const nuevoResultBox = root.querySelector('#enargas-paste-result');
       if (nuevoResultBox) {
         if (aplicados.length === 0) {
           nuevoResultBox.className = 'agent-result err';
-          nuevoResultBox.textContent = 'No reconocí datos de equipo en ese texto — completá a mano lo que falte.';
+          nuevoResultBox.textContent = 'No reconocí datos con formato conocido en ese texto — completá a mano lo que falte.';
         } else {
           nuevoResultBox.className = 'agent-result';
           nuevoResultBox.textContent = 'Aplicado: ' + aplicados.join(' · ');
         }
       }
     }
-    const btnApplyEnargasEq = root.querySelector('#btn-apply-enargas-eq');
-    if (btnApplyEnargasEq) btnApplyEnargasEq.addEventListener('click', aplicarEnargasEquipo);
-    const textareaEnargasEq = root.querySelector('#enargas-eq-paste-text');
-    if (textareaEnargasEq) textareaEnargasEq.addEventListener('paste', () => setTimeout(aplicarEnargasEquipo, 0));
+    const btnApplyEnargas = root.querySelector('#btn-apply-enargas');
+    if (btnApplyEnargas) btnApplyEnargas.addEventListener('click', aplicarEnargasDocumentacion);
+    const textareaEnargasDoc = root.querySelector('#enargas-paste-text');
+    // Pegar ya alcanza para cargar los datos — no hace falta tocar
+    // "Aplicar" aparte. El setTimeout espera a que el navegador termine de
+    // insertar el texto pegado en el campo antes de leer su valor.
+    if (textareaEnargasDoc) textareaEnargasDoc.addEventListener('paste', () => setTimeout(aplicarEnargasDocumentacion, 0));
+
 
     const btnAddCilindro = root.querySelector('#btn-add-cilindro');
     if (btnAddCilindro) btnAddCilindro.addEventListener('click', () => {
@@ -3203,12 +3116,19 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
           creadoEn: new Date().toISOString(),
         });
       }
-      if (tipo === 'prueba_hidraulica') clientes[idx].fecha_crpc = fecha.slice(0, 7);
+      const primerCilindro = tramiteDraftEquipo.cilindros[0];
+      if (tipo === 'prueba_hidraulica') {
+        clientes[idx].fecha_crpc = fecha.slice(0, 7);
+      } else if (primerCilindro && primerCilindro.revisadoMes && primerCilindro.revisadoAnio) {
+        // Si el equipo se cargó por ENARGAS y ya trae una fecha de revisión
+        // del cilindro, la usamos para mantener la Prueba Hidráulica al día
+        // aunque el trámite de hoy sea de otro tipo.
+        clientes[idx].fecha_crpc = `${primerCilindro.revisadoAnio}-${String(primerCilindro.revisadoMes).padStart(2, '0')}`;
+      }
       // La Revisión Anual (y una Conversión, que también entrega oblea nueva)
       // renuevan la habilitación por 1 año — antes esto no se reflejaba en la
       // tarjeta del cliente y la fecha de vencimiento de Oblea quedaba vieja.
       if (tipo === 'revision_anual' || tipo === 'conversion') clientes[idx].fecha_oblea = pecFechaMasUnAnio(fecha);
-      const primerCilindro = tramiteDraftEquipo.cilindros[0];
       if (primerCilindro && primerCilindro.periodicidad) clientes[idx].tipo_cilindro = primerCilindro.periodicidad;
       clientes[idx].ultimoEquipoConocido = {
         regulador: { ...tramiteDraftEquipo.regulador },
