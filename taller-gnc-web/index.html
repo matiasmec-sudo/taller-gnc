@@ -1648,9 +1648,20 @@ Documentación para realizar la renovación:
     return hayAlgo ? { regulador, cilindro, valvula } : null;
   }
 
+  // Estado del permiso de lectura del portapapeles: 'granted' (activado),
+  // 'prompt' (Chrome va a preguntar al usarlo), 'denied' (bloqueado a nivel
+  // sitio/app) o 'desconocido' si el navegador no deja consultarlo.
+  async function estadoPermisoPortapapeles() {
+    if (!navigator.clipboard || !navigator.clipboard.readText) return 'nodisponible';
+    try { return (await navigator.permissions.query({ name: 'clipboard-read' })).state; }
+    catch (e) { return 'desconocido'; }
+  }
+  const PORTAPAPELES_AYUDA_BLOQUEADO = 'El permiso del portapapeles está bloqueado para Estelita. Para activarlo: mantené apretado el ícono de Estelita en la pantalla de inicio → "Información de la app" → Permisos → Portapapeles → Permitir. (Si usás Estelita dentro de Chrome, tocá el candado junto a la dirección → Permisos.) Mientras tanto, pegar a mano funciona igual.';
+
   function enargasPasteBox(entrando) {
     return `<div class="agent-box ${entrando ? 'panel-entrando' : ''}" style="grid-column: 1/-1;">
-      <button type="button" class="btn btn-primary" id="btn-pegar-enargas" style="width:100%; font-size:15px; margin-bottom:10px;">📋 PEGAR LO COPIADO DE ENARGAS</button>
+      <button type="button" class="btn btn-primary" id="btn-pegar-enargas" style="width:100%; font-size:15px; margin-bottom:6px;">📋 PEGAR LO COPIADO DE ENARGAS</button>
+      <div id="pegado-rapido-estado" class="agent-hint" style="margin-bottom:10px;"></div>
       <label>O pegalo a mano acá abajo</label>
       <textarea id="enargas-paste-text" placeholder="Pegá el resultado de la consulta por dominio... (se carga y se cierra solo al pegar)"></textarea>
       <div class="agent-hint">Con pegar alcanza — se completa solo y esta caja se cierra sola. Todavía estamos mejorando esta función, puede que no reconozca todos los datos automáticamente; si no completa algo, cargalo a mano.</div>
@@ -3914,9 +3925,15 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
     // apretado el campo de texto para pegar.
     const btnPegarEnargas = root.querySelector('#btn-pegar-enargas');
     if (btnPegarEnargas) btnPegarEnargas.addEventListener('click', async () => {
-      // Intento 1: leer el portapapeles directo. Chrome (sobre todo en
-      // Android) muchas veces no lo permite — en ese caso, plan B: dejar
-      // el recuadro enfocado y con instrucción clara para pegar a mano
+      const estado = await estadoPermisoPortapapeles();
+      // La primera vez, avisar ANTES de que Chrome muestre su pregunta de
+      // permiso, para que el usuario sepa que hay que tocar "Permitir".
+      if (estado === 'prompt' && !localStorage.getItem('gnc_aviso_pegado_rapido_v1')) {
+        localStorage.setItem('gnc_aviso_pegado_rapido_v1', '1');
+        await customAlert('Chrome te va a preguntar si Estelita puede ver el portapapeles. Tocá "Permitir" — es una sola vez y deja activado el pegado rápido para siempre.', 'Activar pegado rápido');
+      }
+      // Intento 1: leer el portapapeles directo. Si Chrome no lo permite,
+      // plan B: recuadro enfocado + instrucción clara para pegar a mano
       // (el pegado manual dispara la carga automática igual).
       let texto = '';
       if (navigator.clipboard && navigator.clipboard.readText) {
@@ -3931,10 +3948,41 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       const box = root.querySelector('#enargas-paste-result');
       if (box) {
         box.className = 'agent-result err';
-        box.textContent = 'Chrome no nos dejó leer lo copiado (pasa seguido en el celular). Hacelo así: tocá el recuadro de acá abajo, mantené apretado y elegí "Pegar" — se carga solo igual.';
+        box.textContent = estado === 'denied'
+          ? PORTAPAPELES_AYUDA_BLOQUEADO
+          : (estado === 'granted'
+            ? 'No había nada copiado — copiá el resultado en la página de ENARGAS y volvé a tocar el botón.'
+            : 'Chrome no nos dejó leer lo copiado. Hacelo así: tocá el recuadro de acá abajo, mantené apretado y elegí "Pegar" — se carga solo igual.');
       }
       if (ta) ta.focus();
     });
+
+    // Indicador del estado del pegado rápido dentro de la caja de ENARGAS:
+    // muestra si el permiso está activado, sin activar (con botón para
+    // activarlo con un toque) o bloqueado (con la ayuda para destrabarlo).
+    if (root.querySelector('#pegado-rapido-estado')) {
+      estadoPermisoPortapapeles().then(estado => {
+        const el = root.querySelector('#pegado-rapido-estado');
+        if (!el) return;
+        if (estado === 'granted') {
+          el.textContent = 'Pegado rápido: ✅ activado';
+        } else if (estado === 'denied') {
+          el.innerHTML = 'Pegado rápido: 🚫 bloqueado — <button type="button" class="license-link" id="btn-ayuda-portapapeles">ver cómo activarlo</button>';
+          const b = el.querySelector('#btn-ayuda-portapapeles');
+          if (b) b.addEventListener('click', () => customAlert(PORTAPAPELES_AYUDA_BLOQUEADO, 'Activar pegado rápido'));
+        } else if (estado === 'prompt') {
+          el.innerHTML = 'Pegado rápido: ⚠️ sin activar — <button type="button" class="license-link" id="btn-activar-portapapeles">tocá acá para activarlo</button>';
+          const b = el.querySelector('#btn-activar-portapapeles');
+          if (b) b.addEventListener('click', async () => {
+            try { await navigator.clipboard.readText(); } catch (e) { /* eligió bloquear: el re-render lo mostrará */ }
+            syncClienteDraftFromDOM();
+            render();
+          });
+        } else {
+          el.textContent = '';
+        }
+      });
+    }
 
 
     const btnAddCilindro = root.querySelector('#btn-add-cilindro');
