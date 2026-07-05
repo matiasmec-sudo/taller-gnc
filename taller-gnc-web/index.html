@@ -519,7 +519,7 @@ window.storage = {
   });
 
   const TALLER_CONFIG_DEFAULT = {
-    razonSocial: '', direccion: '', cuit: '',
+    razonSocial: '', direccion: '', horario: '', cuit: '',
     tecnicoNombre: '', tecnicoMatricula: '',
     codigoPec: '', codigoTaller: '',
     pecRazonSocial: '', pecDireccion: '', pecTelefono: '', pecIngeniero: '', pecMatriculaCipba: ''
@@ -630,21 +630,37 @@ window.storage = {
 
   function cleanPhone(p) { return (p || '').replace(/\D/g, ''); }
 
+  // Mensaje de aviso de vencimiento. A pedido del usuario NO incluye el
+  // nombre del cliente (a veces no lo tenemos cargado). El horario y la
+  // dirección salen de la configuración del taller, con valores por defecto
+  // razonables si todavía no se completaron.
   function waLink(cliente, tipo) {
     const phone = cleanPhone(cliente.telefono);
-    let doc, fecha, status;
+    let status, queVence;
     if (tipo === 'oblea') {
-      doc = 'Oblea';
-      fecha = fmtDate(cliente.fecha_oblea);
       status = statusOf(cliente.fecha_oblea);
+      queVence = 'la oblea de GNC';
     } else {
-      doc = 'revisión periódica del cilindro (Prueba Hidráulica / CRPC)';
       const phIso = phVencimientoISO(cliente.fecha_crpc, cliente.tipo_cilindro);
-      fecha = phIso ? fmtMonthYear(cliente.fecha_crpc ? `${phIso.slice(0,4)}-${phIso.slice(5,7)}` : '') : '—';
       status = statusOf(phIso);
+      queVence = 'la revisión periódica del cilindro (Prueba Hidráulica / CRPC)';
     }
-    const venceTexto = status.days !== null && status.days < 0 ? `venció (${fecha})` : `vence (${fecha})`;
-    const msg = `Hola ${cliente.nombre}! Te escribimos de ${tallerNombre} para recordarte que la ${doc} de tu vehículo (patente ${cliente.patente || 's/d'}) ${venceTexto}. Te esperamos para renovarla. Cualquier consulta, escribinos por acá. Saludos!`;
+    const vencida = status.days !== null && status.days < 0;
+    const patenteTxt = cliente.patente ? ` (patente ${cliente.patente})` : '';
+    const horario = tallerConfig.horario || 'lunes a viernes de 9 a 17 hs';
+    const lugar = [tallerNombre, tallerConfig.direccion].filter(Boolean).join(' – ');
+    const msg = `¡Buen día! 😊
+Te recordamos que ${vencida ? 'venció' : 'este mes vence'} ${queVence} de tu vehículo${patenteTxt}.
+
+Documentación para realizar la renovación:
+✅ Cédula del gas
+✅ Cédula verde
+✅ DNI
+
+📅 Podés venir a renovarla de ${horario}
+📍 ${lugar}
+
+¡Te esperamos! 😊`;
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   }
 
@@ -1538,7 +1554,8 @@ window.storage = {
 
   function enargasPasteBox(entrando) {
     return `<div class="agent-box ${entrando ? 'panel-entrando' : ''}" style="grid-column: 1/-1;">
-      <label>Pegá acá lo que te muestra la consulta de ENARGAS</label>
+      <button type="button" class="btn btn-primary" id="btn-pegar-enargas" style="width:100%; font-size:15px; margin-bottom:10px;">📋 PEGAR LO COPIADO DE ENARGAS</button>
+      <label>O pegalo a mano acá abajo</label>
       <textarea id="enargas-paste-text" placeholder="Pegá el resultado de la consulta por dominio... (se carga y se cierra solo al pegar)"></textarea>
       <div class="agent-hint">Con pegar alcanza — se completa solo y esta caja se cierra sola. Todavía estamos mejorando esta función, puede que no reconozca todos los datos automáticamente; si no completa algo, cargalo a mano.</div>
       <div id="enargas-paste-result"></div>
@@ -1613,6 +1630,9 @@ window.storage = {
         </label>
         <label>Dirección
           <input type="text" id="tc-direccion" value="${escapeHtml(t.direccion)}" placeholder="Ej: Edison 2945">
+        </label>
+        <label>Horario de atención (para los avisos de WhatsApp)
+          <input type="text" id="tc-horario" value="${escapeHtml(t.horario || '')}" placeholder="Ej: lunes a viernes de 9 a 17 hs">
         </label>
         <label>Técnico responsable
           <input type="text" id="tc-tecnico-nombre" value="${escapeHtml(t.tecnicoNombre)}" placeholder="Ej: Leandro Di Lenarda">
@@ -1702,8 +1722,8 @@ window.storage = {
           <input type="text" id="f-patente" value="${escapeHtml(c.patente)}" placeholder="Ej: AB123CD">
         </label>
         <div style="grid-column: 1/-1; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-          <button type="button" class="btn btn-agent" id="btn-buscar-enargas" data-patente="${escapeHtml(c.patente)}">Buscar en ENARGAS ↗</button>
-          <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-enargas-paste">${enargasPasteOpen ? 'Cerrar' : 'Pegar resultado'}</button>
+          <button type="button" class="btn btn-agent" id="btn-buscar-enargas" data-patente="${escapeHtml(c.patente)}" style="flex:2; min-width:180px; font-size:14px;">🔎 Buscar en ENARGAS ↗</button>
+          <button type="button" class="btn btn-ghost" id="btn-toggle-enargas-paste" style="flex:1; min-width:120px;">${enargasPasteOpen ? 'Cerrar' : '📋 Pegar resultado'}</button>
         </div>
         <div id="enargas-copy-hint" class="agent-hint" style="display:none; grid-column: 1/-1;"></div>
         ${enargasPasteOpen ? enargasPasteBox(enargasEntrando) : ''}
@@ -2343,6 +2363,40 @@ window.storage = {
   let bulkImportRows = [];
   let bulkImportSkip = new Set();
   let enargasPasteOpen = false;
+  // true entre que se toca "Buscar en ENARGAS" y que se logra cargar el
+  // resultado — mientras está activo, al volver el foco a esta pestaña la
+  // app intenta leer el portapapeles y cargar los datos sola.
+  let esperandoEnargas = false;
+
+  // Al volver de la pestaña de ENARGAS: si el portapapeles tiene algo que
+  // parece un resultado de la consulta (2 o más datos reconocidos — así una
+  // patente suelta o cualquier otra cosa copiada no dispara nada), se abre
+  // la caja de pegado y se carga solo. El navegador puede pedir permiso de
+  // lectura del portapapeles la primera vez.
+  window.addEventListener('focus', async () => {
+    if (!esperandoEnargas) return;
+    if (!showForm && !editingId) { esperandoEnargas = false; return; }
+    if (!navigator.clipboard || !navigator.clipboard.readText) return;
+    let texto = '';
+    try { texto = await navigator.clipboard.readText(); } catch (e) { return; }
+    if (!texto || !texto.trim()) return;
+    const parsed = parseEnargasText(texto);
+    const señales = parsed.found.length + (parsed.equipo ? 1 : 0) + (parsed.obleaActual ? 1 : 0);
+    if (señales < 2) return; // no parece un resultado de ENARGAS, seguimos esperando
+    esperandoEnargas = false;
+    enargasPasteOpen = true;
+    // Antes de redibujar, rescatar lo que se haya tipeado y todavía no se
+    // sincronizó — si no, el render lo pisaría.
+    syncClienteDraftFromDOM();
+    render();
+    const ta = root.querySelector('#enargas-paste-text');
+    if (ta) {
+      ta.value = texto;
+      // Dispara el mismo camino que un pegado manual (el listener de
+      // "paste" de la caja aplica los datos y cierra la caja solo).
+      ta.dispatchEvent(new Event('paste'));
+    }
+  });
   let reminderBannerOpen = false;
   const scanFiles = { 'foto1': null, 'foto2': null };
   let currentSignature = null;
@@ -2881,6 +2935,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       tallerConfig = {
         razonSocial: root.querySelector('#tc-razon-social').value.trim(),
         direccion: root.querySelector('#tc-direccion').value.trim(),
+        horario: root.querySelector('#tc-horario').value.trim(),
         cuit: root.querySelector('#tc-cuit').value.trim(),
         tecnicoNombre: root.querySelector('#tc-tecnico-nombre').value.trim(),
         tecnicoMatricula: root.querySelector('#tc-tecnico-matricula').value.trim(),
@@ -3335,9 +3390,10 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       if (patente && navigator.clipboard && navigator.clipboard.writeText) {
         try {
           await navigator.clipboard.writeText(patente);
-          if (hint) { hint.style.display = 'block'; hint.textContent = `Copiamos "${patente}" al portapapeles — pegala (mantené apretado y "Pegar") en el campo Dominio de esa página.`; }
+          if (hint) { hint.style.display = 'block'; hint.textContent = `Copiamos "${patente}" al portapapeles. En la página de ENARGAS: pegala en el campo Dominio y buscá. Cuando aparezca el resultado, mantené apretado sobre el texto → Seleccionar todo → Copiar, y volvé acá: los datos se cargan solos.`; }
         } catch (e) { console.error('No se pudo copiar la patente', e); }
       }
+      esperandoEnargas = true;
       // window.open (en vez de un <a target="_blank">) para que abra en una
       // pestaña/ventana nueva de verdad incluso instalado como app en el
       // celular, donde un link común a veces navega en la misma ventana.
@@ -3419,6 +3475,26 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     // "Aplicar" aparte. El setTimeout espera a que el navegador termine de
     // insertar el texto pegado en el campo antes de leer su valor.
     if (textareaEnargasDoc) textareaEnargasDoc.addEventListener('paste', () => setTimeout(aplicarEnargasDocumentacion, 0));
+
+    // Botón grande "PEGAR LO COPIADO": lee el portapapeles directamente
+    // (el navegador pide permiso la primera vez), así no hay que mantener
+    // apretado el campo de texto para pegar.
+    const btnPegarEnargas = root.querySelector('#btn-pegar-enargas');
+    if (btnPegarEnargas) btnPegarEnargas.addEventListener('click', async () => {
+      if (!navigator.clipboard || !navigator.clipboard.readText) {
+        const box = root.querySelector('#enargas-paste-result');
+        if (box) { box.className = 'agent-result err'; box.textContent = 'Este navegador no deja leer el portapapeles — pegá el texto a mano en el campo de abajo.'; }
+        return;
+      }
+      let texto = '';
+      try { texto = await navigator.clipboard.readText(); } catch (e) {
+        const box = root.querySelector('#enargas-paste-result');
+        if (box) { box.className = 'agent-result err'; box.textContent = 'No pudimos leer el portapapeles (¿permiso denegado?) — pegá el texto a mano en el campo de abajo.'; }
+        return;
+      }
+      const ta = root.querySelector('#enargas-paste-text');
+      if (ta) { ta.value = texto; aplicarEnargasDocumentacion(); }
+    });
 
 
     const btnAddCilindro = root.querySelector('#btn-add-cilindro');
