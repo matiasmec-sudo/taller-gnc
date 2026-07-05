@@ -337,18 +337,16 @@ window.storage = {
   font-size: 12px; color: #6B7688; font-weight: 600;
 }
 
-/* BOTON FLOTANTE (FAB) — solo en mobile, alternativa al boton de arriba */
-#gnc-app .fab-nuevo-tramite { display: none; }
-@media (max-width: 720px) {
-  #gnc-app .fab-nuevo-tramite {
-    display: flex; align-items: center; justify-content: center;
-    position: fixed; bottom: 20px; right: 20px; width: 58px; height: 58px;
-    border-radius: 50%; background: var(--flame); color: #fff; font-size: 28px;
-    font-weight: 400; border: none; box-shadow: 0 6px 18px rgba(29,91,216,0.40);
-    z-index: 40; cursor: pointer; line-height: 1;
-  }
-  #gnc-app .fab-nuevo-tramite:active { transform: scale(0.92); filter: brightness(0.85); }
+/* BOTON FLOTANTE (FAB) — la puerta de entrada a los trámites nuevos,
+   visible en mobile y en compu */
+#gnc-app .fab-nuevo-tramite {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  position: fixed; bottom: 20px; right: 20px; min-height: 54px; padding: 0 22px;
+  border-radius: 999px; background: var(--flame); color: #fff; font-size: 15px;
+  font-weight: 700; border: none; box-shadow: 0 6px 18px rgba(29,91,216,0.40);
+  z-index: 40; cursor: pointer; line-height: 1;
 }
+#gnc-app .fab-nuevo-tramite:active { transform: scale(0.92); filter: brightness(0.85); }
 
 /* BARRA DE NAVEGACION INFERIOR — solo en mobile (estilo app) */
 #gnc-app .bottom-nav { display: none; }
@@ -1098,6 +1096,35 @@ Documentación para realizar la renovación:
     return Array.from(byPatente.values());
   }
 
+  // Alta rápida de cliente: para registrar cualquier auto que pasa por el
+  // taller (aunque hoy venga a reparar, no a renovar la oblea) — con
+  // patente y teléfono ya entra al circuito de avisos de vencimiento. La
+  // documentación se completa después, al iniciar un trámite.
+  function quickAddPanel(entrando) {
+    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="quick-add-panel">
+      <h2>Nuevo cliente</h2>
+      <p class="scan-sub">Carga express: con patente y teléfono alcanza. El resto (documentación, fotos, equipo) se completa cuando haga su primer trámite.</p>
+      <div class="form-grid">
+        <label class="campo-obligatorio">Patente *
+          <input type="text" id="qa-patente" placeholder="Ej: AB123CD">
+        </label>
+        <label class="campo-obligatorio">Teléfono (con código de país, sin +) *
+          <input type="tel" id="qa-telefono" placeholder="Ej: 5492235551234">
+        </label>
+        <label>Nombre (opcional)
+          <input type="text" id="qa-nombre" placeholder="Ej: Juan Pérez">
+        </label>
+        <label>Vencimiento de oblea (si lo sabés)
+          <input type="date" id="qa-fecha-oblea">
+        </label>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" id="btn-quick-add-save">Guardar cliente</button>
+        <button type="button" class="btn btn-ghost" id="btn-quick-add-cancel">Cancelar</button>
+      </div>
+    </div>`;
+  }
+
   function bulkImportPanel(entrando) {
     const rows = bulkImportRows;
     const existentes = new Set(clientes.map(c => (c.patente || '').toUpperCase()));
@@ -1396,6 +1423,7 @@ Documentación para realizar la renovación:
           <div class="client-actions">
             ${c.telefono ? `<a class="btn btn-wa" target="_blank" rel="noopener" href="${waLinkGeneral(c)}">WhatsApp</a>` : ''}
             <button class="btn btn-ghost" data-fotos="${c.id}">Documentación</button>
+            <button class="btn btn-ghost" data-actualizar="${c.id}">Actualizar datos</button>
             <button class="btn btn-agent" data-tramite="${c.id}">Inicio de trámite</button>
             <button class="btn btn-danger-outline" data-delete="${c.id}">Eliminar</button>
           </div>
@@ -1818,7 +1846,9 @@ Documentación para realizar la renovación:
         </label>
       </div>
       <div class="form-actions">
-        <button class="btn btn-primary" id="btn-wizard-next-1">Siguiente →</button>
+        ${modoSoloDatos
+          ? '<button class="btn btn-primary" id="btn-solo-datos-guardar">Guardar datos</button>'
+          : '<button class="btn btn-primary" id="btn-wizard-next-1">Siguiente →</button>'}
         <button class="btn btn-ghost" id="btn-wizard-cancel">Cancelar</button>
       </div>`;
   }
@@ -1884,8 +1914,8 @@ Documentación para realizar la renovación:
     if (!tramiteDraftCampos) tramiteDraftCampos = blankTramiteCampos(editingTramiteId && existing ? existing.tramites.find(t => t.id === editingTramiteId) : null);
     const titulo = existing ? escapeHtml(c.nombre || existing.nombre || 'cliente') : 'Nuevo cliente';
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="form-panel">
-      <h2 class="panel-h2-sticky">Inicio de trámite — ${titulo}
-        <div class="wizard-pasos">Paso ${wizardStep} de 3 — ${WIZARD_PASOS[wizardStep - 1]}</div>
+      <h2 class="panel-h2-sticky">${modoSoloDatos ? 'Actualizar datos' : 'Inicio de trámite'} — ${titulo}
+        ${modoSoloDatos ? '' : `<div class="wizard-pasos">Paso ${wizardStep} de 3 — ${WIZARD_PASOS[wizardStep - 1]}</div>`}
       </h2>
       <div class="${entrandoPaso ? 'panel-entrando' : ''}">
       ${wizardStep === 1 ? wizardPaso1(c, enargasEntrando) : ''}
@@ -2475,6 +2505,15 @@ Documentación para realizar la renovación:
   let bulkImportRows = [];
   let bulkImportSkip = new Set();
   let enargasPasteOpen = false;
+  // Alta rápida de cliente (patente + teléfono + nombre, sin documentación)
+  // — para registrar cualquier auto que pasa por el taller aunque hoy no
+  // haga un trámite de GNC.
+  let showQuickAdd = false;
+  // El asistente en modo "Actualizar datos": muestra solo el paso 1 y
+  // guarda los datos del cliente sin crear un trámite (ej. para refrescar
+  // el vencimiento de la oblea desde ENARGAS y que el aviso de WhatsApp
+  // salga cuando corresponde).
+  let modoSoloDatos = false;
   // true entre que se toca "Buscar en ENARGAS" y que se logra cargar el
   // resultado — mientras está activo, al volver el foco a esta pestaña la
   // app intenta leer el portapapeles y cargar los datos sola.
@@ -2525,7 +2564,7 @@ Documentación para realizar la renovación:
     try {
       localStorage.setItem(WIZARD_SNAPSHOT_KEY, JSON.stringify({
         ts: Date.now(),
-        editingId, showForm, wizardStep, editingTramiteId,
+        editingId, showForm, wizardStep, editingTramiteId, modoSoloDatos,
         clienteDraft, tramiteDraftEquipo, tramiteDraftCampos, currentSignature,
       }));
     } catch (e) { /* localStorage lleno: seguimos sin snapshot */ }
@@ -2555,6 +2594,7 @@ Documentación para realizar la renovación:
       showForm = !!snap.showForm;
       wizardStep = snap.wizardStep || 1;
       editingTramiteId = snap.editingTramiteId || null;
+      modoSoloDatos = !!snap.modoSoloDatos;
       clienteDraft = snap.clienteDraft || null;
       tramiteDraftEquipo = snap.tramiteDraftEquipo || null;
       tramiteDraftCampos = snap.tramiteDraftCampos || null;
@@ -2962,7 +3002,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     const list = currentQuery.trim() ? sortedFiltered(currentQuery) : [];
     const editing = editingId ? clientes.find(c => c.id === editingId) : null;
     const pendCount = pendientesItems().length;
-    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig;
+    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd;
 
     // Para que la animación de entrada de un panel se dispare solo cuando
     // recién se abre — no en cada re-render mientras sigue abierto (ej. al
@@ -2978,11 +3018,12 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       bulkImport: showBulkImport && !prevPanelState.bulkImport,
       tallerConfig: showTallerConfig && !prevPanelState.tallerConfig,
       enargasPaste: enargasPasteOpen && !prevPanelState.enargasPaste,
+      quickAdd: showQuickAdd && !prevPanelState.quickAdd,
     };
     prevPanelState = {
       wizard: wizardAbierto, wizardStep, fotos: !!showFotosFor, historial: showHistorial,
       pendientes: showPendientes, bulkImport: showBulkImport, tallerConfig: showTallerConfig,
-      enargasPaste: enargasPasteOpen,
+      enargasPaste: enargasPasteOpen, quickAdd: showQuickAdd,
     };
 
     root.innerHTML = `
@@ -3018,9 +3059,11 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
         <div class="controls">
           <input class="search-input" type="text" id="search-input" placeholder="Buscar por nombre o patente..." value="${escapeHtml(currentQuery)}">
-          <button class="btn btn-primary" id="btn-new">+ Nuevo trámite</button>
+          <button class="btn btn-primary" id="btn-new">+ Nuevo cliente</button>
+          <button type="button" class="btn btn-ghost" id="btn-enargas-directo" title="Abrir la consulta por dominio de ENARGAS">ENARGAS ↗</button>
         </div>
 
+        ${showQuickAdd ? quickAddPanel(entrando.quickAdd) : ''}
         ${showBulkImport ? bulkImportPanel(entrando.bulkImport) : ''}
         ${showHistorial ? historialPanel(entrando.historial) : ''}
 
@@ -3030,14 +3073,14 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         ${list.length === 0
           ? `<div class="empty">${emptyIconSvg()}${
               clientes.length === 0
-                ? 'Todavía no cargaste clientes. Sumá el primero con "+ Nuevo trámite".'
+                ? 'Todavía no cargaste clientes. Sumá el primero con "+ Nuevo cliente".'
                 : currentQuery.trim()
                   ? 'No se encontraron clientes con esa búsqueda.'
                   : 'Buscá por nombre o patente para ver los datos de un cliente.'
             }</div>`
           : list.map(clientCard).join('')}
       </div>
-      ${algunPanelAbierto ? '' : '<button type="button" class="fab-nuevo-tramite" id="btn-fab-nuevo" aria-label="Nuevo trámite">+</button>'}
+      ${algunPanelAbierto ? '' : '<button type="button" class="fab-nuevo-tramite" id="btn-fab-nuevo" aria-label="Nuevo trámite">+ Nuevo trámite</button>'}
       <div class="bottom-nav">
         <button type="button" class="bn-item ${!showPendientes && !showHistorial && !showTallerConfig ? 'activo' : ''}" data-nav="inicio"><span class="bn-ico">🏠</span>Inicio</button>
         <button type="button" class="bn-item ${showPendientes ? 'activo' : ''}" data-nav="pendientes">${pendCount ? `<span class="bn-badge">${pendCount}</span>` : ''}<span class="bn-ico">📋</span>Pendientes</button>
@@ -3172,13 +3215,66 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
       render();
     }
+    // "+ Nuevo cliente" (arriba): alta rápida sin trámite. El botón
+    // flotante de abajo es la puerta de entrada a los trámites nuevos.
     const btnNew = root.querySelector('#btn-new');
-    if (btnNew) btnNew.addEventListener('click', iniciarNuevoTramite);
+    if (btnNew) btnNew.addEventListener('click', () => {
+      showQuickAdd = true;
+      showBulkImport = false;
+      render();
+      const inp = root.querySelector('#qa-patente');
+      if (inp) inp.focus();
+    });
     const btnFabNuevo = root.querySelector('#btn-fab-nuevo');
     if (btnFabNuevo) btnFabNuevo.addEventListener('click', async () => {
       await iniciarNuevoTramite();
       const panel = root.querySelector('#form-panel');
       if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    // Acceso directo a la consulta por dominio de ENARGAS desde la
+    // pantalla principal.
+    const btnEnargasDirecto = root.querySelector('#btn-enargas-directo');
+    if (btnEnargasDirecto) btnEnargasDirecto.addEventListener('click', () => {
+      window.open('https://www.enargas.gob.ar/secciones/gas-natural-comprimido/consulta-dominio.php', '_blank', 'noopener');
+    });
+
+    const btnQuickAddCancel = root.querySelector('#btn-quick-add-cancel');
+    if (btnQuickAddCancel) btnQuickAddCancel.addEventListener('click', () => {
+      showQuickAdd = false;
+      render();
+    });
+
+    const btnQuickAddSave = root.querySelector('#btn-quick-add-save');
+    if (btnQuickAddSave) btnQuickAddSave.addEventListener('click', async () => {
+      const patente = root.querySelector('#qa-patente').value.trim().toUpperCase().replace(/\s+/g, '');
+      const telefonoRaw = root.querySelector('#qa-telefono').value.trim();
+      const telefono = extractPhoneDigits(telefonoRaw);
+      const nombre = root.querySelector('#qa-nombre').value.trim();
+      const fechaOblea = root.querySelector('#qa-fecha-oblea').value || '';
+      if (!patente) { await customAlert('La patente es obligatoria.'); return; }
+      if (!telefono) { await customAlert('El teléfono es obligatorio (es lo que hace funcionar los avisos de vencimiento).'); return; }
+      const yaExiste = clientes.find(c => (c.patente || '').toUpperCase() === patente);
+      if (yaExiste) {
+        showQuickAdd = false;
+        currentQuery = patente;
+        render();
+        await customAlert(`Ya hay un cliente con la patente ${patente} — te lo dejamos en pantalla. Si querés cambiarle algo, tocá "Actualizar datos".`, 'Cliente existente');
+        return;
+      }
+      clientes.push({
+        id: 'c' + Date.now() + Math.random().toString(36).slice(2, 7),
+        nombre: nombre || patente, dni: '', domicilio: '', provincia: '', ciudad: '',
+        telefono, patente, marca: '', modelo: '',
+        tipo_vehiculo: '', uso: '', fecha_oblea: fechaOblea, fecha_crpc: '',
+        tipo_cilindro: '5', notas: '', tramites: [], ultimoAvisoMes: {}
+      });
+      await saveClientes();
+      showQuickAdd = false;
+      // Dejar al cliente nuevo a la vista, listo para "Inicio de trámite"
+      // o "Actualizar datos".
+      currentQuery = patente;
+      render();
     });
 
     const btnToggleMenu = root.querySelector('#btn-toggle-menu');
@@ -3458,6 +3554,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       editingTramiteId = null;
       currentSignature = null;
       esperandoEnargas = false;
+      modoSoloDatos = false;
       limpiarSnapshotWizard();
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
     }
@@ -3522,6 +3619,50 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
     if (btnCloseFotos) btnCloseFotos.addEventListener('click', () => {
       showFotosFor = null;
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
+      render();
+    });
+
+    // "Actualizar datos": abre solo el paso 1 (datos + ENARGAS) y guarda
+    // sin crear un trámite — para refrescar el vencimiento de la oblea u
+    // otros datos del cliente.
+    root.querySelectorAll('[data-actualizar]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-actualizar');
+        const cliente = clientes.find(x => x.id === id);
+        if (!cliente) return;
+        cerrarWizard();
+        editingId = id;
+        showForm = false;
+        wizardStep = 1;
+        modoSoloDatos = true;
+        clienteDraft = { ...cliente };
+        Object.assign(scanFiles, await fotosGuardadas(id));
+        tramiteDraftEquipo = blankEquipo(cliente.ultimoEquipoConocido);
+        tramiteDraftCampos = blankTramiteCampos(null);
+        render();
+        const panel = root.querySelector('#form-panel');
+        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+
+    const btnSoloDatosGuardar = root.querySelector('#btn-solo-datos-guardar');
+    if (btnSoloDatosGuardar) btnSoloDatosGuardar.addEventListener('click', async () => {
+      syncClienteDraftFromDOM();
+      const idx = clientes.findIndex(c => c.id === editingId);
+      if (idx === -1 || !clienteDraft) return;
+      const patente = (clienteDraft.patente || '').trim().toUpperCase();
+      if (!patente) { await customAlert('La patente es obligatoria.'); return; }
+      const telefono = (clienteDraft.telefono || '').trim();
+      if (!telefono) { await customAlert('El teléfono es obligatorio (es lo que hace funcionar los avisos de vencimiento).'); return; }
+      clientes[idx] = { ...clientes[idx], ...clienteDraft, patente };
+      // Si sacó o cambió fotos en esta pantalla, guardarlas también.
+      try {
+        if (Object.values(scanFiles).some(Boolean)) {
+          await window.storage.set(`fotos:${editingId}`, JSON.stringify(scanFiles), false);
+        }
+      } catch (e) { console.error('Error guardando fotos', e); }
+      await saveClientes();
+      cerrarWizard();
       render();
     });
 
