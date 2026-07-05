@@ -76,7 +76,7 @@ window.storage = {
   display: flex; align-items: center; justify-content: space-between;
   gap: 16px; flex-wrap: wrap; margin-bottom: 28px;
 }
-#gnc-app .brand { display: flex; align-items: baseline; gap: 10px; }
+#gnc-app .brand { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; min-width: 0; }
 #gnc-app .menu-wrap { position: relative; align-self: center; }
 #gnc-app .menu-dropdown {
   position: absolute; top: 100%; left: 0; margin-top: 6px; z-index: 20;
@@ -107,9 +107,12 @@ window.storage = {
   background: transparent; border: none; border-bottom: 1px dashed var(--line);
   color: var(--text); font-family: var(--display); font-size: 26px;
   text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 0;
-  width: 260px; outline: none;
+  width: 260px; max-width: 100%; outline: none;
 }
 #gnc-app .taller-name-input:focus { border-bottom-color: var(--flame); }
+@media (max-width: 480px) {
+  #gnc-app .taller-name-input { flex: 1 1 100%; font-size: 20px; }
+}
 
 /* GAUGE */
 #gnc-app .gauge-box {
@@ -163,6 +166,12 @@ window.storage = {
 #gnc-app input[type="text"], #gnc-app input[type="tel"],
 #gnc-app input[type="date"], #gnc-app input[type="month"],
 #gnc-app select { min-height: 44px; }
+/* Sin esto, un <select> con una opción de texto largo (ej. "Prueba
+   Hidráulica", "Operación (M/S/D/B)") no se achica por debajo de su ancho
+   de contenido — ni él ni el <label> que lo envuelve, aunque estén en un
+   grid de columnas angostas — y termina saliéndose del recuadro en
+   pantallas chicas en vez de ajustarse. */
+#gnc-app input, #gnc-app select { min-width: 0; width: 100%; box-sizing: border-box; }
 #gnc-app input[type="checkbox"] { width: 20px; height: 20px; }
 
 /* FORM PANEL */
@@ -188,8 +197,8 @@ window.storage = {
   border-top: 1px dashed var(--line); padding-top: 14px;
 }
 #gnc-app .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-#gnc-app .form-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text-muted); font-family: var(--mono); }
-#gnc-app .form-actions { display: flex; gap: 10px; margin-top: 16px; }
+#gnc-app .form-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text-muted); font-family: var(--mono); min-width: 0; }
+#gnc-app .form-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
 @media (max-width: 640px) { #gnc-app .form-grid { grid-template-columns: 1fr; } }
 
 /* AGENT PASTE BOX */
@@ -388,8 +397,9 @@ window.storage = {
 
 /* EQUIPO (grilla del tramite) */
 #gnc-app .equipo-fila { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; align-items: end; }
-#gnc-app .equipo-fila label { font-size: 11px; color: var(--text-muted); font-family: var(--mono); display: flex; flex-direction: column; gap: 4px; }
-@media (max-width: 640px) { #gnc-app .equipo-fila { grid-template-columns: 1fr 1fr; } }
+#gnc-app .equipo-fila label { font-size: 11px; color: var(--text-muted); font-family: var(--mono); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+@media (max-width: 900px) { #gnc-app .equipo-fila { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 480px) { #gnc-app .equipo-fila { grid-template-columns: 1fr; } }
 #gnc-app .equipo-grupo { padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px dashed var(--line); }
 #gnc-app .equipo-grupo:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
 #gnc-app .equipo-operacion { color: var(--warn) !important; }
