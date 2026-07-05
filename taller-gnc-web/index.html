@@ -1940,6 +1940,9 @@ Documentación para realizar la renovación:
     return `<div style="width:1000px; min-height:1414px; background:#fff; color:#000; font-family: Arial, Helvetica, sans-serif; box-sizing:border-box; border:2px solid #000; padding:16px; position:relative;">
       <div style="position:absolute; top:2px; right:10px; font-size:10px; font-weight:bold;">F1</div>
 
+      <!-- Título (planilla oficial ANEXO I — Documento N° 3) -->
+      <div style="border:2px solid #000; text-align:center; font-size:15px; font-weight:bold; letter-spacing:1px; padding:5px 0; margin-bottom:8px;">FICHA TÉCNICA DEL EQUIPO PARA GNC</div>
+
       <!-- Encabezado: PEC + habilitación + oblea -->
       <div style="display:flex; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:6px;">
         <div style="flex:2; display:flex; gap:8px;">
@@ -1968,7 +1971,7 @@ Documentación para realizar la renovación:
           <div style="border-bottom:1px solid #000; min-height:15px; font-size:10px; font-weight:600; text-align:center;">${escapeHtml(tramite.obleaAnterior || '')}</div>
           <div style="font-size:7px; text-align:center;">Anterior</div>
           <div style="border-bottom:1px solid #000; min-height:15px; font-size:10px; font-weight:600; text-align:center; margin-top:2px;">${escapeHtml(tramite.obleaNueva || '')}</div>
-          <div style="font-size:7px; text-align:center;">Nuevo</div>
+          <div style="font-size:7px; text-align:center;">Nueva</div>
         </div>
       </div>
 
@@ -2079,12 +2082,11 @@ Documentación para realizar la renovación:
               <div style="font-size:7.5px; font-weight:600;">Cilindros</div>
               <table style="width:100%; border-collapse:collapse; font-size:7.5px;">
                 <tr style="font-weight:600; text-align:center;">
-                  <td>Código</td><td>N° Serie</td><td>Capac.</td><td>Nvo/Usado</td><td>Fab. Mes/Año</td><td>Rev. Mes/Año</td><td>CRPC</td><td>M/SC/D/B</td>
+                  <td>Código</td><td>N° Serie</td><td>Nvo/Usado</td><td>Fabricado Mes/Año</td><td>Revisado Mes/Año</td><td>CRPC</td><td>M/SC/D/B</td>
                 </tr>
                 ${cilindroFilas.map(c => `<tr style="text-align:center;">
                   <td style="border-top:1px solid #999; font-weight:600; font-size:9px;">${escapeHtml(c.codigo || '')}</td>
                   <td style="border-top:1px solid #999; font-weight:600; font-size:9px;">${escapeHtml(c.serie || '')}</td>
-                  <td style="border-top:1px solid #999;"></td>
                   <td style="border-top:1px solid #999; font-size:8px;">${c.nuevoUsado === 'nuevo' ? 'Nuevo' : (c.codigo || c.serie) ? 'Usado' : ''}</td>
                   <td style="border-top:1px solid #999; font-size:8px;">${[c.fabricadoMes, c.fabricadoAnio].filter(Boolean).join('/')}</td>
                   <td style="border-top:1px solid #999; font-size:8px;">${[c.revisadoMes, c.revisadoAnio].filter(Boolean).join('/')}</td>
@@ -2136,35 +2138,36 @@ Documentación para realizar la renovación:
         <div style="flex:1; display:flex; flex-direction:column; gap:6px; padding-left:6px;">
           <div style="border:1px solid #000; padding:5px; display:flex; gap:8px;">
             <div style="flex:2; font-size:7px; color:#333;">
-              <b>Taller de Montaje:</b> CERTIFICO la autenticidad de los datos consignados en esta Ficha Técnica y haber efectuado la operación indicada de acuerdo con el procedimiento y capacitación recibida del PEC habilitante, sobre la base de la normativa vigente.
+              <b>Taller de Montaje:</b> CERTIFICO haber efectuado la operación indicada en esta Ficha Técnica de acuerdo con el procedimiento y capacitación recibida del PEC habilitante, sobre la base de la normativa vigente.
             </div>
             <div style="flex:1; text-align:center; font-size:8px;">
               <div style="height:28px;"></div>
               <div style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(tc.tecnicoNombre || '')}</div>
               <div style="font-size:7px;">Técnico Mecánico — Mat. ${escapeHtml(tc.tecnicoMatricula || '')}</div>
-              <div style="font-size:6px; color:#666;">Firma, aclaración y N° de Mat. del Rep. Téc. del TdM</div>
+              <div style="font-size:6px; color:#666;">Firma, aclaración y N° Matrícula del Representante Técnico del TdM</div>
             </div>
           </div>
           <div style="border:1px solid #000; padding:5px; display:flex; gap:8px;">
             <div style="flex:2; font-size:7px; color:#333;">
-              <b>Propietario:</b> Tomo conocimiento del vencimiento de la habilitación del equipo de GNC y certifico haber recibido un ejemplar del Manual de instrucción y las Recomendaciones de Seguridad para el uso de vehículos propulsados con GNC (Res. 2768/02). Me notifico de las responsabilidades civiles y/o penales que podrían corresponderme como consecuencia de la eliminación de la etiqueta de identificación. ESTE DOCUMENTO NO HABILITA LA CARGA DE GNC.
+              <b>Propietario:</b> Tomo conocimiento del vencimiento de la habilitación del equipo para GNC, y certifico haber recibido un ejemplar del "Manual de instrucción para el uso del equipo para GNC" y de las "Recomendaciones para el uso de vehículos propulsados con GNC".
+              <div style="font-size:8px; font-weight:bold; margin-top:3px;">ESTE DOCUMENTO NO HABILITA LA CARGA DE GNC</div>
             </div>
             <div style="flex:1; text-align:center; font-size:8px;">
               ${firmaDataUrl ? `<img src="${firmaDataUrl}" style="height:28px; max-width:100%;">` : `<div style="height:28px;"></div>`}
               <div style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(cliente.nombre || '')}</div>
               <div style="font-size:7px;">${escapeHtml([cliente.tipo_documento, cliente.dni].filter(Boolean).join(' '))}</div>
-              <div style="font-size:6px; color:#666;">Aclaración y N° de Documento</div>
+              <div style="font-size:6px; color:#666;">Firma, aclaración y N° Documento del Propietario</div>
             </div>
           </div>
           <div style="border:1px solid #000; padding:5px; display:flex; gap:8px;">
             <div style="flex:2; font-size:7px; color:#333;">
-              <b>Productor de Equipos Completos (PEC):</b> CERTIFICO haber corroborado la autenticidad de los datos consignados en esta Ficha Técnica y que la operación indicada se efectuó conforme a la normativa vigente del ENARGAS.
+              <b>Productor de Equipos Completos (PEC):</b> CERTIFICO la autenticidad de los datos, y que la operación indicada en esta Ficha Técnica se efectuó conforme a la normativa vigente del ENARGAS.
             </div>
             <div style="flex:1; text-align:center; font-size:8px;">
               <div style="height:28px;"></div>
               <div style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(tc.pecIngeniero || '')}</div>
               <div style="font-size:7px;">Ingeniero Mecánico — Mat. CIPBA ${escapeHtml(tc.pecMatriculaCipba || '')}</div>
-              <div style="font-size:6px; color:#666;">Firma, aclaración y N° de Mat. del Rep. Téc. del PEC</div>
+              <div style="font-size:6px; color:#666;">Firma, aclaración y N° Matrícula del Representante Técnico del PEC</div>
             </div>
           </div>
         </div>
@@ -2172,7 +2175,18 @@ Documentación para realizar la renovación:
     </div>`;
   }
 
+  function pecCargarImagen(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('No se pudo cargar una foto de la documentación'));
+      img.src = src;
+    });
+  }
+
   // Renderiza pecFormHtml() off-screen, lo rasteriza y arma el PDF final.
+  // Después de la ficha, agrega una página por cada foto de documentación
+  // guardada del cliente — el PEC recibe todo en un solo archivo.
   async function generarPecPdf(cliente, tramite, firmaDataUrl) {
     await cargarLibreriasPec();
     const cont = document.createElement('div');
@@ -2182,6 +2196,7 @@ Documentación para realizar la renovación:
     cont.innerHTML = pecFormHtml(cliente, tramite, firmaDataUrl);
     document.body.appendChild(cont);
     let blob;
+    let fotosIncluidas = 0;
     try {
       const canvas = await window.html2canvas(cont.firstElementChild, { scale: 2, backgroundColor: '#ffffff' });
       const { jsPDF } = window.jspdf;
@@ -2193,20 +2208,49 @@ Documentación para realizar la renovación:
       if (h > pageH) { h = pageH; w = pageH / ratio; }
       const x = (pageW - w) / 2, y = (pageH - h) / 2;
       doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', x, y, w, h);
+
+      const fotos = await fotosGuardadas(cliente.id);
+      const paginasFotos = [
+        { titulo: 'Documentación (lado A)', dataUrl: fotos.foto1 },
+        { titulo: 'Documentación (lado B)', dataUrl: fotos.foto2 },
+      ].filter(f => f.dataUrl);
+      for (const f of paginasFotos) {
+        let img;
+        try {
+          img = await pecCargarImagen(f.dataUrl);
+        } catch (e) {
+          console.error(e);
+          continue; // una foto ilegible no debe frenar el envío de la ficha
+        }
+        doc.addPage();
+        const margen = 12;
+        doc.setFontSize(11);
+        doc.text(`${f.titulo} — ${[cliente.nombre, cliente.patente].filter(Boolean).join(' · ')}`, margen, margen);
+        const maxW = pageW - margen * 2;
+        const maxH = pageH - margen * 2 - 6;
+        const r = img.height / img.width;
+        let fw = maxW, fh = maxW * r;
+        if (fh > maxH) { fh = maxH; fw = maxH / r; }
+        const formato = f.dataUrl.slice(0, 20).includes('png') ? 'PNG' : 'JPEG';
+        doc.addImage(f.dataUrl, formato, (pageW - fw) / 2, margen + 4, fw, fh);
+        fotosIncluidas++;
+      }
+
       blob = doc.output('blob');
     } finally {
       document.body.removeChild(cont);
     }
     const filename = `PEC_${(cliente.patente || cliente.nombre || 'tramite').replace(/\s+/g, '_')}_${tramite.fecha || ''}.pdf`;
-    return { blob, filename };
+    return { blob, filename, fotosIncluidas };
   }
 
   // Comparte el PDF por WhatsApp: si el celular soporta el "compartir"
   // nativo con archivos, se abre directo con el PDF adjunto y el contacto
   // se elige ahí mismo. Si no (ej. en escritorio), se descarga el PDF y se
   // abre WhatsApp Web con el mensaje ya armado para adjuntarlo a mano.
-  async function compartirPecPdf(blob, filename, cliente) {
-    const mensaje = `Hola! Te comparto la ficha técnica del trámite de GNC de la patente ${cliente.patente || 's/d'} para el PEC.`;
+  async function compartirPecPdf(blob, filename, cliente, fotosIncluidas) {
+    const notaFotos = fotosIncluidas ? ' Incluye las fotos de la documentación.' : '';
+    const mensaje = `Hola! Te comparto la ficha técnica del trámite de GNC de la patente ${cliente.patente || 's/d'} para el PEC.${notaFotos}`;
     const file = new File([blob], filename, { type: 'application/pdf' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
@@ -2629,6 +2673,16 @@ Documentación para realizar la renovación:
       reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
       reader.readAsDataURL(file);
     });
+  }
+
+  // Fotos de documentación guardadas de un cliente (clave fotos:<id>).
+  // Devuelve siempre un objeto { foto1, foto2 } (con null si no hay).
+  async function fotosGuardadas(clienteId) {
+    try {
+      const res = await window.storage.get(`fotos:${clienteId}`, false);
+      if (res) return JSON.parse(res.value) || {};
+    } catch (e) { /* este cliente todavía no tiene fotos guardadas */ }
+    return {};
   }
 
   function dataUrlParts(dataUrl) {
@@ -3152,6 +3206,10 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         editingTramiteId = tramiteId;
         currentSignature = tramite.firma || null;
         clienteDraft = { ...cliente };
+        // Reemplaza cualquier foto que quedara de otro cliente y evita que
+        // el guardado borre las fotos ya guardadas de este.
+        Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
+        Object.assign(scanFiles, await fotosGuardadas(clienteId));
         // No se reaplican los valores automáticos por tipo acá — es una
         // edición, no queremos pisar lo que el TdM ya haya ajustado a mano.
         tramiteDraftEquipo = normalizarEquipoOtros(JSON.parse(JSON.stringify(tramite.equipo || blankEquipo(cliente.ultimoEquipoConocido))));
@@ -3310,10 +3368,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       btn.addEventListener('click', async () => {
         const id = btn.getAttribute('data-fotos');
         Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
-        try {
-          const res = await window.storage.get(`fotos:${id}`, false);
-          if (res) Object.assign(scanFiles, JSON.parse(res.value));
-        } catch (e) { /* este cliente todavía no tiene fotos guardadas */ }
+        Object.assign(scanFiles, await fotosGuardadas(id));
         showFotosFor = id;
         render();
         const panel = root.querySelector('#fotos-panel');
@@ -3340,6 +3395,10 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         showForm = false;
         wizardStep = 1;
         clienteDraft = { ...cliente };
+        // Sin esto, guardar el trámite sin volver a sacar fotos borraba las
+        // fotos de documentación ya guardadas del cliente (el guardado
+        // interpreta "scanFiles vacío" como "no tiene fotos").
+        Object.assign(scanFiles, await fotosGuardadas(id));
         tramiteDraftEquipo = blankEquipo(cliente.ultimoEquipoConocido);
         aplicarValoresPorTipoTramite(elegido.tipo, tramiteDraftEquipo);
         tramiteDraftCampos = blankTramiteCampos(null);
@@ -3745,8 +3804,8 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       const tramite = cliente && cliente.tramites.find(t => t.id === resultado.tramiteId);
       if (!cliente || !tramite) return;
       try {
-        const { blob, filename } = await generarPecPdf(cliente, tramite, firmaParaPdf);
-        await compartirPecPdf(blob, filename, cliente);
+        const { blob, filename, fotosIncluidas } = await generarPecPdf(cliente, tramite, firmaParaPdf);
+        await compartirPecPdf(blob, filename, cliente, fotosIncluidas);
       } catch (e) {
         console.error(e);
         await customAlert('El trámite se guardó y se marcó como enviado, pero no se pudo generar el PDF: ' + (e && e.message ? e.message : e));
