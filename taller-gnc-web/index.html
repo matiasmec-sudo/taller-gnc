@@ -196,6 +196,9 @@ window.storage = {
   letter-spacing: 1px; margin: 18px 0 10px; color: var(--text-muted);
   border-top: 1px dashed var(--line); padding-top: 14px;
 }
+#gnc-app .panel h3.vehiculo-heading {
+  font-size: 16px; color: var(--flame); border-top: 2px solid var(--flame-dim);
+}
 #gnc-app .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 #gnc-app .form-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text-muted); font-family: var(--mono); min-width: 0; }
 #gnc-app .form-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
@@ -1096,6 +1099,63 @@ window.storage = {
     });
   }
 
+  // Ventana emergente que pide Tipo de trámite + Fecha ANTES de mostrar el
+  // resto del paso 1 — el usuario pidió que esto sea lo primero que se
+  // completa (se sacó del paso 3). Devuelve {tipo, fecha} o null si se
+  // cancela (en ese caso no se abre el asistente).
+  function mostrarModalTipoFecha(valoresIniciales) {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'gnc-modal-overlay';
+      overlay.innerHTML = `
+        <div class="gnc-modal-box">
+          <div class="gnc-modal-title" style="margin-bottom:12px;">Tipo de trámite</div>
+          <div class="form-grid">
+            <label>Tipo
+              <select id="modal-t-tipo">
+                ${TRAMITE_TIPOS.map(opt => `<option value="${opt.value}" ${valoresIniciales.tipo === opt.value ? 'selected' : ''}>${opt.label}</option>`).join('')}
+              </select>
+            </label>
+            <label>Fecha
+              <input type="date" id="modal-t-fecha" value="${escapeHtml(valoresIniciales.fecha)}">
+            </label>
+          </div>
+          <div class="gnc-modal-actions">
+            <button type="button" class="btn btn-sm btn-ghost" id="modal-t-cancelar">Cancelar</button>
+            <button type="button" class="btn btn-sm btn-primary" id="modal-t-continuar">Continuar</button>
+          </div>
+        </div>`;
+      function cerrar(valor) {
+        overlay.classList.add('closing');
+        setTimeout(() => { overlay.remove(); resolve(valor); }, 150);
+      }
+      overlay.querySelector('#modal-t-cancelar').addEventListener('click', () => cerrar(null));
+      overlay.querySelector('#modal-t-continuar').addEventListener('click', () => {
+        const tipo = overlay.querySelector('#modal-t-tipo').value;
+        const fecha = overlay.querySelector('#modal-t-fecha').value || valoresIniciales.fecha;
+        cerrar({ tipo, fecha });
+      });
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(null); });
+      document.body.appendChild(overlay);
+    });
+  }
+
+  // A partir del tipo elegido, deja precargados los M/S/D/B más comunes
+  // para ese trámite (se pueden seguir ajustando a mano en el paso 2):
+  // - Revisión Anual ("Renovación"): todo sigue igual (Sin Cambios).
+  // - Prueba Hidráulica: la válvula ya cargada se da de baja y se agrega
+  //   una válvula nueva en Montaje — sus datos los completa el TdM a mano.
+  function aplicarValoresPorTipoTramite(tipo, eq) {
+    if (tipo === 'revision_anual') {
+      eq.regulador.operacion = 'sigue';
+      eq.cilindros.forEach(c => { c.msdb = 'sigue'; });
+      eq.valvulas.forEach(v => { v.msb = 'sigue'; });
+    } else if (tipo === 'prueba_hidraulica') {
+      if (eq.valvulas.length > 0) eq.valvulas[0].msb = 'baja';
+      eq.valvulas.push({ codigo: '', serie: '', msb: 'montaje' });
+    }
+  }
+
   function customAlert(mensaje, titulo) {
     return mostrarModal({
       titulo: titulo || 'Aviso', mensaje, danger: false,
@@ -1447,11 +1507,8 @@ window.storage = {
   function enargasPasteBox(entrando) {
     return `<div class="agent-box ${entrando ? 'panel-entrando' : ''}" style="grid-column: 1/-1;">
       <label>Pegá acá lo que te muestra la consulta de ENARGAS</label>
-      <textarea id="enargas-paste-text" placeholder="Pegá el resultado de la consulta por dominio... (se carga solo al pegar)"></textarea>
-      <div class="form-actions">
-        <button type="button" class="btn btn-primary btn-sm" id="btn-apply-enargas">Aplicar al formulario</button>
-      </div>
-      <div class="agent-hint">Con pegar alcanza — se completa solo. Todavía estamos mejorando esta función, puede que no reconozca todos los datos automáticamente; si no completa algo, cargalo a mano.</div>
+      <textarea id="enargas-paste-text" placeholder="Pegá el resultado de la consulta por dominio... (se carga y se cierra solo al pegar)"></textarea>
+      <div class="agent-hint">Con pegar alcanza — se completa solo y esta caja se cierra sola. Todavía estamos mejorando esta función, puede que no reconozca todos los datos automáticamente; si no completa algo, cargalo a mano.</div>
       <div id="enargas-paste-result"></div>
     </div>`;
   }
@@ -1607,13 +1664,13 @@ window.storage = {
           <input type="text" id="f-provincia" value="${escapeHtml(c.provincia)}" placeholder="Ej: Buenos Aires">
         </label>
       </div>
-      <h3>Vehículo</h3>
+      <h3 class="vehiculo-heading">Vehículo</h3>
       <div class="form-grid">
         <label class="campo-obligatorio">Patente *
           <input type="text" id="f-patente" value="${escapeHtml(c.patente)}" placeholder="Ej: AB123CD">
         </label>
         <div style="grid-column: 1/-1; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-          <button type="button" class="btn btn-ghost btn-sm" id="btn-buscar-enargas" data-patente="${escapeHtml(c.patente)}">Buscar en ENARGAS ↗</button>
+          <button type="button" class="btn btn-agent" id="btn-buscar-enargas" data-patente="${escapeHtml(c.patente)}">Buscar en ENARGAS ↗</button>
           <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-enargas-paste">${enargasPasteOpen ? 'Cerrar' : 'Pegar resultado'}</button>
         </div>
         <div id="enargas-copy-hint" class="agent-hint" style="display:none; grid-column: 1/-1;"></div>
@@ -1658,15 +1715,8 @@ window.storage = {
   function wizardPaso3(c) {
     const d = tramiteDraftCampos;
     return `<h3 style="margin-top:0;">Trámite</h3>
+      <p class="agent-hint">${tramiteTipoLabel(d.tipo)} · ${fmtDate(d.fecha)} — Vehículo: ${escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) || 'sin marca/modelo cargado'} — Patente ${escapeHtml(c.patente || 's/d')}</p>
       <div class="form-grid">
-        <label>Tipo
-          <select id="t-tipo">
-            ${TRAMITE_TIPOS.map(opt => `<option value="${opt.value}" ${d.tipo === opt.value ? 'selected' : ''}>${opt.label}</option>`).join('')}
-          </select>
-        </label>
-        <label>Fecha
-          <input type="date" id="t-fecha" value="${escapeHtml(d.fecha)}">
-        </label>
         <label>N° Oblea anterior
           <input type="text" id="t-oblea-anterior" value="${escapeHtml(d.obleaAnterior)}" placeholder="Oblea que tenía el vehículo">
         </label>
@@ -1674,7 +1724,6 @@ window.storage = {
           <input type="text" id="t-oblea-nueva" value="${escapeHtml(d.obleaNueva)}" placeholder="Si este trámite entrega una oblea nueva">
         </label>
       </div>
-      <p class="agent-hint">Vehículo: ${escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) || 'sin marca/modelo cargado'} — Patente ${escapeHtml(c.patente || 's/d')}</p>
       <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Observaciones adicionales</label>
       <textarea id="t-detalle" placeholder="Cualquier detalle que no entre en los campos de arriba...">${escapeHtml(d.detalle)}</textarea>
       <div class="form-grid" style="margin-top:10px;">
@@ -2814,13 +2863,18 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         render();
       });
     }
-    function iniciarNuevoTramite() {
+    async function iniciarNuevoTramite() {
+      const elegido = await mostrarModalTipoFecha({ tipo: TRAMITE_TIPOS[0].value, fecha: new Date().toISOString().slice(0, 10) });
+      if (!elegido) return;
       editingId = null; showForm = true;
       showBulkImport = false;
       enargasPasteOpen = false;
       clienteDraft = blankClienteBase();
       tramiteDraftEquipo = blankEquipo(null);
+      aplicarValoresPorTipoTramite(elegido.tipo, tramiteDraftEquipo);
       tramiteDraftCampos = blankTramiteCampos(null);
+      tramiteDraftCampos.tipo = elegido.tipo;
+      tramiteDraftCampos.fecha = elegido.fecha;
       editingTramiteId = null;
       wizardStep = 1;
       currentSignature = null;
@@ -2830,8 +2884,8 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     const btnNew = root.querySelector('#btn-new');
     if (btnNew) btnNew.addEventListener('click', iniciarNuevoTramite);
     const btnFabNuevo = root.querySelector('#btn-fab-nuevo');
-    if (btnFabNuevo) btnFabNuevo.addEventListener('click', () => {
-      iniciarNuevoTramite();
+    if (btnFabNuevo) btnFabNuevo.addEventListener('click', async () => {
+      await iniciarNuevoTramite();
       const panel = root.querySelector('#form-panel');
       if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
@@ -2911,13 +2965,15 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     });
 
     root.querySelectorAll('[data-editar-tramite-cliente]').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const clienteId = btn.getAttribute('data-editar-tramite-cliente');
         const tramiteId = btn.getAttribute('data-editar-tramite-id');
         const cliente = clientes.find(x => x.id === clienteId);
         if (!cliente) return;
         const tramite = cliente.tramites.find(t => t.id === tramiteId);
         if (!tramite) return;
+        const elegido = await mostrarModalTipoFecha({ tipo: tramite.tipo, fecha: tramite.fecha });
+        if (!elegido) return;
         showHistorial = false; showForm = false; showBulkImport = false; showPendientes = false; menuOpen = false;
         editingId = clienteId;
         // Editar un trámite puntual va directo al paso 3 (tipo/equipo ya
@@ -2926,8 +2982,12 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         editingTramiteId = tramiteId;
         currentSignature = tramite.firma || null;
         clienteDraft = { ...cliente };
+        // No se reaplican los valores automáticos por tipo acá — es una
+        // edición, no queremos pisar lo que el TdM ya haya ajustado a mano.
         tramiteDraftEquipo = normalizarEquipoOtros(JSON.parse(JSON.stringify(tramite.equipo || blankEquipo(cliente.ultimoEquipoConocido))));
         tramiteDraftCampos = blankTramiteCampos(tramite);
+        tramiteDraftCampos.tipo = elegido.tipo;
+        tramiteDraftCampos.fecha = elegido.fecha;
         render();
         const panel = root.querySelector('#form-panel');
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -3097,17 +3157,22 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     });
 
     root.querySelectorAll('[data-tramite]').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const id = btn.getAttribute('data-tramite');
         const cliente = clientes.find(x => x.id === id);
         if (!cliente) return;
+        const elegido = await mostrarModalTipoFecha({ tipo: TRAMITE_TIPOS[0].value, fecha: new Date().toISOString().slice(0, 10) });
+        if (!elegido) return;
         cerrarWizard();
         editingId = id;
         showForm = false;
         wizardStep = 1;
         clienteDraft = { ...cliente };
         tramiteDraftEquipo = blankEquipo(cliente.ultimoEquipoConocido);
+        aplicarValoresPorTipoTramite(elegido.tipo, tramiteDraftEquipo);
         tramiteDraftCampos = blankTramiteCampos(null);
+        tramiteDraftCampos.tipo = elegido.tipo;
+        tramiteDraftCampos.fecha = elegido.fecha;
         render();
         const panel = root.querySelector('#form-panel');
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -3284,20 +3349,20 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         };
       }
 
-      render();
-      const nuevoResultBox = root.querySelector('#enargas-paste-result');
-      if (nuevoResultBox) {
-        if (aplicados.length === 0) {
+      if (aplicados.length > 0) {
+        // Se reconoció algo: la caja ya cumplió su función, se cierra sola
+        // en vez de esperar a que la cierren a mano.
+        enargasPasteOpen = false;
+        render();
+      } else {
+        render();
+        const nuevoResultBox = root.querySelector('#enargas-paste-result');
+        if (nuevoResultBox) {
           nuevoResultBox.className = 'agent-result err';
           nuevoResultBox.textContent = 'No reconocí datos con formato conocido en ese texto — completá a mano lo que falte.';
-        } else {
-          nuevoResultBox.className = 'agent-result';
-          nuevoResultBox.textContent = 'Aplicado: ' + aplicados.join(' · ');
         }
       }
     }
-    const btnApplyEnargas = root.querySelector('#btn-apply-enargas');
-    if (btnApplyEnargas) btnApplyEnargas.addEventListener('click', aplicarEnargasDocumentacion);
     const textareaEnargasDoc = root.querySelector('#enargas-paste-text');
     // Pegar ya alcanza para cargar los datos — no hace falta tocar
     // "Aplicar" aparte. El setTimeout espera a que el navegador termine de
@@ -3356,8 +3421,8 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       const patente = (clienteDraft.patente || '').trim().toUpperCase();
       if (!patente) { await customAlert('La patente es obligatoria para poder guardar.'); wizardStep = 1; render(); return; }
 
-      const tipo = root.querySelector('#t-tipo').value;
-      const fecha = root.querySelector('#t-fecha').value;
+      const tipo = tramiteDraftCampos.tipo;
+      const fecha = tramiteDraftCampos.fecha;
       if (!fecha) { await customAlert('Poné una fecha para el trámite.'); return; }
 
       if (equipoTieneBaja(tramiteDraftEquipo)) {
