@@ -968,6 +968,22 @@ Documentación para realizar la renovación:
     return (digits.length >= 6 && digits.length <= 15) ? digits : null;
   }
 
+  // Lector de archivos Excel (SheetJS), cargado desde CDN solo la primera
+  // vez que alguien importa un .xlsx — mismo patrón que jsPDF/html2canvas.
+  let xlsxLibPromise = null;
+  function cargarXlsxLib() {
+    if (!xlsxLibPromise) {
+      xlsxLibPromise = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = resolve;
+        s.onerror = () => { xlsxLibPromise = null; reject(new Error('No se pudo descargar el lector de Excel (¿sin internet?) — probá de nuevo o guardá la planilla como CSV.')); };
+        document.head.appendChild(s);
+      });
+    }
+    return xlsxLibPromise;
+  }
+
   function normalizeHeader(h) {
     return (h || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
   }
@@ -986,6 +1002,40 @@ Documentación para realizar la renovación:
       const n = normalizeHeader(cell);
       return Object.values(HEADER_SYNONYMS).some(syns => syns.includes(n));
     });
+  }
+
+  // Cuando no hay fila de encabezados, detecta qué columna es cada cosa
+  // mirando el CONTENIDO — los Excel de cada taller vienen con las columnas
+  // en cualquier orden. Puntúa cada columna según cuántas celdas parecen
+  // patente, teléfono, fecha o nombre, y asigna la mejor a cada campo.
+  function detectColumnsByContent(rows) {
+    const nCols = Math.max(...rows.map(r => r.length));
+    const sample = rows.slice(0, 30);
+    const scores = [];
+    for (let c = 0; c < nCols; c++) {
+      const s = { patente: 0, telefono: 0, fecha: 0, nombre: 0 };
+      sample.forEach(r => {
+        const v = (r[c] || '').trim();
+        if (!v) return;
+        const compact = v.toUpperCase().replace(/[\s-]/g, '');
+        if (/^[A-Z]{3}\d{3}$/.test(compact) || /^[A-Z]{2}\d{3}[A-Z]{2}$/.test(compact) || /^\d{3}[A-Z]{3}$/.test(compact)) s.patente++;
+        if (parseDateLenient(v)) s.fecha++;
+        const digits = v.replace(/\D/g, '');
+        if (digits.length >= 8 && digits.length <= 15 && !v.includes('/')) s.telefono++;
+        if (/^[A-Za-zÁÉÍÓÚÑÜáéíóúñü\s.,']{4,}$/.test(v)) s.nombre++;
+      });
+      scores.push(s);
+    }
+    const map = {};
+    const usadas = new Set();
+    ['patente', 'telefono', 'fecha', 'nombre'].forEach(campo => {
+      let best = -1, bestScore = 0;
+      scores.forEach((s, c) => {
+        if (!usadas.has(c) && s[campo] > bestScore) { bestScore = s[campo]; best = c; }
+      });
+      if (best !== -1) { map[campo] = best; usadas.add(best); }
+    });
+    return map;
   }
 
   function matchColumns(headerRow) {
@@ -1009,6 +1059,12 @@ Documentación para realizar la renovación:
     if (looksLikeHeaderRow(allRows[0])) {
       colMap = matchColumns(allRows[0]);
       dataRows = allRows.slice(1);
+    } else {
+      // Sin encabezados: detectar las columnas por su contenido. Si no se
+      // encuentra ninguna columna que parezca patente, se mantiene el
+      // formato posicional histórico (patente, teléfono, fecha).
+      const detectado = detectColumnsByContent(allRows);
+      if (detectado.patente !== undefined) colMap = detectado;
     }
     const parsed = dataRows.map(row => {
       const rawPatente = (colMap.patente !== undefined ? row[colMap.patente] : '') || '';
@@ -1048,9 +1104,19 @@ Documentación para realizar la renovación:
     const previewRows = rows.slice(0, 50);
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="bulk-import-panel">
       <h2>Importar clientes</h2>
-      <p class="scan-sub">Subí un archivo CSV, o pegá directamente las filas (patente, teléfono, fecha) en la caja de texto. Funciona con o sin encabezados.</p>
-      <input type="file" accept=".csv,.tsv,text/csv,text/tab-separated-values,text/plain" id="bulk-import-file">
-      <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">O pegá acá</label>
+      <p class="scan-sub">Traé tu base como la tengas: un Excel, o directamente fotos del cuaderno del taller. Con patente y teléfono alcanza — el resto se completa después.</p>
+
+      <h3 style="margin-top:0;">Desde un Excel o planilla</h3>
+      <p class="scan-sub">Elegí el archivo (.xlsx o .csv) — las columnas se reconocen solas, en cualquier orden, con o sin títulos.</p>
+      <input type="file" accept=".csv,.tsv,.xlsx,.xls,text/csv,text/tab-separated-values,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" id="bulk-import-file">
+
+      <h3>Desde el cuaderno del taller</h3>
+      <button type="button" class="btn btn-primary" id="btn-cuaderno-ia" style="width:100%; font-size:15px;">📖 Leer fotos del cuaderno con IA</button>
+      <input type="file" id="cuaderno-fotos-input" accept="image/*" multiple style="display:none;">
+      <div class="agent-hint" style="margin-top:6px;">Sacale fotos a las páginas (hasta 6 por tanda, bien iluminadas) y elegilas acá — la IA lee los renglones, incluso manuscritos. Después revisás la lista antes de confirmar.</div>
+      <div id="cuaderno-ia-status"></div>
+
+      <h3>O pegá el texto acá</h3>
       <textarea id="bulk-import-text" placeholder="EIJ507	2235776850	1/03/2024"></textarea>
       <div class="form-actions">
         <button type="button" class="btn btn-ghost btn-sm" id="btn-bulk-parse">Previsualizar</button>
@@ -1059,7 +1125,7 @@ Documentación para realizar la renovación:
         <div class="import-summary">${rows.length} fila(s) detectada(s)${rows.length > 50 ? ' (mostrando las primeras 50)' : ''}. Las que ya existen (misma patente) vienen destildadas.</div>
         <div class="import-preview">
           <table>
-            <thead><tr><th></th><th>Patente</th><th>Teléfono</th><th>Vencimiento oblea</th><th>Notas</th></tr></thead>
+            <thead><tr><th></th><th>Patente</th><th>Nombre</th><th>Teléfono</th><th>Vencimiento oblea</th><th>Notas</th></tr></thead>
             <tbody>
               ${previewRows.map((r, i) => {
                 const yaExiste = existentes.has(r.patente);
@@ -1067,6 +1133,7 @@ Documentación para realizar la renovación:
                 return `<tr>
                   <td><input type="checkbox" data-bulk-row="${i}" ${checked}></td>
                   <td>${escapeHtml(r.patente)}</td>
+                  <td>${escapeHtml(r.nombre || '—')}</td>
                   <td>${escapeHtml(r.telefono || '(sin teléfono)')}</td>
                   <td>${r.fecha_oblea ? fmtDate(r.fecha_oblea) : (r.fechaSinParsear ? 'no reconocida: ' + escapeHtml(r.fechaSinParsear) : '—')}</td>
                   <td>${yaExiste ? '<span class="badge badge-warn">Ya existe</span>' : (r.notas ? escapeHtml(r.notas) : '')}</td>
@@ -2927,7 +2994,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
               ${menuOpen ? `<div class="menu-dropdown">
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-pendientes">Trámites pendientes${pendCount ? ` <span class="menu-badge-inline">${pendCount}</span>` : ''}</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-historial">Historial de trámites</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-import">+ Importar clientes</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-import">+ Importar clientes (Excel / cuaderno)</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-export-csv">Exportar CSV</button>
                 ${showInstallButton ? `<button type="button" class="btn btn-ghost btn-sm" id="btn-install-app">📲 Instalar app</button>` : ''}
               </div>` : ''}
@@ -3231,13 +3298,88 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     }
 
     const bulkFileInput = root.querySelector('#bulk-import-file');
-    if (bulkFileInput) bulkFileInput.addEventListener('change', () => {
+    if (bulkFileInput) bulkFileInput.addEventListener('change', async () => {
       const file = bulkFileInput.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (e) => applyBulkParsedRows(parseBulkImportText(e.target.result));
-      reader.readAsText(file);
+      if (/\.xlsx?$/i.test(file.name)) {
+        // Excel de verdad: se convierte la primera hoja a CSV y sigue por
+        // el mismo camino que un archivo de texto.
+        try {
+          await cargarXlsxLib();
+          const buf = await file.arrayBuffer();
+          const wb = XLSX.read(buf);
+          const hoja = wb.Sheets[wb.SheetNames[0]];
+          applyBulkParsedRows(parseBulkImportText(XLSX.utils.sheet_to_csv(hoja)));
+        } catch (e) {
+          console.error(e);
+          await customAlert('No se pudo leer ese Excel: ' + (e.message || 'archivo inválido'));
+        }
+      } else {
+        const reader = new FileReader();
+        reader.onload = (e) => applyBulkParsedRows(parseBulkImportText(e.target.result));
+        reader.readAsText(file);
+      }
     });
+
+    // Lectura con IA de fotos del cuaderno/fichas del taller: cada foto se
+    // comprime y se manda al mismo endpoint con licencia que la lectura de
+    // documentos. La IA devuelve los renglones como JSON, que se convierte
+    // a texto tabulado y entra por el MISMO camino que un Excel pegado
+    // (normalización de patente/teléfono/fecha, dedupe y previsualización).
+    const btnCuadernoIa = root.querySelector('#btn-cuaderno-ia');
+    const cuadernoInput = root.querySelector('#cuaderno-fotos-input');
+    if (btnCuadernoIa && cuadernoInput) {
+      btnCuadernoIa.addEventListener('click', () => cuadernoInput.click());
+      cuadernoInput.addEventListener('change', async () => {
+        const files = Array.from(cuadernoInput.files).slice(0, 6);
+        if (!files.length) return;
+        const status = root.querySelector('#cuaderno-ia-status');
+        btnCuadernoIa.disabled = true;
+        if (status) { status.className = 'agent-result'; status.innerHTML = '<span class="gnc-loading-row"><span class="gnc-spinner"></span> Leyendo las fotos con IA...</span>'; }
+        try {
+          const content = [];
+          for (const f of files) {
+            const dataUrl = await compressImageFile(f);
+            const parts = dataUrlParts(dataUrl);
+            if (parts) content.push({ type: 'image', source: { type: 'base64', media_type: parts.mediaType, data: parts.base64 } });
+          }
+          content.push({ type: 'text', text: `Estas fotos muestran páginas del registro de clientes de un taller de GNC argentino (cuaderno manuscrito, fichas de papel o una planilla impresa). Cada renglón es un cliente/vehículo. Extraé TODOS los renglones legibles y respondé SOLO con un array JSON válido, sin texto adicional ni markdown:
+[{"patente":"dominio del vehiculo","telefono":"solo dígitos o null","nombre":"nombre del cliente o null","fecha_vencimiento":"dd/mm/aaaa o mm/aaaa o null"}]
+Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o AA111BB (nuevas) — usá ese formato para corregir confusiones obvias de lectura (letra O por número 0, I por 1). Si un renglón no tiene patente legible, omitilo. No inventes datos ni completes lo que no se ve.` });
+
+          const response = await fetch('/api/read-docs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000, messages: [{ role: 'user', content }], license: localStorage.getItem(LICENSE_KEY) })
+          });
+          if (response.status === 403) throw new Error('El código de licencia no es válido. Tocá "Cambiar código de licencia" arriba para corregirlo.');
+          const data = await response.json();
+          if (!response.ok || data.type === 'error') {
+            const msg = (data.error && data.error.message) ? data.error.message : JSON.stringify(data).slice(0, 300);
+            throw new Error(`API (${response.status}): ${msg}`);
+          }
+          const textBlock = (data.content || []).find(b => b.type === 'text');
+          if (!textBlock) throw new Error('La respuesta no trajo texto.');
+          let filas;
+          try { filas = JSON.parse(textBlock.text.replace(/```json|```/g, '').trim()); }
+          catch (e2) { throw new Error('No pude interpretar la lectura — probá con fotos más nítidas o de menos páginas por vez.'); }
+          if (!Array.isArray(filas) || !filas.length) throw new Error('La IA no encontró renglones con patente en esas fotos.');
+
+          const tsv = 'patente\ttelefono\tfecha\tnombre\n' + filas.map(r => [r.patente || '', r.telefono || '', r.fecha_vencimiento || '', r.nombre || '']
+            .map(v => String(v).replace(/[\t\n]/g, ' ')).join('\t')).join('\n');
+          applyBulkParsedRows(parseBulkImportText(tsv));
+        } catch (e) {
+          console.error(e);
+          const st = root.querySelector('#cuaderno-ia-status');
+          if (st) { st.className = 'agent-result err'; st.textContent = 'Error: ' + (e.message || 'no se pudieron leer las fotos'); }
+        } finally {
+          const btn = root.querySelector('#btn-cuaderno-ia');
+          if (btn) btn.disabled = false;
+          const inp = root.querySelector('#cuaderno-fotos-input');
+          if (inp) inp.value = '';
+        }
+      });
+    }
 
     const btnBulkParse = root.querySelector('#btn-bulk-parse');
     if (btnBulkParse) btnBulkParse.addEventListener('click', async () => {
