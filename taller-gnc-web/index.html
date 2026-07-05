@@ -613,7 +613,41 @@ window.storage = {
               ${tramite.estadoPec === 'incompleto' && tramite.motivoIncompleto ? `<div class="tramite-motivo">Motivo: ${escapeHtml(tramite.motivoIncompleto)}</div>` : ''}
             </div>
             <span class="badge ${tramite.estadoPec === 'incompleto' ? 'badge-danger' : 'badge-warn'}">${ESTADO_PEC_LABELS[tramite.estadoPec]}</span>
+            <button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${cliente.id}" data-editar-tramite-id="${tramite.id}">Editar</button>
           </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  // Todos los trámites de todos los clientes, del más nuevo al más viejo —
+  // usado por el historial global (menú), separado de la vista por cliente.
+  function todosTramites() {
+    const items = [];
+    clientes.forEach(c => {
+      (c.tramites || []).forEach(t => items.push({ cliente: c, tramite: t }));
+    });
+    items.sort((a, b) => (b.tramite.fecha || '').localeCompare(a.tramite.fecha || ''));
+    return items;
+  }
+
+  function historialPanel() {
+    const items = todosTramites();
+    return `<div class="panel" id="historial-panel">
+      <h2 style="margin-top:0;">Historial de trámites</h2>
+      ${items.length ? `<div class="tramites-list">
+        ${items.map(({ cliente, tramite }) => `
+          <div class="tramite-row">
+            <div>
+              <div class="doc-label">${escapeHtml(cliente.nombre)} · ${escapeHtml(cliente.patente || 's/d')}</div>
+              <div class="doc-sub">${tramiteTipoLabel(tramite.tipo)} · ${fmtDate(tramite.fecha)}</div>
+              ${tramite.estadoPec === 'incompleto' && tramite.motivoIncompleto ? `<div class="tramite-motivo">Motivo: ${escapeHtml(tramite.motivoIncompleto)}</div>` : ''}
+            </div>
+            <span class="badge ${tramite.estadoPec === 'enviado' ? 'badge-ok' : tramite.estadoPec === 'incompleto' ? 'badge-danger' : 'badge-warn'}">${ESTADO_PEC_LABELS[tramite.estadoPec]}</span>
+            ${tramite.estadoPec !== 'enviado' ? `<button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${cliente.id}" data-editar-tramite-id="${tramite.id}">Editar</button>` : ''}
+          </div>`).join('')}
+      </div>` : `<div class="empty">Todavía no hay trámites cargados.</div>`}
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="btn-close-historial">Cerrar</button>
       </div>
     </div>`;
   }
@@ -1314,6 +1348,7 @@ window.storage = {
         <option value="incompleto" ${t.estadoPec === 'incompleto' ? 'selected' : ''}>Incompleto</option>
       </select>
       <span class="badge ${badgeClass}">${ESTADO_PEC_LABELS[t.estadoPec]}</span>
+      ${t.estadoPec !== 'enviado' ? `<button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${clienteId}" data-editar-tramite-id="${t.id}">Editar</button>` : ''}
     </div>`;
   }
 
@@ -1425,18 +1460,18 @@ window.storage = {
       ${otrosEquiposDetails(eq)}`;
   }
 
-  function tramiteAddForm(c) {
+  function tramiteAddForm(c, t) {
     const eq = tramiteDraftEquipo;
     return `<div class="agent-box" id="tramite-add-box">
-      <label>Nuevo trámite</label>
+      <label>${t ? 'Editando trámite' : 'Nuevo trámite'}</label>
       <div class="form-grid">
         <label>Tipo
           <select id="t-tipo">
-            ${TRAMITE_TIPOS.map(t => `<option value="${t.value}">${t.label}</option>`).join('')}
+            ${TRAMITE_TIPOS.map(opt => `<option value="${opt.value}" ${t && t.tipo === opt.value ? 'selected' : ''}>${opt.label}</option>`).join('')}
           </select>
         </label>
         <label>Fecha
-          <input type="date" id="t-fecha" value="${new Date().toISOString().slice(0,10)}">
+          <input type="date" id="t-fecha" value="${t ? escapeHtml(t.fecha) : new Date().toISOString().slice(0,10)}">
         </label>
       </div>
       <p class="agent-hint">Vehículo: ${escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) || 'sin marca/modelo cargado'} — Patente ${escapeHtml(c.patente || 's/d')}</p>
@@ -1444,17 +1479,17 @@ window.storage = {
       ${equipoSection(eq, c)}
 
       <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Observaciones adicionales</label>
-      <textarea id="t-detalle" placeholder="Cualquier detalle que no entre en los campos de arriba..."></textarea>
+      <textarea id="t-detalle" placeholder="Cualquier detalle que no entre en los campos de arriba...">${t ? escapeHtml(t.detalle || '') : ''}</textarea>
       <div class="form-grid" style="margin-top:10px;">
         <label>Estado
           <select id="t-estado">
-            <option value="pendiente">Pendiente</option>
-            <option value="enviado">Enviado al PEC</option>
-            <option value="incompleto">Incompleto</option>
+            <option value="pendiente" ${!t || t.estadoPec === 'pendiente' ? 'selected' : ''}>Pendiente</option>
+            <option value="enviado" ${t && t.estadoPec === 'enviado' ? 'selected' : ''}>Enviado al PEC</option>
+            <option value="incompleto" ${t && t.estadoPec === 'incompleto' ? 'selected' : ''}>Incompleto</option>
           </select>
         </label>
         <label>Motivo (si quedó incompleto)
-          <input type="text" id="t-motivo" placeholder="Ej: falta firma del propietario">
+          <input type="text" id="t-motivo" value="${t ? escapeHtml(t.motivoIncompleto || '') : ''}" placeholder="Ej: falta firma del propietario">
         </label>
       </div>
       <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Firma del propietario</label>
@@ -1465,7 +1500,7 @@ window.storage = {
         </div>
       </div>
       <div class="form-actions">
-        <button type="button" class="btn btn-primary btn-sm" id="btn-save-tramite">Guardar trámite</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-save-tramite">${t ? 'Guardar cambios' : 'Guardar trámite'}</button>
         <button type="button" class="btn btn-agent btn-sm" id="btn-send-pec-tramite">Enviar al PEC</button>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-cancel-tramite">Cancelar</button>
       </div>
@@ -1475,23 +1510,29 @@ window.storage = {
   function tramitesSection(c) {
     const rows = c.tramites.slice().sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''))
       .map(t => tramiteRow(c.id, t)).join('');
-    return `<h3 style="margin-top:0;">Nuevo trámite</h3>
+    const editingTramite = editingTramiteId ? c.tramites.find(t => t.id === editingTramiteId) : null;
+    return `<h3 style="margin-top:0;">${editingTramite ? 'Editar trámite' : 'Nuevo trámite'}</h3>
       ${addingTramite
-        ? tramiteAddForm(c)
+        ? tramiteAddForm(c, editingTramite)
         : `<div class="form-actions"><button type="button" class="btn btn-ghost btn-sm" id="btn-add-tramite">+ Agregar trámite</button></div>`}
       ${c.tramites.length ? `
         <h3>Historial de trámites</h3>
         <div class="tramites-list">${rows}</div>
       ` : ''}
-      ${addingTramite ? `<div class="form-actions"><button type="button" class="btn btn-ghost btn-sm" id="btn-add-tramite">Cerrar nuevo trámite</button></div>` : ''}`;
+      ${addingTramite ? `<div class="form-actions"><button type="button" class="btn btn-ghost btn-sm" id="btn-add-tramite">Cerrar</button></div>` : ''}`;
   }
 
   let currentQuery = '';
   let showForm = false;
   let showBulkImport = false;
+  let showHistorial = false;
   let menuOpen = false;
   let tramitesOpenFor = null;
   let addingTramite = false;
+  // Id del trámite que se está editando (no null cuando "Editar" trae un
+  // trámite existente al formulario) — si es null, guardarTramite() crea uno
+  // nuevo en vez de actualizar.
+  let editingTramiteId = null;
   let bulkImportRows = [];
   let bulkImportSkip = new Set();
   let enargasPasteOpen = false;
@@ -1804,6 +1845,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
               ${menuOpen ? `<div class="menu-dropdown">
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-import">+ Importar clientes</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-export-csv">Exportar CSV</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-historial">Historial de trámites</button>
               </div>` : ''}
             </div>
             <span class="tag">ESTELITA</span>
@@ -1831,6 +1873,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         </div>
 
         ${showBulkImport ? bulkImportPanel() : ''}
+        ${showHistorial ? historialPanel() : ''}
 
         ${showForm || (editing && editMode === 'documentacion') ? documentacionPanel(editing) : ''}
         ${editing && editMode === 'tramite' ? tramitePanel(editing) : ''}
@@ -1965,6 +2008,40 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       showBulkImport = !showBulkImport;
       bulkImportRows = []; bulkImportSkip = new Set();
       render();
+    });
+
+    const btnHistorial = root.querySelector('#btn-historial');
+    if (btnHistorial) btnHistorial.addEventListener('click', () => {
+      showForm = false; editingId = null;
+      menuOpen = false;
+      showBulkImport = false;
+      showHistorial = !showHistorial;
+      render();
+    });
+
+    const btnCloseHistorial = root.querySelector('#btn-close-historial');
+    if (btnCloseHistorial) btnCloseHistorial.addEventListener('click', () => {
+      showHistorial = false;
+      render();
+    });
+
+    root.querySelectorAll('[data-editar-tramite-cliente]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const clienteId = btn.getAttribute('data-editar-tramite-cliente');
+        const tramiteId = btn.getAttribute('data-editar-tramite-id');
+        const cliente = clientes.find(x => x.id === clienteId);
+        if (!cliente) return;
+        const tramite = cliente.tramites.find(t => t.id === tramiteId);
+        if (!tramite) return;
+        showHistorial = false; showForm = false; showBulkImport = false; menuOpen = false;
+        editingId = clienteId; editMode = 'tramite'; addingTramite = true;
+        editingTramiteId = tramiteId;
+        currentSignature = tramite.firma || null;
+        tramiteDraftEquipo = JSON.parse(JSON.stringify(tramite.equipo || blankEquipo(cliente.ultimoEquipoConocido)));
+        render();
+        const panel = root.querySelector('#form-panel');
+        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
     });
 
     function applyBulkParsedRows(rows) {
@@ -2168,6 +2245,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         showForm = false;
         addingTramite = true;
         currentSignature = null;
+        editingTramiteId = null;
         enargasEqPasteOpen = false;
         tramiteDraftEquipo = blankEquipo(cliente.ultimoEquipoConocido);
         render();
@@ -2182,6 +2260,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       addingTramite = false;
       currentSignature = null;
       tramiteDraftEquipo = null;
+      editingTramiteId = null;
       render();
     });
 
@@ -2358,6 +2437,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     if (btnAddTramite) btnAddTramite.addEventListener('click', () => {
       addingTramite = !addingTramite;
       currentSignature = null;
+      editingTramiteId = null;
       const cliente = editingId ? clientes.find(x => x.id === editingId) : null;
       tramiteDraftEquipo = addingTramite ? blankEquipo(cliente ? cliente.ultimoEquipoConocido : null) : null;
       render();
@@ -2368,6 +2448,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       addingTramite = false;
       currentSignature = null;
       tramiteDraftEquipo = null;
+      editingTramiteId = null;
       render();
     });
 
@@ -2426,18 +2507,27 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       }
 
       const estadoPec = estadoForzado || root.querySelector('#t-estado').value;
-      const tramite = {
-        id: 't' + Date.now() + Math.random().toString(36).slice(2, 7),
-        tipo,
-        fecha,
-        equipo: tramiteDraftEquipo,
-        detalle: root.querySelector('#t-detalle').value.trim(),
-        estadoPec,
-        motivoIncompleto: estadoPec === 'incompleto' ? root.querySelector('#t-motivo').value.trim() : '',
-        firma: currentSignature,
-        creadoEn: new Date().toISOString(),
-      };
-      clientes[idx].tramites.push(tramite);
+      const detalle = root.querySelector('#t-detalle').value.trim();
+      const motivoIncompleto = estadoPec === 'incompleto' ? root.querySelector('#t-motivo').value.trim() : '';
+
+      if (editingTramiteId) {
+        const tIdx = clientes[idx].tramites.findIndex(t => t.id === editingTramiteId);
+        if (tIdx !== -1) {
+          const prev = clientes[idx].tramites[tIdx];
+          clientes[idx].tramites[tIdx] = {
+            ...prev,
+            tipo, fecha, equipo: tramiteDraftEquipo, detalle, estadoPec, motivoIncompleto,
+            firma: currentSignature || prev.firma,
+          };
+        }
+      } else {
+        clientes[idx].tramites.push({
+          id: 't' + Date.now() + Math.random().toString(36).slice(2, 7),
+          tipo, fecha, equipo: tramiteDraftEquipo, detalle, estadoPec, motivoIncompleto,
+          firma: currentSignature,
+          creadoEn: new Date().toISOString(),
+        });
+      }
       if (tipo === 'prueba_hidraulica') clientes[idx].fecha_crpc = fecha.slice(0, 7);
       const primerCilindro = tramiteDraftEquipo.cilindros[0];
       if (primerCilindro && primerCilindro.periodicidad) clientes[idx].tipo_cilindro = primerCilindro.periodicidad;
@@ -2445,6 +2535,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       addingTramite = false;
       currentSignature = null;
       tramiteDraftEquipo = null;
+      editingTramiteId = null;
       render();
     }
 
