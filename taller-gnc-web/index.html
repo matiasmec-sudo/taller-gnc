@@ -167,6 +167,10 @@ window.storage = {
   position: sticky; top: 0; z-index: 5; background: var(--surface);
   margin: -20px -20px 14px; padding: 16px 20px 10px; border-bottom: 1px solid var(--line);
 }
+#gnc-app .wizard-pasos {
+  font-family: var(--mono); font-size: 11px; text-transform: none; letter-spacing: normal;
+  color: var(--text-muted); margin-top: 4px;
+}
 #gnc-app .panel h3 {
   font-family: var(--display); font-size: 13px; text-transform: uppercase;
   letter-spacing: 1px; margin: 18px 0 10px; color: var(--text-muted);
@@ -351,8 +355,10 @@ window.storage = {
   let tallerNombre = 'Mi Taller GNC';
   let tallerConfig = { ...TALLER_CONFIG_DEFAULT };
   let showTallerConfig = false;
+  // Id del cliente para el que está abierto el asistente "Inicio de trámite"
+  // (null = todavía no se abrió ninguno, o se está dando de alta uno nuevo
+  // vía showForm).
   let editingId = null;
-  let editMode = null; // 'documentacion' | 'tramite'
   let ready = false;
   // Ids de clientes cuya tarjeta tiene el detalle (datos + historial de
   // trámites) desplegado — no hace falta entrar a editar solo para mirar.
@@ -1023,8 +1029,8 @@ window.storage = {
         </div>
         <div class="client-actions">
           ${c.telefono ? `<a class="btn btn-wa" target="_blank" rel="noopener" href="${waLinkGeneral(c)}">WhatsApp</a>` : ''}
-          <button class="btn btn-ghost" data-doc="${c.id}">Documentación</button>
-          <button class="btn btn-agent" data-tramite="${c.id}">Trámite</button>
+          <button class="btn btn-ghost" data-fotos="${c.id}">Documentación</button>
+          <button class="btn btn-agent" data-tramite="${c.id}">Inicio de trámite</button>
           <button class="btn btn-danger-outline" data-delete="${c.id}">Eliminar</button>
         </div>
       </div>
@@ -1259,6 +1265,32 @@ window.storage = {
     </div>`;
   }
 
+  // Galería de solo lectura de las fotos ya guardadas de un cliente —
+  // botón "Documentación" en la tarjeta. Separado del asistente de trámite:
+  // acá solo se mira lo que ya está guardado, no se edita nada.
+  function fotosPanel(cliente) {
+    if (!cliente) return '';
+    const slots = [
+      { key: 'foto1', label: 'Foto 1 — Documentos (lado A)' },
+      { key: 'foto2', label: 'Foto 2 — Documentos (lado B)' },
+    ];
+    return `<div class="panel" id="fotos-panel">
+      <h2 class="panel-h2-sticky">Documentación — ${escapeHtml(cliente.nombre)}</h2>
+      <div class="scan-grid" style="grid-template-columns: repeat(2, 1fr);">
+        ${slots.map(s => `
+        <div class="scan-slot">
+          <label>${s.label}</label>
+          ${scanFiles[s.key]
+            ? `<img class="scan-thumb" style="height:240px; display:block;" src="${scanFiles[s.key]}">`
+            : '<p class="scan-sub">Todavía no hay foto guardada.</p>'}
+        </div>`).join('')}
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="btn-close-fotos">Cerrar</button>
+      </div>
+    </div>`;
+  }
+
   function scanBox() {
     const slots = [
       { key: 'foto1', label: 'Foto 1 — Documentos (lado A)' },
@@ -1348,8 +1380,11 @@ window.storage = {
     };
   }
 
-  function datosPersonalesYDomicilioFields(c) {
-    return `<h3 style="margin-top:0;">Datos personales</h3>
+  const WIZARD_PASOS = ['Datos y vehículo', 'Equipo GNC', 'Trámite y firma'];
+
+  function wizardPaso1(c) {
+    return `${scanBox()}
+      <h3 style="margin-top:0;">Datos personales</h3>
       <div class="form-grid">
         <label>Nombre y apellido
           <input type="text" id="f-nombre" value="${escapeHtml(c.nombre)}" placeholder="Ej: Juan Pérez">
@@ -1368,14 +1403,8 @@ window.storage = {
       </div>
       <h3>Domicilio</h3>
       <div class="form-grid">
-        <label>Calle
-          <input type="text" id="f-domicilio" value="${escapeHtml(c.domicilio)}" placeholder="Ej: Perez Bulnes">
-        </label>
-        <label>N°
-          <input type="text" id="f-numero" value="${escapeHtml(c.numero)}" placeholder="Ej: 3752">
-        </label>
-        <label>Piso/Depto
-          <input type="text" id="f-piso" value="${escapeHtml(c.piso)}" placeholder="Ej: 2° B">
+        <label>Domicilio
+          <input type="text" id="f-domicilio" value="${escapeHtml(c.domicilio)}" placeholder="Ej: Perez Bulnes 3752, 2° B">
         </label>
         <label>Ciudad
           <input type="text" id="f-ciudad" value="${escapeHtml(c.ciudad)}" placeholder="Ej: Mar del Plata">
@@ -1386,21 +1415,10 @@ window.storage = {
         <label>Provincia
           <input type="text" id="f-provincia" value="${escapeHtml(c.provincia)}" placeholder="Ej: Buenos Aires">
         </label>
-      </div>`;
-  }
-
-  // Misma pantalla para dar de alta un cliente nuevo y para editar la
-  // documentación de uno existente — el usuario pidió no tener un
-  // formulario aparte y más simple solo para el alta.
-  function documentacionPanel(existing) {
-    const c = clienteDraft || existing || blankClienteBase();
-    return `<div class="panel" id="form-panel">
-      <h2 class="panel-h2-sticky">${existing ? 'Documentación — ' + escapeHtml(c.nombre) : 'Nuevo cliente'}</h2>
-      ${scanBox()}
-      ${datosPersonalesYDomicilioFields(c)}
+      </div>
       <h3>Vehículo</h3>
       <div class="form-grid">
-        <label>Patente
+        <label class="campo-obligatorio">Patente *
           <input type="text" id="f-patente" value="${escapeHtml(c.patente)}" placeholder="Ej: AB123CD">
         </label>
         <div style="grid-column: 1/-1; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
@@ -1432,20 +1450,86 @@ window.storage = {
         </label>
       </div>
       <div class="form-actions">
-        <button class="btn btn-primary" id="btn-save-doc">${existing ? 'Guardar cambios' : 'Continuar con el trámite'}</button>
-        <button class="btn btn-ghost" id="btn-cancel-doc">${existing ? 'Cerrar' : 'Cancelar'}</button>
-      </div>
-    </div>`;
+        <button class="btn btn-primary" id="btn-wizard-next-1">Siguiente →</button>
+        <button class="btn btn-ghost" id="btn-wizard-cancel">Cancelar</button>
+      </div>`;
   }
 
-  function tramitePanel(existing) {
-    const c = existing;
-    return `<div class="panel" id="form-panel">
-      <h2 class="panel-h2-sticky">Trámite — ${escapeHtml(c.nombre)}</h2>
-      ${tramitesSection(c)}
+  function wizardPaso2(eq, c) {
+    return `${equipoSection(eq, c)}
       <div class="form-actions">
-        <button class="btn btn-ghost" id="btn-close-tramite-panel">Cerrar</button>
+        <button class="btn btn-ghost" id="btn-wizard-back-2">← Atrás</button>
+        <button class="btn btn-primary" id="btn-wizard-next-2">Siguiente →</button>
+        <button class="btn btn-ghost" id="btn-wizard-cancel">Cancelar</button>
+      </div>`;
+  }
+
+  function wizardPaso3(c) {
+    const d = tramiteDraftCampos;
+    return `<h3 style="margin-top:0;">Trámite</h3>
+      <div class="form-grid">
+        <label>Tipo
+          <select id="t-tipo">
+            ${TRAMITE_TIPOS.map(opt => `<option value="${opt.value}" ${d.tipo === opt.value ? 'selected' : ''}>${opt.label}</option>`).join('')}
+          </select>
+        </label>
+        <label>Fecha
+          <input type="date" id="t-fecha" value="${escapeHtml(d.fecha)}">
+        </label>
+        <label>N° Oblea anterior
+          <input type="text" id="t-oblea-anterior" value="${escapeHtml(d.obleaAnterior)}" placeholder="Oblea que tenía el vehículo">
+        </label>
+        <label>N° Oblea nueva
+          <input type="text" id="t-oblea-nueva" value="${escapeHtml(d.obleaNueva)}" placeholder="Si este trámite entrega una oblea nueva">
+        </label>
       </div>
+      <p class="agent-hint">Vehículo: ${escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) || 'sin marca/modelo cargado'} — Patente ${escapeHtml(c.patente || 's/d')}</p>
+      <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Observaciones adicionales</label>
+      <textarea id="t-detalle" placeholder="Cualquier detalle que no entre en los campos de arriba...">${escapeHtml(d.detalle)}</textarea>
+      <div class="form-grid" style="margin-top:10px;">
+        <label>Estado
+          <select id="t-estado">
+            <option value="pendiente" ${d.estado === 'pendiente' ? 'selected' : ''}>Pendiente</option>
+            <option value="enviado" ${d.estado === 'enviado' ? 'selected' : ''}>Enviado al PEC</option>
+            <option value="incompleto" ${d.estado === 'incompleto' ? 'selected' : ''}>Incompleto</option>
+          </select>
+        </label>
+        <label>Motivo (si quedó incompleto)
+          <input type="text" id="t-motivo" value="${escapeHtml(d.motivo)}" placeholder="Ej: falta firma del propietario">
+        </label>
+      </div>
+      <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Firma del propietario</label>
+      <div class="signature-box">
+        <canvas id="sig-canvas" width="600" height="200"></canvas>
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-sig-clear">Limpiar firma</button>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" id="btn-wizard-back-3">← Atrás</button>
+        <button class="btn btn-primary" id="btn-save-tramite">Guardar trámite</button>
+        <button class="btn btn-agent" id="btn-send-pec-tramite">Enviar al PEC</button>
+        <button class="btn btn-ghost" id="btn-wizard-cancel">Cancelar</button>
+      </div>`;
+  }
+
+  // Panel único (fusiona lo que antes eran "Documentación" y "Trámite") que
+  // arma todo el alta/edición como un asistente de 3 pasos — así se
+  // garantiza que cada sección quede completa antes de avanzar, en vez de
+  // tener todos los campos sueltos en una sola pantalla larga.
+  function tramiteWizardPanel(existing) {
+    if (!clienteDraft) clienteDraft = existing ? { ...existing } : blankClienteBase();
+    const c = clienteDraft;
+    if (!tramiteDraftEquipo) tramiteDraftEquipo = blankEquipo(existing ? existing.ultimoEquipoConocido : null);
+    if (!tramiteDraftCampos) tramiteDraftCampos = blankTramiteCampos(editingTramiteId && existing ? existing.tramites.find(t => t.id === editingTramiteId) : null);
+    const titulo = existing ? escapeHtml(c.nombre || existing.nombre || 'cliente') : 'Nuevo cliente';
+    return `<div class="panel" id="form-panel">
+      <h2 class="panel-h2-sticky">Inicio de trámite — ${titulo}
+        <div class="wizard-pasos">Paso ${wizardStep} de 3 — ${WIZARD_PASOS[wizardStep - 1]}</div>
+      </h2>
+      ${wizardStep === 1 ? wizardPaso1(c) : ''}
+      ${wizardStep === 2 ? wizardPaso2(tramiteDraftEquipo, c) : ''}
+      ${wizardStep === 3 ? wizardPaso3(c) : ''}
     </div>`;
   }
 
@@ -1977,75 +2061,6 @@ window.storage = {
       ${otrosEquiposDetails(eq)}`;
   }
 
-  function tramiteAddForm(c, t) {
-    const eq = tramiteDraftEquipo;
-    if (!tramiteDraftCampos) tramiteDraftCampos = blankTramiteCampos(t);
-    const d = tramiteDraftCampos;
-    return `<div class="agent-box" id="tramite-add-box">
-      <label>${t ? 'Editando trámite' : 'Nuevo trámite'}</label>
-      <div class="form-grid">
-        <label>Tipo
-          <select id="t-tipo">
-            ${TRAMITE_TIPOS.map(opt => `<option value="${opt.value}" ${d.tipo === opt.value ? 'selected' : ''}>${opt.label}</option>`).join('')}
-          </select>
-        </label>
-        <label>Fecha
-          <input type="date" id="t-fecha" value="${escapeHtml(d.fecha)}">
-        </label>
-        <label>N° Oblea anterior
-          <input type="text" id="t-oblea-anterior" value="${escapeHtml(d.obleaAnterior)}" placeholder="Oblea que tenía el vehículo">
-        </label>
-        <label>N° Oblea nueva
-          <input type="text" id="t-oblea-nueva" value="${escapeHtml(d.obleaNueva)}" placeholder="Si este trámite entrega una oblea nueva">
-        </label>
-      </div>
-      <p class="agent-hint">Vehículo: ${escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) || 'sin marca/modelo cargado'} — Patente ${escapeHtml(c.patente || 's/d')}</p>
-
-      ${equipoSection(eq, c)}
-
-      <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Observaciones adicionales</label>
-      <textarea id="t-detalle" placeholder="Cualquier detalle que no entre en los campos de arriba...">${escapeHtml(d.detalle)}</textarea>
-      <div class="form-grid" style="margin-top:10px;">
-        <label>Estado
-          <select id="t-estado">
-            <option value="pendiente" ${d.estado === 'pendiente' ? 'selected' : ''}>Pendiente</option>
-            <option value="enviado" ${d.estado === 'enviado' ? 'selected' : ''}>Enviado al PEC</option>
-            <option value="incompleto" ${d.estado === 'incompleto' ? 'selected' : ''}>Incompleto</option>
-          </select>
-        </label>
-        <label>Motivo (si quedó incompleto)
-          <input type="text" id="t-motivo" value="${escapeHtml(d.motivo)}" placeholder="Ej: falta firma del propietario">
-        </label>
-      </div>
-      <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Firma del propietario</label>
-      <div class="signature-box">
-        <canvas id="sig-canvas" width="600" height="200"></canvas>
-        <div class="form-actions">
-          <button type="button" class="btn btn-ghost btn-sm" id="btn-sig-clear">Limpiar firma</button>
-        </div>
-      </div>
-      <div class="form-actions">
-        <button type="button" class="btn btn-primary btn-sm" id="btn-save-tramite">${t ? 'Guardar cambios' : 'Guardar trámite'}</button>
-        <button type="button" class="btn btn-agent btn-sm" id="btn-send-pec-tramite">Enviar al PEC</button>
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-cancel-tramite">Cancelar</button>
-      </div>
-    </div>`;
-  }
-
-  function tramitesSection(c) {
-    const rows = c.tramites.slice().sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''))
-      .map(t => tramiteRow(c.id, t)).join('');
-    const editingTramite = editingTramiteId ? c.tramites.find(t => t.id === editingTramiteId) : null;
-    return `<h3 style="margin-top:0;">${editingTramite ? 'Editar trámite' : 'Nuevo trámite'}</h3>
-      ${addingTramite
-        ? tramiteAddForm(c, editingTramite)
-        : `<div class="form-actions"><button type="button" class="btn btn-ghost btn-sm" id="btn-add-tramite">+ Agregar trámite</button></div>`}
-      ${c.tramites.length ? `
-        <h3>Historial de trámites</h3>
-        <div class="tramites-list">${rows}</div>
-      ` : ''}
-      ${addingTramite ? `<div class="form-actions"><button type="button" class="btn btn-ghost btn-sm" id="btn-add-tramite">Cerrar</button></div>` : ''}`;
-  }
 
   let currentQuery = '';
   let showForm = false;
@@ -2054,11 +2069,16 @@ window.storage = {
   let showPendientes = false;
   let menuOpen = false;
   let tramitesOpenFor = null;
-  let addingTramite = false;
+  // Paso actual (1/2/3) del asistente "Inicio de trámite" — se resetea a 1
+  // cada vez que se abre el asistente de cero.
+  let wizardStep = 1;
   // Id del trámite que se está editando (no null cuando "Editar" trae un
-  // trámite existente al formulario) — si es null, guardarTramite() crea uno
-  // nuevo en vez de actualizar.
+  // trámite existente al formulario) — si es null, guardarClienteYTramite()
+  // crea uno nuevo en vez de actualizar.
   let editingTramiteId = null;
+  // Id del cliente cuya galería de fotos está abierta (botón "Documentación"
+  // en la tarjeta) — independiente del asistente de trámite.
+  let showFotosFor = null;
   let bulkImportRows = [];
   let bulkImportSkip = new Set();
   let enargasPasteOpen = false;
@@ -2071,7 +2091,7 @@ window.storage = {
   // estado/motivo/oblea) que no viven en tramiteDraftEquipo — mismo problema
   // y misma solución que clienteDraft: sin esto, cualquier render() a mitad
   // de carga (ej. al abrir o aplicar la caja de pegado de ENARGAS) borraba
-  // lo que ya se había tipeado, porque tramiteAddForm() se reconstruye desde
+  // lo que ya se había tipeado, porque wizardPaso3() se reconstruye desde
   // el trámite GUARDADO (o en blanco si es nuevo), no desde el DOM.
   let tramiteDraftCampos = null;
   function blankTramiteCampos(t) {
@@ -2103,7 +2123,7 @@ window.storage = {
   let clienteDraft = null;
   const CLIENTE_DRAFT_CAMPOS = {
     nombre: 'f-nombre', dni: 'f-dni', tipo_documento: 'f-tipo-documento', telefono: 'f-telefono',
-    domicilio: 'f-domicilio', numero: 'f-numero', piso: 'f-piso', cpa: 'f-cpa',
+    domicilio: 'f-domicilio', cpa: 'f-cpa',
     provincia: 'f-provincia', ciudad: 'f-ciudad', patente: 'f-patente',
     marca: 'f-marca', modelo: 'f-modelo', anio: 'f-anio', inyeccion: 'f-inyeccion', uso: 'f-uso',
   };
@@ -2182,6 +2202,10 @@ window.storage = {
   // vuelve a dibujar todo con render().
   function syncEquipoFromDOM() {
     if (!tramiteDraftEquipo) return;
+    // Si los campos del equipo no están en pantalla (ej. ya se avanzó al
+    // paso 3 del asistente), no hay nada que leer — sin este corte se
+    // pisaba lo ya cargado con valores vacíos.
+    if (!root.querySelector('#eq-regulador-codigo')) return;
     const val = (sel) => { const el = root.querySelector(sel); return el ? el.value : ''; };
     tramiteDraftEquipo.regulador = {
       codigo: val('#eq-regulador-codigo'), serie: val('#eq-regulador-serie'), nuevoUsado: val('#eq-regulador-nuevousado') || 'usado',
@@ -2451,8 +2475,8 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         ${showBulkImport ? bulkImportPanel() : ''}
         ${showHistorial ? historialPanel() : ''}
 
-        ${showForm || (editing && editMode === 'documentacion') ? documentacionPanel(editing) : ''}
-        ${editing && editMode === 'tramite' ? tramitePanel(editing) : ''}
+        ${showForm || editing ? tramiteWizardPanel(editing) : ''}
+        ${showFotosFor ? fotosPanel(clientes.find(c => c.id === showFotosFor)) : ''}
 
         ${list.length === 0
           ? `<div class="empty">${
@@ -2561,7 +2585,13 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       editingId = null; showForm = true;
       showBulkImport = false;
       enargasPasteOpen = false;
+      enargasEqPasteOpen = false;
       clienteDraft = blankClienteBase();
+      tramiteDraftEquipo = blankEquipo(null);
+      tramiteDraftCampos = blankTramiteCampos(null);
+      editingTramiteId = null;
+      wizardStep = 1;
+      currentSignature = null;
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
       render();
     });
@@ -2648,10 +2678,14 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         if (!cliente) return;
         const tramite = cliente.tramites.find(t => t.id === tramiteId);
         if (!tramite) return;
-        showHistorial = false; showForm = false; showBulkImport = false; menuOpen = false;
-        editingId = clienteId; editMode = 'tramite'; addingTramite = true;
+        showHistorial = false; showForm = false; showBulkImport = false; showPendientes = false; menuOpen = false;
+        editingId = clienteId;
+        // Editar un trámite puntual va directo al paso 3 (tipo/equipo ya
+        // están cargados) — no hace falta repasar datos personales de nuevo.
+        wizardStep = 3;
         editingTramiteId = tramiteId;
         currentSignature = tramite.firma || null;
+        clienteDraft = { ...cliente };
         tramiteDraftEquipo = normalizarEquipoOtros(JSON.parse(JSON.stringify(tramite.equipo || blankEquipo(cliente.ultimoEquipoConocido))));
         tramiteDraftCampos = blankTramiteCampos(tramite);
         render();
@@ -2743,144 +2777,102 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
     // Misma pantalla (Documentación) sirve para dar de alta un cliente
     // nuevo y para editar uno existente — si no hay editingId, es un alta.
-    const btnSaveDoc = root.querySelector('#btn-save-doc');
-    if (btnSaveDoc) btnSaveDoc.addEventListener('click', async () => {
+    function cerrarWizard() {
+      showForm = false;
+      editingId = null;
+      wizardStep = 1;
+      enargasPasteOpen = false;
+      enargasEqPasteOpen = false;
+      clienteDraft = null;
+      tramiteDraftEquipo = null;
+      tramiteDraftCampos = null;
+      editingTramiteId = null;
+      currentSignature = null;
+      Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
+    }
+
+    const btnWizardCancel = root.querySelector('#btn-wizard-cancel');
+    if (btnWizardCancel) btnWizardCancel.addEventListener('click', () => {
+      cerrarWizard();
+      render();
+    });
+
+    const btnWizardNext1 = root.querySelector('#btn-wizard-next-1');
+    if (btnWizardNext1) btnWizardNext1.addEventListener('click', () => {
       const nombre = root.querySelector('#f-nombre').value.trim();
       if (!nombre) { alert('Poné al menos el nombre del cliente.'); return; }
-      const esAltaNueva = !editingId;
       const telefono = root.querySelector('#f-telefono').value.trim();
-      if (esAltaNueva && !telefono) {
-        alert('El teléfono es obligatorio para poder iniciar el trámite — completalo antes de continuar.');
-        return;
-      }
-      const data = {
-        nombre,
-        dni: root.querySelector('#f-dni').value.trim(),
-        tipo_documento: root.querySelector('#f-tipo-documento').value,
-        telefono,
-        domicilio: root.querySelector('#f-domicilio').value.trim(),
-        numero: root.querySelector('#f-numero').value.trim(),
-        piso: root.querySelector('#f-piso').value.trim(),
-        cpa: root.querySelector('#f-cpa').value.trim(),
-        provincia: root.querySelector('#f-provincia').value.trim(),
-        ciudad: root.querySelector('#f-ciudad').value.trim(),
-        patente: root.querySelector('#f-patente').value.trim().toUpperCase(),
-        marca: root.querySelector('#f-marca').value.trim(),
-        modelo: root.querySelector('#f-modelo').value.trim(),
-        anio: root.querySelector('#f-anio').value.trim(),
-        inyeccion: root.querySelector('#f-inyeccion').value,
-        uso: root.querySelector('#f-uso').value,
-      };
-      if (clienteDraft && clienteDraft.ultimoEquipoConocido) data.ultimoEquipoConocido = clienteDraft.ultimoEquipoConocido;
-      let clientId;
-      if (editingId) {
-        clientId = editingId;
-        const idx = clientes.findIndex(c => c.id === editingId);
-        if (idx === -1) return;
-        clientes[idx] = { ...clientes[idx], ...data };
-      } else {
-        clientId = 'c' + Date.now() + Math.random().toString(36).slice(2, 7);
-        clientes.push({ id: clientId, ...blankClienteBase(), ...data, tramites: [], ultimoAvisoMes: {}, notas: '' });
-      }
-      await saveClientes();
-
-      try {
-        const anyPhoto = Object.values(scanFiles).some(v => v);
-        if (anyPhoto) {
-          await window.storage.set(`fotos:${clientId}`, JSON.stringify(scanFiles), false);
-        } else {
-          try { await window.storage.delete(`fotos:${clientId}`, false); } catch (e) { /* no existía, ok */ }
-        }
-      } catch (e) {
-        console.error('Error guardando fotos', e);
-        alert('El cliente se guardó, pero hubo un problema guardando las fotos (puede que sean muy pesadas). Probá sacándolas de nuevo.');
-      }
-
-      showForm = false;
-      enargasPasteOpen = false;
-      clienteDraft = null;
-      Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
-
-      if (esAltaNueva) {
-        // "Continuar con el trámite": el cliente recién creado queda
-        // abierto directo en la solapa Trámite, en vez de volver a la lista.
-        const cliente = clientes.find(x => x.id === clientId);
-        editingId = clientId;
-        editMode = 'tramite';
-        addingTramite = true;
-        currentSignature = null;
-        tramiteDraftEquipo = blankEquipo(cliente ? cliente.ultimoEquipoConocido : null);
-        tramiteDraftCampos = blankTramiteCampos(null);
-      } else {
-        editingId = null; editMode = null;
-      }
+      if (!telefono) { alert('El teléfono es obligatorio para poder continuar.'); return; }
+      const patente = root.querySelector('#f-patente').value.trim();
+      if (!patente) { alert('La patente es obligatoria para poder continuar.'); return; }
+      syncClienteDraftFromDOM();
+      wizardStep = 2;
       render();
       const panel = root.querySelector('#form-panel');
-      if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
-    const btnCancelDoc = root.querySelector('#btn-cancel-doc');
-    if (btnCancelDoc) btnCancelDoc.addEventListener('click', () => {
-      showForm = false;
-      editingId = null; editMode = null;
-      enargasPasteOpen = false;
-      clienteDraft = null;
-      Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
+    const btnWizardBack2 = root.querySelector('#btn-wizard-back-2');
+    if (btnWizardBack2) btnWizardBack2.addEventListener('click', () => {
+      syncEquipoFromDOM();
+      wizardStep = 1;
       render();
     });
 
-    root.querySelectorAll('[data-doc]').forEach(btn => {
+    const btnWizardNext2 = root.querySelector('#btn-wizard-next-2');
+    if (btnWizardNext2) btnWizardNext2.addEventListener('click', () => {
+      syncEquipoFromDOM();
+      wizardStep = 3;
+      render();
+      const panel = root.querySelector('#form-panel');
+      if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    const btnWizardBack3 = root.querySelector('#btn-wizard-back-3');
+    if (btnWizardBack3) btnWizardBack3.addEventListener('click', () => {
+      syncTramiteCamposFromDOM();
+      wizardStep = 2;
+      render();
+    });
+
+    root.querySelectorAll('[data-fotos]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const id = btn.getAttribute('data-doc');
+        const id = btn.getAttribute('data-fotos');
         Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
         try {
           const res = await window.storage.get(`fotos:${id}`, false);
           if (res) Object.assign(scanFiles, JSON.parse(res.value));
         } catch (e) { /* este cliente todavía no tiene fotos guardadas */ }
-        editingId = id;
-        editMode = 'documentacion';
-        showForm = false;
-        enargasPasteOpen = false;
-        const cliente = clientes.find(x => x.id === id);
-        clienteDraft = cliente ? { ...cliente } : blankClienteBase();
+        showFotosFor = id;
         render();
-        const panel = root.querySelector('#form-panel');
+        const panel = root.querySelector('#fotos-panel');
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
+    });
+
+    const btnCloseFotos = root.querySelector('#btn-close-fotos');
+    if (btnCloseFotos) btnCloseFotos.addEventListener('click', () => {
+      showFotosFor = null;
+      Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
+      render();
     });
 
     root.querySelectorAll('[data-tramite]').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-tramite');
         const cliente = clientes.find(x => x.id === id);
-        if (!cliente || !cliente.telefono || !cliente.telefono.trim()) {
-          alert('Este cliente no tiene teléfono cargado. Andá a "Documentación" y completalo antes de iniciar un trámite.');
-          return;
-        }
+        if (!cliente) return;
+        cerrarWizard();
         editingId = id;
-        editMode = 'tramite';
         showForm = false;
-        addingTramite = true;
-        currentSignature = null;
-        editingTramiteId = null;
-        tramiteDraftCampos = blankTramiteCampos(null);
-        enargasEqPasteOpen = false;
+        wizardStep = 1;
+        clienteDraft = { ...cliente };
         tramiteDraftEquipo = blankEquipo(cliente.ultimoEquipoConocido);
+        tramiteDraftCampos = blankTramiteCampos(null);
         render();
         const panel = root.querySelector('#form-panel');
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
-    });
-
-    const btnCloseTramitePanel = root.querySelector('#btn-close-tramite-panel');
-    if (btnCloseTramitePanel) btnCloseTramitePanel.addEventListener('click', () => {
-      editingId = null; editMode = null;
-      addingTramite = false;
-      currentSignature = null;
-      tramiteDraftEquipo = null;
-      tramiteDraftCampos = null;
-      editingTramiteId = null;
-      render();
     });
 
     root.querySelectorAll('[data-toggle-detalle]').forEach(btn => {
@@ -2898,7 +2890,8 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         const c = clientes.find(x => x.id === id);
         if (confirm(`¿Eliminar a ${c ? c.nombre : 'este cliente'}? Esta acción no se puede deshacer.`)) {
           clientes = clientes.filter(x => x.id !== id);
-          if (editingId === id) { editingId = null; editMode = null; }
+          if (editingId === id) cerrarWizard();
+          if (showFotosFor === id) showFotosFor = null;
           await saveClientes();
           try { await window.storage.delete(`fotos:${id}`, false); } catch (e) { /* no tenía fotos, ok */ }
           render();
@@ -3078,27 +3071,6 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     const textareaEnargasEq = root.querySelector('#enargas-eq-paste-text');
     if (textareaEnargasEq) textareaEnargasEq.addEventListener('paste', () => setTimeout(aplicarEnargasEquipo, 0));
 
-    const btnAddTramite = root.querySelector('#btn-add-tramite');
-    if (btnAddTramite) btnAddTramite.addEventListener('click', () => {
-      addingTramite = !addingTramite;
-      currentSignature = null;
-      editingTramiteId = null;
-      const cliente = editingId ? clientes.find(x => x.id === editingId) : null;
-      tramiteDraftEquipo = addingTramite ? blankEquipo(cliente ? cliente.ultimoEquipoConocido : null) : null;
-      tramiteDraftCampos = addingTramite ? blankTramiteCampos(null) : null;
-      render();
-    });
-
-    const btnCancelTramite = root.querySelector('#btn-cancel-tramite');
-    if (btnCancelTramite) btnCancelTramite.addEventListener('click', () => {
-      addingTramite = false;
-      currentSignature = null;
-      tramiteDraftEquipo = null;
-      tramiteDraftCampos = null;
-      editingTramiteId = null;
-      render();
-    });
-
     const btnAddCilindro = root.querySelector('#btn-add-cilindro');
     if (btnAddCilindro) btnAddCilindro.addEventListener('click', () => {
       syncEquipoFromDOM();
@@ -3135,18 +3107,24 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       });
     });
 
-    async function guardarTramite(estadoForzado) {
-      if (!editingId) return;
-      const idx = clientes.findIndex(c => c.id === editingId);
-      if (idx === -1) return;
-      if (!clientes[idx].telefono || !clientes[idx].telefono.trim()) {
-        alert('Este cliente no tiene teléfono cargado. Andá a "Documentación" y completalo antes de guardar el trámite.');
-        return;
-      }
+    // Guarda de una sola vez los datos del cliente (pasos 1 y 2 del
+    // asistente) y el trámite (paso 3) — antes eran dos guardados separados
+    // (Documentación y Trámite); ahora es un único paso final.
+    async function guardarClienteYTramite(estadoForzado) {
+      if (!clienteDraft) return;
+      syncClienteDraftFromDOM();
+      syncEquipoFromDOM();
+
+      const nombre = (clienteDraft.nombre || '').trim();
+      if (!nombre) { alert('Poné al menos el nombre del cliente.'); wizardStep = 1; render(); return; }
+      const telefono = (clienteDraft.telefono || '').trim();
+      if (!telefono) { alert('El teléfono es obligatorio para poder guardar.'); wizardStep = 1; render(); return; }
+      const patente = (clienteDraft.patente || '').trim().toUpperCase();
+      if (!patente) { alert('La patente es obligatoria para poder guardar.'); wizardStep = 1; render(); return; }
+
       const tipo = root.querySelector('#t-tipo').value;
       const fecha = root.querySelector('#t-fecha').value;
       if (!fecha) { alert('Poné una fecha para el trámite.'); return; }
-      syncEquipoFromDOM();
 
       if (equipoTieneBaja(tramiteDraftEquipo)) {
         const partes = [];
@@ -3157,13 +3135,52 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         if (!ok) return;
       }
 
+      const data = {
+        nombre, telefono, patente,
+        dni: (clienteDraft.dni || '').trim(),
+        tipo_documento: clienteDraft.tipo_documento,
+        domicilio: (clienteDraft.domicilio || '').trim(),
+        cpa: (clienteDraft.cpa || '').trim(),
+        provincia: (clienteDraft.provincia || '').trim(),
+        ciudad: (clienteDraft.ciudad || '').trim(),
+        marca: (clienteDraft.marca || '').trim(),
+        modelo: (clienteDraft.modelo || '').trim(),
+        anio: (clienteDraft.anio || '').trim(),
+        inyeccion: clienteDraft.inyeccion,
+        uso: clienteDraft.uso,
+      };
+
+      let clientId;
+      if (editingId) {
+        clientId = editingId;
+        const idx0 = clientes.findIndex(c => c.id === editingId);
+        if (idx0 === -1) return;
+        clientes[idx0] = { ...clientes[idx0], ...data };
+      } else {
+        clientId = 'c' + Date.now() + Math.random().toString(36).slice(2, 7);
+        clientes.push({ id: clientId, ...blankClienteBase(), ...data, tramites: [], ultimoAvisoMes: {}, notas: '' });
+      }
+
+      try {
+        const anyPhoto = Object.values(scanFiles).some(v => v);
+        if (anyPhoto) {
+          await window.storage.set(`fotos:${clientId}`, JSON.stringify(scanFiles), false);
+        } else {
+          try { await window.storage.delete(`fotos:${clientId}`, false); } catch (e) { /* no existía, ok */ }
+        }
+      } catch (e) {
+        console.error('Error guardando fotos', e);
+        alert('Los datos se guardaron, pero hubo un problema guardando las fotos (puede que sean muy pesadas). Probá sacándolas de nuevo.');
+      }
+
+      const idx = clientes.findIndex(c => c.id === clientId);
       const estadoPec = estadoForzado || root.querySelector('#t-estado').value;
       const detalle = root.querySelector('#t-detalle').value.trim();
       const motivoIncompleto = estadoPec === 'incompleto' ? root.querySelector('#t-motivo').value.trim() : '';
       const obleaAnterior = root.querySelector('#t-oblea-anterior').value.trim();
       const obleaNueva = root.querySelector('#t-oblea-nueva').value.trim();
 
-      let savedId;
+      let savedTramiteId;
       if (editingTramiteId) {
         const tIdx = clientes[idx].tramites.findIndex(t => t.id === editingTramiteId);
         if (tIdx !== -1) {
@@ -3174,12 +3191,12 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
             obleaAnterior, obleaNueva,
             firma: currentSignature || prev.firma,
           };
-          savedId = prev.id;
+          savedTramiteId = prev.id;
         }
       } else {
-        savedId = 't' + Date.now() + Math.random().toString(36).slice(2, 7);
+        savedTramiteId = 't' + Date.now() + Math.random().toString(36).slice(2, 7);
         clientes[idx].tramites.push({
-          id: savedId,
+          id: savedTramiteId,
           tipo, fecha, equipo: tramiteDraftEquipo, detalle, estadoPec, motivoIncompleto,
           obleaAnterior, obleaNueva,
           firma: currentSignature,
@@ -3187,30 +3204,36 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         });
       }
       if (tipo === 'prueba_hidraulica') clientes[idx].fecha_crpc = fecha.slice(0, 7);
+      // La Revisión Anual (y una Conversión, que también entrega oblea nueva)
+      // renuevan la habilitación por 1 año — antes esto no se reflejaba en la
+      // tarjeta del cliente y la fecha de vencimiento de Oblea quedaba vieja.
+      if (tipo === 'revision_anual' || tipo === 'conversion') clientes[idx].fecha_oblea = pecFechaMasUnAnio(fecha);
       const primerCilindro = tramiteDraftEquipo.cilindros[0];
       if (primerCilindro && primerCilindro.periodicidad) clientes[idx].tipo_cilindro = primerCilindro.periodicidad;
+      clientes[idx].ultimoEquipoConocido = {
+        regulador: { ...tramiteDraftEquipo.regulador },
+        cilindros: tramiteDraftEquipo.cilindros.map(c => ({ ...c })),
+        valvulas: tramiteDraftEquipo.valvulas.map(v => ({ ...v })),
+        otros: JSON.parse(JSON.stringify(tramiteDraftEquipo.otros)),
+      };
+
       await saveClientes();
-      addingTramite = false;
-      currentSignature = null;
-      tramiteDraftEquipo = null;
-      tramiteDraftCampos = null;
-      editingTramiteId = null;
+      cerrarWizard();
       render();
-      return savedId;
+      return { clienteId: clientId, tramiteId: savedTramiteId };
     }
 
     const btnSaveTramite = root.querySelector('#btn-save-tramite');
-    if (btnSaveTramite) btnSaveTramite.addEventListener('click', () => guardarTramite(null));
+    if (btnSaveTramite) btnSaveTramite.addEventListener('click', () => guardarClienteYTramite(null));
 
     const btnSendPecTramite = root.querySelector('#btn-send-pec-tramite');
     if (btnSendPecTramite) btnSendPecTramite.addEventListener('click', async () => {
       if (!currentSignature) { alert('Falta la firma del propietario antes de enviar al PEC.'); return; }
-      const clienteId = editingId;
       const firmaParaPdf = currentSignature;
-      const tramiteId = await guardarTramite('enviado');
-      if (!tramiteId) return;
-      const cliente = clientes.find(c => c.id === clienteId);
-      const tramite = cliente && cliente.tramites.find(t => t.id === tramiteId);
+      const resultado = await guardarClienteYTramite('enviado');
+      if (!resultado) return;
+      const cliente = clientes.find(c => c.id === resultado.clienteId);
+      const tramite = cliente && cliente.tramites.find(t => t.id === resultado.tramiteId);
       if (!cliente || !tramite) return;
       try {
         const { blob, filename } = await generarPecPdf(cliente, tramite, firmaParaPdf);
