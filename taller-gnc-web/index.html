@@ -1726,9 +1726,6 @@ Documentación para realizar la renovación:
           <button type="button" class="btn btn-agent" id="btn-buscar-enargas" data-patente="${escapeHtml(c.patente)}" style="flex:2; min-width:180px; font-size:14px;">🔎 Buscar en ENARGAS ↗</button>
           <button type="button" class="btn btn-ghost" id="btn-toggle-enargas-paste" style="flex:1; min-width:120px;">${enargasPasteOpen ? 'Cerrar' : '📋 Pegar resultado'}</button>
         </div>
-        <div style="grid-column: 1/-1; margin-top:-4px;">
-          <a class="license-link" href="boton-enargas.html" target="_blank" rel="noopener">¿Copiar el resultado con un solo botón? Instalalo acá (una sola vez)</a>
-        </div>
         <div id="enargas-copy-hint" class="agent-hint" style="display:none; grid-column: 1/-1;"></div>
         ${enargasPasteOpen ? enargasPasteBox(enargasEntrando) : ''}
         <label>Marca
