@@ -163,6 +163,10 @@ window.storage = {
   font-family: var(--display); font-size: 16px; text-transform: uppercase;
   letter-spacing: 1px; margin: 0 0 14px; color: var(--flame);
 }
+#gnc-app .panel h2.panel-h2-sticky {
+  position: sticky; top: 0; z-index: 5; background: var(--surface);
+  margin: -20px -20px 14px; padding: 16px 20px 10px; border-bottom: 1px solid var(--line);
+}
 #gnc-app .panel h3 {
   font-family: var(--display); font-size: 13px; text-transform: uppercase;
   letter-spacing: 1px; margin: 18px 0 10px; color: var(--text-muted);
@@ -225,9 +229,16 @@ window.storage = {
 #gnc-app .client-card.st-warn { border-left-color: var(--warn); }
 #gnc-app .client-card.st-ok { border-left-color: var(--ok); }
 #gnc-app .client-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
-#gnc-app .client-name { font-family: var(--display); font-size: 18px; text-transform: uppercase; letter-spacing: 0.4px; }
-#gnc-app .client-meta { font-family: var(--mono); font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+#gnc-app .client-patente { font-family: var(--display); font-size: 22px; letter-spacing: 1px; }
+#gnc-app .client-modelo { font-family: var(--mono); font-size: 13px; color: var(--text); margin-top: 2px; }
+#gnc-app .client-name { font-family: var(--mono); font-size: 11px; color: var(--text-muted); margin-top: 4px; }
 #gnc-app .client-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+#gnc-app .client-detalle { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+#gnc-app .client-detalle-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 16px; font-size: 12px; margin-bottom: 10px;
+}
+@media (max-width: 640px) { #gnc-app .client-detalle-grid { grid-template-columns: 1fr; } }
+#gnc-app .client-detalle-grid .doc-label { display: block; margin-bottom: 2px; }
 #gnc-app .docs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
 @media (max-width: 640px) { #gnc-app .docs { grid-template-columns: 1fr; } }
 #gnc-app .doc-row {
@@ -343,6 +354,9 @@ window.storage = {
   let editingId = null;
   let editMode = null; // 'documentacion' | 'tramite'
   let ready = false;
+  // Ids de clientes cuya tarjeta tiene el detalle (datos + historial de
+  // trámites) desplegado — no hace falta entrar a editar solo para mirar.
+  const clientesExpandidos = new Set();
 
   root.innerHTML = '<div class="loading">Cargando datos del taller...</div>';
 
@@ -444,6 +458,14 @@ window.storage = {
     }
     const venceTexto = status.days !== null && status.days < 0 ? `venció (${fecha})` : `vence (${fecha})`;
     const msg = `Hola ${cliente.nombre}! Te escribimos de ${tallerNombre} para recordarte que la ${doc} de tu vehículo (patente ${cliente.patente || 's/d'}) ${venceTexto}. Te esperamos para renovarla. Cualquier consulta, escribinos por acá. Saludos!`;
+    return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  }
+
+  // Link de WhatsApp genérico (no atado a oblea/prueba) para contactar al
+  // cliente por cualquier motivo desde su tarjeta.
+  function waLinkGeneral(cliente) {
+    const phone = cleanPhone(cliente.telefono);
+    const msg = `Hola ${cliente.nombre}! Te escribimos de ${tallerNombre}.`;
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   }
 
@@ -991,13 +1013,16 @@ window.storage = {
   function clientCard(c) {
     const s = worstStatus(c);
     const cls = s.level === 'danger' ? 'st-danger' : s.level === 'warn' ? 'st-warn' : 'st-ok';
+    const expandido = clientesExpandidos.has(c.id);
     return `<div class="client-card ${cls}">
       <div class="client-top">
         <div>
-          <div class="client-name">${escapeHtml(c.nombre)}</div>
-          <div class="client-meta">Patente ${escapeHtml(c.patente || 's/d')} ${(c.marca || c.modelo) ? '· ' + escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) : ''} ${c.telefono ? '· ' + escapeHtml(c.telefono) : ''} ${c.tramites.length ? `· ${c.tramites.length} trámite(s)` : ''}</div>
+          <div class="client-patente">${escapeHtml(c.patente || 'SIN PATENTE')}</div>
+          <div class="client-modelo">${escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) || 'Sin marca/modelo'}${c.anio ? ' · ' + escapeHtml(c.anio) : ''}</div>
+          <div class="client-name">${escapeHtml(c.nombre)}${c.telefono ? ' · ' + escapeHtml(c.telefono) : ''}</div>
         </div>
         <div class="client-actions">
+          ${c.telefono ? `<a class="btn btn-wa" target="_blank" rel="noopener" href="${waLinkGeneral(c)}">WhatsApp</a>` : ''}
           <button class="btn btn-ghost" data-doc="${c.id}">Documentación</button>
           <button class="btn btn-agent" data-tramite="${c.id}">Trámite</button>
           <button class="btn btn-danger-outline" data-delete="${c.id}">Eliminar</button>
@@ -1007,6 +1032,25 @@ window.storage = {
         ${docRowOblea(c)}
         ${docRowPH(c)}
       </div>
+      <div class="form-actions" style="margin-top:10px;">
+        <button type="button" class="btn btn-ghost btn-sm" data-toggle-detalle="${c.id}">${expandido ? 'Ocultar detalle' : `Ver datos y trámites${c.tramites.length ? ` (${c.tramites.length})` : ''}`}</button>
+      </div>
+      ${expandido ? clientDetalleExpandido(c) : ''}
+    </div>`;
+  }
+
+  // Vista de solo lectura de los datos personales/vehículo + historial de
+  // trámites, desplegable desde la tarjeta sin tener que entrar a editar.
+  function clientDetalleExpandido(c) {
+    const rows = c.tramites.slice().sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).map(t => tramiteRow(c.id, t)).join('');
+    return `<div class="client-detalle">
+      <div class="client-detalle-grid">
+        <div><span class="doc-label">Documento</span><div>${escapeHtml([c.tipo_documento, c.dni].filter(Boolean).join(' ')) || '—'}</div></div>
+        <div><span class="doc-label">Domicilio</span><div>${escapeHtml([c.domicilio, c.numero].filter(Boolean).join(' ')) || '—'}${c.piso ? ' - ' + escapeHtml(c.piso) : ''}</div></div>
+        <div><span class="doc-label">Localidad</span><div>${escapeHtml([c.ciudad, c.provincia].filter(Boolean).join(', ')) || '—'}${c.cpa ? ' (CPA ' + escapeHtml(c.cpa) + ')' : ''}</div></div>
+        <div><span class="doc-label">Uso del vehículo</span><div>${escapeHtml(c.uso) || '—'}${c.inyeccion ? ' · Inyección ' + escapeHtml(c.inyeccion) : ''}</div></div>
+      </div>
+      ${c.tramites.length ? `<h4>Historial de trámites</h4><div class="tramites-list">${rows}</div>` : '<p class="scan-sub">Todavía no tiene trámites cargados.</p>'}
     </div>`;
   }
 
@@ -1206,11 +1250,11 @@ window.storage = {
   function enargasPasteBox() {
     return `<div class="agent-box" style="grid-column: 1/-1;">
       <label>Pegá acá lo que te muestra la consulta de ENARGAS</label>
-      <textarea id="enargas-paste-text" placeholder="Pegá el resultado de la consulta por dominio..."></textarea>
+      <textarea id="enargas-paste-text" placeholder="Pegá el resultado de la consulta por dominio... (se carga solo al pegar)"></textarea>
       <div class="form-actions">
         <button type="button" class="btn btn-primary btn-sm" id="btn-apply-enargas">Aplicar al formulario</button>
       </div>
-      <div class="agent-hint">Todavía estamos mejorando esta función — puede que no reconozca todos los datos automáticamente. Si no completa algo, cargalo a mano.</div>
+      <div class="agent-hint">Con pegar alcanza — se completa solo. Todavía estamos mejorando esta función, puede que no reconozca todos los datos automáticamente; si no completa algo, cargalo a mano.</div>
       <div id="enargas-paste-result"></div>
     </div>`;
   }
@@ -1351,7 +1395,7 @@ window.storage = {
   function documentacionPanel(existing) {
     const c = clienteDraft || existing || blankClienteBase();
     return `<div class="panel" id="form-panel">
-      <h2 style="margin-top:0;">${existing ? 'Documentación — ' + escapeHtml(c.nombre) : 'Nuevo cliente'}</h2>
+      <h2 class="panel-h2-sticky">${existing ? 'Documentación — ' + escapeHtml(c.nombre) : 'Nuevo cliente'}</h2>
       ${scanBox()}
       ${datosPersonalesYDomicilioFields(c)}
       <h3>Vehículo</h3>
@@ -1397,7 +1441,7 @@ window.storage = {
   function tramitePanel(existing) {
     const c = existing;
     return `<div class="panel" id="form-panel">
-      <h2 style="margin-top:0;">Trámite — ${escapeHtml(c.nombre)}</h2>
+      <h2 class="panel-h2-sticky">Trámite — ${escapeHtml(c.nombre)}</h2>
       ${tramitesSection(c)}
       <div class="form-actions">
         <button class="btn btn-ghost" id="btn-close-tramite-panel">Cerrar</button>
@@ -1916,11 +1960,11 @@ window.storage = {
       <div id="enargas-eq-copy-hint" class="agent-hint" style="display:none;"></div>
       ${enargasEqPasteOpen ? `<div class="agent-box">
         <label>Pegá acá el "Detalle de la operación" del SIC</label>
-        <textarea id="enargas-eq-paste-text" placeholder="Pegá el resultado de la consulta..."></textarea>
+        <textarea id="enargas-eq-paste-text" placeholder="Pegá el resultado de la consulta... (se carga solo al pegar)"></textarea>
         <div class="form-actions">
           <button type="button" class="btn btn-primary btn-sm" id="btn-apply-enargas-eq">Aplicar al equipo</button>
         </div>
-        <div class="agent-hint">Completa regulador, cilindro y válvula, y también la fecha de la prueba hidráulica.</div>
+        <div class="agent-hint">Con pegar alcanza — completa regulador, cilindro, válvula, N° de oblea y la fecha de la prueba hidráulica.</div>
         <div id="enargas-eq-paste-result"></div>
       </div>` : ''}
       ${reguladorFields(eq)}
@@ -2839,6 +2883,15 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       render();
     });
 
+    root.querySelectorAll('[data-toggle-detalle]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-toggle-detalle');
+        if (clientesExpandidos.has(id)) clientesExpandidos.delete(id);
+        else clientesExpandidos.add(id);
+        render();
+      });
+    });
+
     root.querySelectorAll('[data-delete]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const id = btn.getAttribute('data-delete');
@@ -2884,9 +2937,9 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       render();
     });
 
-    const btnApplyEnargas = root.querySelector('#btn-apply-enargas');
-    if (btnApplyEnargas) btnApplyEnargas.addEventListener('click', () => {
+    function aplicarEnargasDocumentacion() {
       const textarea = root.querySelector('#enargas-paste-text');
+      if (!textarea || !textarea.value.trim()) return;
       const parsed = parseEnargasText(textarea.value || '');
       const aplicados = parsed.found.slice();
 
@@ -2934,7 +2987,14 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
           nuevoResultBox.textContent = 'Aplicado: ' + aplicados.join(' · ') + ' — no te olvides de tocar "Guardar cambios" para que quede guardado.';
         }
       }
-    });
+    }
+    const btnApplyEnargas = root.querySelector('#btn-apply-enargas');
+    if (btnApplyEnargas) btnApplyEnargas.addEventListener('click', aplicarEnargasDocumentacion);
+    const textareaEnargasDoc = root.querySelector('#enargas-paste-text');
+    // Pegar ya alcanza para cargar los datos — no hace falta tocar
+    // "Aplicar" aparte. El setTimeout espera a que el navegador termine de
+    // insertar el texto pegado en el campo antes de leer su valor.
+    if (textareaEnargasDoc) textareaEnargasDoc.addEventListener('paste', () => setTimeout(aplicarEnargasDocumentacion, 0));
 
     const btnBuscarEnargasEq = root.querySelector('#btn-buscar-enargas-eq');
     if (btnBuscarEnargasEq) btnBuscarEnargasEq.addEventListener('click', async () => {
@@ -2957,9 +3017,9 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       render();
     });
 
-    const btnApplyEnargasEq = root.querySelector('#btn-apply-enargas-eq');
-    if (btnApplyEnargasEq) btnApplyEnargasEq.addEventListener('click', async () => {
+    async function aplicarEnargasEquipo() {
       const textarea = root.querySelector('#enargas-eq-paste-text');
+      if (!textarea || !textarea.value.trim()) return;
       const parsed = parseEnargasText(textarea.value || '');
       const aplicados = [];
       syncEquipoFromDOM();
@@ -3012,7 +3072,11 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
           nuevoResultBox.textContent = 'Aplicado: ' + aplicados.join(' · ');
         }
       }
-    });
+    }
+    const btnApplyEnargasEq = root.querySelector('#btn-apply-enargas-eq');
+    if (btnApplyEnargasEq) btnApplyEnargasEq.addEventListener('click', aplicarEnargasEquipo);
+    const textareaEnargasEq = root.querySelector('#enargas-eq-paste-text');
+    if (textareaEnargasEq) textareaEnargasEq.addEventListener('paste', () => setTimeout(aplicarEnargasEquipo, 0));
 
     const btnAddTramite = root.querySelector('#btn-add-tramite');
     if (btnAddTramite) btnAddTramite.addEventListener('click', () => {
