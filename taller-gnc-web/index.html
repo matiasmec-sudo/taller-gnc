@@ -3813,7 +3813,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       if (patente && navigator.clipboard && navigator.clipboard.writeText) {
         try {
           await navigator.clipboard.writeText(patente);
-          if (hint) { hint.style.display = 'block'; hint.textContent = `Copiamos "${patente}" al portapapeles. En la página de ENARGAS: pegala en el campo Dominio y buscá. Cuando aparezca el resultado: mantené apretado sobre el texto → Seleccionar todo → Compartir → elegí Estelita, y los datos se cargan solos. (También sirve Copiar y volver acá.)`; }
+          if (hint) { hint.style.display = 'block'; hint.textContent = `Copiamos "${patente}" al portapapeles. En la página de ENARGAS: pegala en el campo Dominio y buscá. Con el resultado a la vista: mantené apretado → Seleccionar todo → Copiar. Para volver acá: la X de arriba a la izquierda (si la app está instalada) o el botón de apps recientes del celular. Al volver, tocá "PEGAR LO COPIADO". Atajo: en vez de Copiar podés tocar Compartir → Estelita y volvés con los datos ya cargados.`; }
         } catch (e) { console.error('No se pudo copiar la patente', e); }
       }
       esperandoEnargas = true;
