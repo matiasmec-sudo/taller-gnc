@@ -428,6 +428,12 @@ window.storage = {
 #gnc-app .activation-wrap { max-width: 420px; padding-top: 80px; }
 #gnc-app .activation-panel #activation-input { width: 100%; margin-bottom: 4px; }
 #gnc-app .activation-hint { font-size: 13px; color: var(--text-muted); margin: 0 0 16px; line-height: 1.5; }
+#gnc-app .activation-terminos { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--text-muted); margin: 10px 0 4px; line-height: 1.5; }
+#gnc-app .activation-terminos input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; margin-top: 2px; flex-shrink: 0; }
+#gnc-app .activation-terminos a { color: var(--flame); font-weight: 600; }
+#gnc-app .activation-error { color: #C0392B; font-size: 13px; margin-top: 8px; line-height: 1.4; }
+#gnc-app .activation-registro { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 16px; }
+#gnc-app .activation-registro input { width: 100%; margin-bottom: 8px; }
 #gnc-app .license-link {
   font-family: var(--mono); font-size: 11px; color: var(--text-muted);
   text-decoration: underline; cursor: pointer; background: none; border: none; padding: 0;
@@ -488,6 +494,10 @@ window.storage = {
   const TALLER_KEY = 'gnc_taller_nombre_v1';
   const LICENSE_KEY = 'gnc_license_code';
   const TALLER_CONFIG_KEY = 'gnc_taller_config_v1';
+  // Fecha en que el taller aceptó Términos y Privacidad (constancia local).
+  const TERMS_KEY = 'gnc_terms_accepted_v1';
+  // WhatsApp comercial al que llegan las solicitudes de registro de talleres.
+  const REGISTRO_WHATSAPP = '5492236009347';
 
   // Chrome/Android dispara este evento cuando la app cumple los requisitos
   // para instalarse (manifest + service worker ya están OK) — lo guardamos
@@ -549,14 +559,32 @@ window.storage = {
     root.innerHTML = `
       <div class="wrap activation-wrap">
         <div class="panel activation-panel">
-          <h2>Activar Taller GNC</h2>
-          <p class="activation-hint">Ingresá el código de licencia que te dieron para habilitar la lectura de fotos con IA.</p>
+          <h2>Activar Estelita</h2>
+          <p class="activation-hint">Ingresá el código de licencia de tu taller.</p>
           <form id="activation-form">
             <input type="text" id="activation-input" placeholder="Ej: GNC-0001" autocomplete="off">
+            <label class="activation-terminos">
+              <input type="checkbox" id="activation-terminos-check">
+              <span>Leí y acepto los <a href="terminos.html" target="_blank" rel="noopener">Términos y Condiciones</a> y la <a href="privacidad.html" target="_blank" rel="noopener">Política de Privacidad</a>.</span>
+            </label>
             <div class="form-actions">
               <button type="submit" class="btn btn-primary">Activar</button>
             </div>
+            <div class="activation-error" id="activation-error"></div>
           </form>
+          <div class="activation-registro">
+            <p class="activation-hint" style="margin-bottom:8px;">¿Todavía no tenés tu código?</p>
+            <button type="button" class="btn btn-ghost" id="btn-mostrar-registro">Registrá tu taller</button>
+            <form id="registro-form" style="display:none; margin-top:12px;">
+              <input type="text" id="reg-taller" placeholder="Nombre del taller" autocomplete="off">
+              <input type="text" id="reg-localidad" placeholder="Localidad" autocomplete="off">
+              <input type="text" id="reg-nombre" placeholder="Tu nombre" autocomplete="off">
+              <div class="form-actions">
+                <button type="submit" class="btn btn-agent">Enviar solicitud por WhatsApp</button>
+              </div>
+              <p class="activation-hint">Se abre un chat de WhatsApp con nosotros, con tus datos ya escritos. Te contestamos con el código de licencia y cómo activar la suscripción.</p>
+            </form>
+          </div>
         </div>
       </div>
     `;
@@ -564,10 +592,28 @@ window.storage = {
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const input = root.querySelector('#activation-input');
+      const errorEl = root.querySelector('#activation-error');
       const code = input.value.trim();
       if (!code) return;
+      if (!root.querySelector('#activation-terminos-check').checked) {
+        errorEl.textContent = 'Para activar, marcá la casilla de aceptación de los Términos y la Política de Privacidad.';
+        return;
+      }
+      localStorage.setItem(TERMS_KEY, new Date().toISOString());
       localStorage.setItem(LICENSE_KEY, code);
       boot();
+    });
+    root.querySelector('#btn-mostrar-registro').addEventListener('click', () => {
+      const f = root.querySelector('#registro-form');
+      f.style.display = f.style.display === 'none' ? 'block' : 'none';
+    });
+    root.querySelector('#registro-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const taller = root.querySelector('#reg-taller').value.trim();
+      const localidad = root.querySelector('#reg-localidad').value.trim();
+      const nombre = root.querySelector('#reg-nombre').value.trim();
+      const msg = `Hola! Quiero registrar mi taller en Estelita.\nTaller: ${taller || '-'}\nLocalidad: ${localidad || '-'}\nMi nombre: ${nombre || '-'}`;
+      window.open(`https://wa.me/${REGISTRO_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
     });
   }
 
