@@ -304,7 +304,7 @@ window.storage = {
     razonSocial: '', direccion: '', cuit: '',
     tecnicoNombre: '', tecnicoMatricula: '',
     codigoPec: '', codigoTaller: '',
-    pecRazonSocial: '', pecIngeniero: '', pecMatriculaCipba: ''
+    pecRazonSocial: '', pecDireccion: '', pecTelefono: '', pecIngeniero: '', pecMatriculaCipba: ''
   };
 
   let clientes = [];
@@ -1192,7 +1192,13 @@ window.storage = {
           <input type="text" id="tc-codigo-pec" value="${escapeHtml(t.codigoPec)}" placeholder="Ej: 3441">
         </label>
         <label>Razón Social del PEC
-          <input type="text" id="tc-pec-razon-social" value="${escapeHtml(t.pecRazonSocial)}" placeholder="Ej: PecMar">
+          <input type="text" id="tc-pec-razon-social" value="${escapeHtml(t.pecRazonSocial)}" placeholder="Ej: 752 T.L.MDQ Argentina S.A.">
+        </label>
+        <label>Dirección del PEC
+          <input type="text" id="tc-pec-direccion" value="${escapeHtml(t.pecDireccion)}" placeholder="Ej: Talcahuano 752, Mar del Plata, Bs. As.">
+        </label>
+        <label>Teléfono del PEC
+          <input type="text" id="tc-pec-telefono" value="${escapeHtml(t.pecTelefono)}" placeholder="Ej: (0223) 481-0414">
         </label>
         <label>Ingeniero responsable del PEC
           <input type="text" id="tc-pec-ingeniero" value="${escapeHtml(t.pecIngeniero)}" placeholder="Ej: Nestor Ariel Breitman">
@@ -1330,6 +1336,391 @@ window.storage = {
       if (v.codigo || v.serie) partes.push(`Válvula ${[v.codigo, v.serie].filter(Boolean).join('/')}`);
     });
     return partes.join(' · ');
+  }
+
+  // --- Generación del PDF de la planilla PEC (réplica de la ficha técnica en papel) ---
+
+  // Carga jsPDF y html2canvas desde un CDN solo la primera vez que hacen
+  // falta (al tocar "Enviar al PEC"), para no pesar el arranque de la app
+  // con estas dos librerías si nunca se llega a usar esa función.
+  let pecLibsPromise = null;
+  function cargarLibreriasPec() {
+    if (pecLibsPromise) return pecLibsPromise;
+    function cargarScript(src) {
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('No se pudo cargar ' + src));
+        document.head.appendChild(s);
+      });
+    }
+    pecLibsPromise = Promise.all([
+      cargarScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'),
+      cargarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'),
+    ]);
+    return pecLibsPromise;
+  }
+
+  function pecFechaMasUnAnio(iso) {
+    if (!iso) return '';
+    const d = new Date(iso + 'T00:00:00');
+    if (isNaN(d.getTime())) return '';
+    d.setFullYear(d.getFullYear() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function pecPartesFecha(iso) {
+    if (!iso) return { d: '', m: '', a: '' };
+    const [y, m, d] = iso.split('-');
+    return { d: d || '', m: m || '', a: y ? y.slice(2) : '' };
+  }
+
+  function pecCasilla(marcada) {
+    return `<span style="display:inline-block;width:12px;height:12px;border:1px solid #000;text-align:center;line-height:11px;font-size:10px;margin-right:4px;vertical-align:middle;font-weight:bold;">${marcada ? '✕' : ''}</span>`;
+  }
+
+  function pecCasillaConLabel(marcada, label) {
+    return `<span style="display:inline-flex; align-items:center; margin-right:8px; font-size:9px; white-space:nowrap;">${pecCasilla(marcada)}${escapeHtml(label)}</span>`;
+  }
+
+  function pecCampo(valor, etiqueta, flex) {
+    return `<div style="flex:${flex || 1}; min-width:0; padding:0 5px; box-sizing:border-box;">
+      <div style="border-bottom:1px solid #000; min-height:15px; font-size:11px; font-weight:600; padding-bottom:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(valor || '')}</div>
+      <div style="font-size:7px; color:#333; margin-top:1px;">${etiqueta}</div>
+    </div>`;
+  }
+
+  // Bloque "Código / N° Serie" de un accesorio de la grilla de equipos
+  // (Manómetro, Electroválvula, etc.) — replica el recuadro chico de la
+  // planilla real con el nombre del accesorio arriba y dos líneas abajo.
+  function pecAccesorio(label, codigo, serie, flex) {
+    return `<div style="flex:${flex || 1}; min-width:0; padding:2px 5px; box-sizing:border-box; border-left:1px solid #000;">
+      <div style="font-size:7.5px; font-weight:600;">${escapeHtml(label)}</div>
+      <div style="border-bottom:1px solid #000; min-height:13px; font-size:10px; font-weight:600;">${escapeHtml(codigo || '')}</div>
+      <div style="font-size:6.5px; color:#333;">Código</div>
+      <div style="border-bottom:1px solid #000; min-height:13px; font-size:10px; font-weight:600;">${escapeHtml(serie || '')}</div>
+      <div style="font-size:6.5px; color:#333;">N° Serie</div>
+    </div>`;
+  }
+
+  function pecOperacionLetra(valor) {
+    return { montaje: 'M', sigue: 'S/C', desmontaje: 'D', baja: 'B' }[valor] || '';
+  }
+
+  // Arma el HTML de la ficha técnica (una réplica visual de la planilla del
+  // PEC/ENARGAS) para un trámite puntual. Se renderiza off-screen y se
+  // rasteriza con html2canvas antes de meterlo en el PDF — así el layout se
+  // arma con CSS normal en vez de calcular coordenadas a mano con jsPDF.
+  function pecFormHtml(cliente, tramite, firmaDataUrl) {
+    const tc = tallerConfig;
+    const eq = tramite.equipo || blankEquipo(null);
+    const fVenc = pecPartesFecha(pecFechaMasUnAnio(tramite.fecha));
+    const fHab = pecPartesFecha(tramite.fecha);
+    const usoNorm = (cliente.uso || '').toLowerCase();
+    const tipoVehiculoChecks = [
+      { label: 'Moto', on: usoNorm === 'moto' },
+      { label: 'Taxi', on: usoNorm === 'taxi' },
+      { label: 'Pick Up Part.', on: usoNorm === 'pick up' },
+      { label: 'Bus', on: usoNorm === 'bus' },
+      { label: 'Oficial', on: usoNorm === 'oficial' },
+      { label: 'Otros', on: !!usoNorm && !['moto', 'taxi', 'pick up', 'bus', 'oficial'].includes(usoNorm) },
+    ];
+    const inyeccionSi = (cliente.inyeccion || '').toLowerCase().startsWith('s');
+    const cilindroFilas = (eq.cilindros || []).slice(0, 5);
+    const valvulaFilas = (eq.valvulas || []).slice(0, 5);
+    while (cilindroFilas.length < valvulaFilas.length) cilindroFilas.push({});
+    while (valvulaFilas.length < cilindroFilas.length) valvulaFilas.push({});
+
+    return `<div style="width:1000px; min-height:1414px; background:#fff; color:#000; font-family: Arial, Helvetica, sans-serif; box-sizing:border-box; border:2px solid #000; padding:16px; position:relative;">
+      <div style="position:absolute; top:2px; right:10px; font-size:10px; font-weight:bold;">F1</div>
+
+      <!-- Encabezado: PEC + habilitación + oblea -->
+      <div style="display:flex; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:6px;">
+        <div style="flex:2; display:flex; gap:8px;">
+          <div style="width:46px; height:46px; border-radius:50%; background:#1a1a1a; color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:bold; flex-shrink:0;">e</div>
+          <div style="font-size:9px; line-height:1.35;">
+            <div style="font-weight:bold; font-size:11px;">${escapeHtml(tc.pecRazonSocial || 'Razón social del PEC')}</div>
+            <div>${escapeHtml(tc.pecDireccion || '')}</div>
+            <div>${escapeHtml(tc.pecTelefono || '')}</div>
+          </div>
+          <div style="font-size:9px; line-height:1.35; border-left:1px solid #000; padding-left:8px;">
+            <div style="font-size:7.5px;">REPRESENTANTE TÉCNICO</div>
+            <div style="font-weight:bold;">${escapeHtml(tc.pecIngeniero || '')}</div>
+            <div>INGENIERO MECÁNICO</div>
+            <div>Mat. CIPBA ${escapeHtml(tc.pecMatriculaCipba || '')}</div>
+          </div>
+        </div>
+        <div style="flex:1; border-left:1px solid #000; padding-left:8px;">
+          <div style="font-size:8px; text-align:center; font-weight:bold;">Habilitación</div>
+          <div style="font-size:7px; text-align:center;">FECHA</div>
+          <div style="display:flex; gap:3px; justify-content:center;">${[fHab.d, fHab.m, fHab.a].map(v => `<span style="border:1px solid #000; width:22px; height:16px; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:600;">${escapeHtml(v)}</span>`).join('')}</div>
+          <div style="font-size:7px; text-align:center; margin-top:3px;">Vencimiento</div>
+          <div style="display:flex; gap:3px; justify-content:center;">${[fVenc.d, fVenc.m, fVenc.a].map(v => `<span style="border:1px solid #000; width:22px; height:16px; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:600;">${escapeHtml(v)}</span>`).join('')}</div>
+        </div>
+        <div style="flex:1; border-left:1px solid #000; padding-left:8px;">
+          <div style="font-size:8px; text-align:center; font-weight:bold;">N° OBLEA</div>
+          <div style="border-bottom:1px solid #000; min-height:15px; font-size:10px; font-weight:600; text-align:center;">${escapeHtml(tramite.obleaAnterior || '')}</div>
+          <div style="font-size:7px; text-align:center;">Anterior</div>
+          <div style="border-bottom:1px solid #000; min-height:15px; font-size:10px; font-weight:600; text-align:center; margin-top:2px;">${escapeHtml(tramite.obleaNueva || '')}</div>
+          <div style="font-size:7px; text-align:center;">Nuevo</div>
+        </div>
+      </div>
+
+      <!-- F3-USUARIO -->
+      <div style="display:flex; border-bottom:1px solid #000; padding-bottom:6px; margin-bottom:6px;">
+        <div style="width:14px; writing-mode:vertical-rl; transform:rotate(180deg); font-size:7px; font-weight:bold; text-align:center;">F3-USUARIO</div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:3px; padding-left:6px;">
+          ${pecCampo(tc.razonSocial, 'Razón Social Taller', 1)}
+          ${pecCampo(tc.direccion, 'Dirección', 1)}
+          ${pecCampo(tc.cuit, 'N° de C.U.I.T. del TdM', 1)}
+        </div>
+        <div style="width:150px; display:flex; flex-direction:column; gap:3px; padding-left:6px;">
+          <div style="border:1px solid #000; text-align:center; padding:2px;">
+            <div style="font-size:12px; font-weight:bold;">${escapeHtml(tc.codigoPec || '')}</div>
+            <div style="font-size:7px;">CÓDIGO PEC</div>
+          </div>
+          <div style="border:1px solid #000; text-align:center; padding:2px;">
+            <div style="font-size:12px; font-weight:bold;">${escapeHtml(tc.codigoTaller || '')}</div>
+            <div style="font-size:7px;">CÓDIGO TALLER</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VEHICULO / TIPO DE OPERACIÓN -->
+      <div style="display:flex; border-bottom:1px solid #000; padding-bottom:6px; margin-bottom:6px;">
+        <div style="width:14px; writing-mode:vertical-rl; transform:rotate(180deg); font-size:7px; font-weight:bold; text-align:center;">VEHICULO</div>
+        <div style="flex:1; padding-left:6px;">
+          <div style="display:flex; gap:3px;">
+            ${pecCampo(cliente.marca, 'Marca', 1)}
+            ${pecCampo(cliente.modelo, 'Modelo', 1)}
+            ${pecCampo(cliente.anio, 'Año', 1)}
+          </div>
+          <div style="display:flex; gap:3px; margin-top:4px; align-items:flex-end;">
+            ${pecCampo(cliente.patente, 'Dominio', 1)}
+            <div style="flex:1; font-size:9px;">
+              <div>${pecCasillaConLabel(inyeccionSi, 'Sí')}${pecCasillaConLabel(!inyeccionSi, 'No')}</div>
+              <div style="font-size:7px;">Inyección</div>
+            </div>
+            <div style="flex:2; font-size:9px; display:flex; flex-wrap:wrap; gap:2px;">
+              ${tipoVehiculoChecks.map(o => pecCasillaConLabel(o.on, o.label)).join('')}
+              <div style="font-size:7px; width:100%;">Tipo de Vehículo</div>
+            </div>
+          </div>
+        </div>
+        <div style="width:190px; border-left:1px solid #000; padding-left:8px;">
+          <div style="font-size:8px; font-weight:bold; text-align:center;">Tipo de Operación</div>
+          ${[
+            ['conversion', 'CONVERSIÓN', 'C'],
+            ['modificacion', 'MODIFICACIÓN', 'M'],
+            ['revision_anual', 'REVISIÓN ANUAL', 'R'],
+            ['prueba_hidraulica', 'PRUEBA HIDRÁULICA', 'P'],
+            ['baja', 'BAJA', 'B'],
+            ['desmontaje', 'DESMONTAJE', 'D'],
+          ].map(([val, label, letra]) => `<div style="display:flex; justify-content:space-between; font-size:9px; margin-top:1px;"><span>${pecCasilla(tramite.tipo === val)}${label}</span><b>${letra}</b></div>`).join('')}
+        </div>
+      </div>
+
+      <!-- PROPIETARIO -->
+      <div style="display:flex; border-bottom:1px solid #000; padding-bottom:6px; margin-bottom:6px;">
+        <div style="width:14px; writing-mode:vertical-rl; transform:rotate(180deg); font-size:7px; font-weight:bold; text-align:center;">PROPIETARIO</div>
+        <div style="flex:1; padding-left:6px;">
+          <div style="display:flex; gap:3px;">
+            ${pecCampo(cliente.nombre, 'Nombre y Apellido', 3)}
+            ${pecCampo(cliente.domicilio, 'Calle', 2)}
+            ${pecCampo(cliente.numero, 'N°', 1)}
+            ${pecCampo(cliente.piso, 'Piso/Depto', 1)}
+            ${pecCampo(cliente.cpa, 'CPA', 1)}
+          </div>
+          <div style="display:flex; gap:3px; margin-top:4px;">
+            ${pecCampo(cliente.ciudad, 'Localidad', 2)}
+            ${pecCampo(cliente.provincia, 'Provincia', 1)}
+            ${pecCampo(cliente.telefono, 'Teléfono', 1)}
+            ${pecCampo([cliente.tipo_documento, cliente.dni].filter(Boolean).join(' '), 'Tipo y N° de Documento', 2)}
+          </div>
+        </div>
+      </div>
+
+      <!-- F2-TALLER DE MONTAJE: Regulador + accesorios -->
+      <div style="display:flex;">
+        <div style="width:14px; writing-mode:vertical-rl; transform:rotate(180deg); font-size:7px; font-weight:bold; text-align:center;">F2-TALLER DE MONTAJE</div>
+        <div style="flex:1; padding-left:6px;">
+          <div style="display:flex; border-bottom:1px solid #000; padding-bottom:4px;">
+            <div style="width:220px;">
+              <div style="font-size:7.5px; font-weight:600;">Regulador</div>
+              <div style="display:flex; gap:3px;">
+                ${pecCampo(eq.regulador.codigo, 'Código', 1)}
+                ${pecCampo(eq.regulador.serie, 'N° Serie', 1)}
+              </div>
+              <div style="font-size:8px; margin-top:2px;">
+                ${pecCasillaConLabel(eq.regulador.operacion === 'sigue', 'S/Cambio')}
+                ${pecCasillaConLabel(eq.regulador.operacion === 'montaje', 'Montaje')}
+                ${pecCasillaConLabel(eq.regulador.operacion === 'desmontaje', 'Desmontaje')}
+                ${pecCasillaConLabel(eq.regulador.operacion === 'baja', 'Baja')}
+              </div>
+              <div style="font-size:8px;">
+                ${pecCasillaConLabel(eq.regulador.nuevoUsado === 'nuevo', 'Nuevo')}
+                ${pecCasillaConLabel(eq.regulador.nuevoUsado !== 'nuevo', 'Usado')}
+              </div>
+            </div>
+            ${pecAccesorio('Manómetro', eq.otros.manometro.codigo, eq.otros.manometro.serie, 1)}
+            ${pecAccesorio('Accesorio P/Tubería', eq.otros.accesorioTuberia.codigo, eq.otros.accesorioTuberia.serie, 1)}
+            ${pecAccesorio('Tubería alta presión', eq.otros.tuberiaAltaPresion.codigo, eq.otros.tuberiaAltaPresion.serie, 1)}
+          </div>
+
+          <!-- Cilindros / Válvula de Cilindro -->
+          <div style="display:flex; border-bottom:1px solid #000; padding:4px 0;">
+            <div style="flex:3;">
+              <div style="font-size:7.5px; font-weight:600;">Cilindros</div>
+              <table style="width:100%; border-collapse:collapse; font-size:7.5px;">
+                <tr style="font-weight:600; text-align:center;">
+                  <td>Código</td><td>N° Serie</td><td>Capac.</td><td>Nvo/Usado</td><td>Fab. Mes/Año</td><td>Rev. Mes/Año</td><td>CRPC</td><td>M/SC/D/B</td>
+                </tr>
+                ${cilindroFilas.map(c => `<tr style="text-align:center;">
+                  <td style="border-top:1px solid #999; font-weight:600; font-size:9px;">${escapeHtml(c.codigo || '')}</td>
+                  <td style="border-top:1px solid #999; font-weight:600; font-size:9px;">${escapeHtml(c.serie || '')}</td>
+                  <td style="border-top:1px solid #999;"></td>
+                  <td style="border-top:1px solid #999; font-size:8px;">${c.nuevoUsado === 'nuevo' ? 'Nuevo' : (c.codigo || c.serie) ? 'Usado' : ''}</td>
+                  <td style="border-top:1px solid #999; font-size:8px;">${[c.fabricadoMes, c.fabricadoAnio].filter(Boolean).join('/')}</td>
+                  <td style="border-top:1px solid #999; font-size:8px;">${[c.revisadoMes, c.revisadoAnio].filter(Boolean).join('/')}</td>
+                  <td style="border-top:1px solid #999; font-size:8px;">${escapeHtml(c.crpc || '')}</td>
+                  <td style="border-top:1px solid #999; font-weight:600;">${pecOperacionLetra(c.msdb)}</td>
+                </tr>`).join('')}
+              </table>
+            </div>
+            <div style="flex:1; border-left:1px solid #000; padding-left:6px;">
+              <div style="font-size:7.5px; font-weight:600;">Válvula de Cilindro</div>
+              <table style="width:100%; border-collapse:collapse; font-size:7.5px;">
+                <tr style="font-weight:600; text-align:center;"><td>Código</td><td>N° Serie</td><td>M/S/B</td></tr>
+                ${valvulaFilas.map(v => `<tr style="text-align:center;">
+                  <td style="border-top:1px solid #999; font-weight:600; font-size:9px;">${escapeHtml(v.codigo || '')}</td>
+                  <td style="border-top:1px solid #999; font-weight:600; font-size:9px;">${escapeHtml(v.serie || '')}</td>
+                  <td style="border-top:1px solid #999; font-weight:600;">${pecOperacionLetra(v.msb)}</td>
+                </tr>`).join('')}
+              </table>
+            </div>
+          </div>
+
+          <!-- Otros accesorios -->
+          <div style="display:flex; border-bottom:1px solid #000;">
+            ${pecAccesorio('Disp. sujeción cilindro', eq.otros.dispSujecionCilindro.codigo, eq.otros.dispSujecionCilindro.serie, 1)}
+            ${pecAccesorio('Electroválvula Nafta', eq.otros.electrovalvulaNafta.codigo, eq.otros.electrovalvulaNafta.serie, 1)}
+            ${pecAccesorio('Electroválvula GNC', eq.otros.electrovalvulaGnc.codigo, eq.otros.electrovalvulaGnc.serie, 1)}
+            ${pecAccesorio('Dosif./mezclador', eq.otros.dosifMezclador.codigo, eq.otros.dosifMezclador.serie, 1)}
+            ${pecAccesorio('Sistema de venteo', eq.otros.sistemaVenteo.codigo, eq.otros.sistemaVenteo.serie, 1)}
+            ${pecAccesorio('Llave conmutadora', eq.otros.llaveConmutadora.codigo, eq.otros.llaveConmutadora.serie, 1)}
+          </div>
+          <div style="display:flex; border-bottom:1px solid #000; padding-bottom:4px;">
+            ${pecAccesorio('Val. carga interna', eq.otros.valCargaInterna.codigo, eq.otros.valCargaInterna.serie, 1)}
+            ${pecAccesorio('Val. carga externa', eq.otros.valCargaExterna.codigo, eq.otros.valCargaExterna.serie, 1)}
+            ${pecAccesorio('Manguera baja presión', eq.otros.mangueraBajaPresion.codigo, eq.otros.mangueraBajaPresion.serie, 1)}
+            <div style="flex:3; border-left:1px solid #000;"></div>
+          </div>
+
+          <!-- Observaciones -->
+          <div style="margin-top:6px;">
+            <div style="border-bottom:1px solid #000; min-height:16px; font-size:10px;">${escapeHtml(tramite.detalle || '')}</div>
+            <div style="font-size:7px; color:#333;">Observaciones</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Certificaciones -->
+      <div style="display:flex; margin-top:8px;">
+        <div style="width:14px; writing-mode:vertical-rl; transform:rotate(180deg); font-size:6.5px; font-weight:bold; text-align:center;">F1 - PRODUCTOR DE EQUIPOS COMPLETOS</div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:6px; padding-left:6px;">
+          <div style="border:1px solid #000; padding:5px; display:flex; gap:8px;">
+            <div style="flex:2; font-size:7px; color:#333;">
+              <b>Taller de Montaje:</b> CERTIFICO la autenticidad de los datos consignados en esta Ficha Técnica y haber efectuado la operación indicada de acuerdo con el procedimiento y capacitación recibida del PEC habilitante, sobre la base de la normativa vigente.
+            </div>
+            <div style="flex:1; text-align:center; font-size:8px;">
+              <div style="height:28px;"></div>
+              <div style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(tc.tecnicoNombre || '')}</div>
+              <div style="font-size:7px;">Técnico Mecánico — Mat. ${escapeHtml(tc.tecnicoMatricula || '')}</div>
+              <div style="font-size:6px; color:#666;">Firma, aclaración y N° de Mat. del Rep. Téc. del TdM</div>
+            </div>
+          </div>
+          <div style="border:1px solid #000; padding:5px; display:flex; gap:8px;">
+            <div style="flex:2; font-size:7px; color:#333;">
+              <b>Propietario:</b> Tomo conocimiento del vencimiento de la habilitación del equipo de GNC y certifico haber recibido un ejemplar del Manual de instrucción y las Recomendaciones de Seguridad para el uso de vehículos propulsados con GNC (Res. 2768/02). Me notifico de las responsabilidades civiles y/o penales que podrían corresponderme como consecuencia de la eliminación de la etiqueta de identificación. ESTE DOCUMENTO NO HABILITA LA CARGA DE GNC.
+            </div>
+            <div style="flex:1; text-align:center; font-size:8px;">
+              ${firmaDataUrl ? `<img src="${firmaDataUrl}" style="height:28px; max-width:100%;">` : `<div style="height:28px;"></div>`}
+              <div style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(cliente.nombre || '')}</div>
+              <div style="font-size:7px;">${escapeHtml([cliente.tipo_documento, cliente.dni].filter(Boolean).join(' '))}</div>
+              <div style="font-size:6px; color:#666;">Aclaración y N° de Documento</div>
+            </div>
+          </div>
+          <div style="border:1px solid #000; padding:5px; display:flex; gap:8px;">
+            <div style="flex:2; font-size:7px; color:#333;">
+              <b>Productor de Equipos Completos (PEC):</b> CERTIFICO haber corroborado la autenticidad de los datos consignados en esta Ficha Técnica y que la operación indicada se efectuó conforme a la normativa vigente del ENARGAS.
+            </div>
+            <div style="flex:1; text-align:center; font-size:8px;">
+              <div style="height:28px;"></div>
+              <div style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(tc.pecIngeniero || '')}</div>
+              <div style="font-size:7px;">Ingeniero Mecánico — Mat. CIPBA ${escapeHtml(tc.pecMatriculaCipba || '')}</div>
+              <div style="font-size:6px; color:#666;">Firma, aclaración y N° de Mat. del Rep. Téc. del PEC</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // Renderiza pecFormHtml() off-screen, lo rasteriza y arma el PDF final.
+  async function generarPecPdf(cliente, tramite, firmaDataUrl) {
+    await cargarLibreriasPec();
+    const cont = document.createElement('div');
+    cont.style.position = 'fixed';
+    cont.style.left = '-99999px';
+    cont.style.top = '0';
+    cont.innerHTML = pecFormHtml(cliente, tramite, firmaDataUrl);
+    document.body.appendChild(cont);
+    let blob;
+    try {
+      const canvas = await window.html2canvas(cont.firstElementChild, { scale: 2, backgroundColor: '#ffffff' });
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const ratio = canvas.height / canvas.width;
+      let w = pageW, h = pageW * ratio;
+      if (h > pageH) { h = pageH; w = pageH / ratio; }
+      const x = (pageW - w) / 2, y = (pageH - h) / 2;
+      doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', x, y, w, h);
+      blob = doc.output('blob');
+    } finally {
+      document.body.removeChild(cont);
+    }
+    const filename = `PEC_${(cliente.patente || cliente.nombre || 'tramite').replace(/\s+/g, '_')}_${tramite.fecha || ''}.pdf`;
+    return { blob, filename };
+  }
+
+  // Comparte el PDF por WhatsApp: si el celular soporta el "compartir"
+  // nativo con archivos, se abre directo con el PDF adjunto y el contacto
+  // se elige ahí mismo. Si no (ej. en escritorio), se descarga el PDF y se
+  // abre WhatsApp Web con el mensaje ya armado para adjuntarlo a mano.
+  async function compartirPecPdf(blob, filename, cliente) {
+    const mensaje = `Hola! Te comparto la ficha técnica del trámite de GNC de la patente ${cliente.patente || 's/d'} para el PEC.`;
+    const file = new File([blob], filename, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: filename, text: mensaje });
+        return;
+      } catch (e) {
+        if (e && e.name === 'AbortError') return;
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    const pecPhone = cleanPhone(tallerConfig.pecTelefono);
+    window.open(`https://wa.me/${pecPhone}?text=${encodeURIComponent(mensaje + ' (adjuntá el PDF que se acaba de descargar)')}`, '_blank');
   }
 
   function tramiteRow(clienteId, t) {
@@ -1473,6 +1864,12 @@ window.storage = {
         <label>Fecha
           <input type="date" id="t-fecha" value="${t ? escapeHtml(t.fecha) : new Date().toISOString().slice(0,10)}">
         </label>
+        <label>N° Oblea anterior
+          <input type="text" id="t-oblea-anterior" value="${t ? escapeHtml(t.obleaAnterior || '') : ''}" placeholder="Oblea que tenía el vehículo">
+        </label>
+        <label>N° Oblea nueva
+          <input type="text" id="t-oblea-nueva" value="${t ? escapeHtml(t.obleaNueva || '') : ''}" placeholder="Si este trámite entrega una oblea nueva">
+        </label>
       </div>
       <p class="agent-hint">Vehículo: ${escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) || 'sin marca/modelo cargado'} — Patente ${escapeHtml(c.patente || 's/d')}</p>
 
@@ -1561,6 +1958,7 @@ window.storage = {
   }
 
   const OTROS_EQUIPOS_CAMPOS = [
+    { key: 'dispSujecionCilindro', label: 'Disp. sujeción cilindro' },
     { key: 'manometro', label: 'Manómetro' },
     { key: 'accesorioTuberia', label: 'Accesorio P/Tubería' },
     { key: 'tuberiaAltaPresion', label: 'Tubería alta presión' },
@@ -1573,6 +1971,18 @@ window.storage = {
     { key: 'valCargaExterna', label: 'Val. carga externa' },
     { key: 'mangueraBajaPresion', label: 'Manguera baja presión' },
   ];
+
+  // Un trámite guardado antes de agregar un accesorio nuevo a la lista de
+  // arriba (ej. "Disp. sujeción cilindro") no tiene esa clave en su
+  // `equipo.otros` — sin esto, reabrirlo para editar rompería al leer
+  // `eq.otros[esaClave].codigo`.
+  function normalizarEquipoOtros(eq) {
+    if (!eq.otros) eq.otros = {};
+    OTROS_EQUIPOS_CAMPOS.forEach(o => {
+      if (!eq.otros[o.key]) eq.otros[o.key] = { codigo: '', serie: '' };
+    });
+    return eq;
+  }
 
   // Si se pasa `seed` (el último equipo conocido del cliente, cargado por
   // ENARGAS alguna vez), arranca el trámite con esos códigos/series ya
@@ -1954,6 +2364,8 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         codigoPec: root.querySelector('#tc-codigo-pec').value.trim(),
         codigoTaller: root.querySelector('#tc-codigo-taller').value.trim(),
         pecRazonSocial: root.querySelector('#tc-pec-razon-social').value.trim(),
+        pecDireccion: root.querySelector('#tc-pec-direccion').value.trim(),
+        pecTelefono: root.querySelector('#tc-pec-telefono').value.trim(),
         pecIngeniero: root.querySelector('#tc-pec-ingeniero').value.trim(),
         pecMatriculaCipba: root.querySelector('#tc-pec-matricula').value.trim(),
       };
@@ -2037,7 +2449,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         editingId = clienteId; editMode = 'tramite'; addingTramite = true;
         editingTramiteId = tramiteId;
         currentSignature = tramite.firma || null;
-        tramiteDraftEquipo = JSON.parse(JSON.stringify(tramite.equipo || blankEquipo(cliente.ultimoEquipoConocido)));
+        tramiteDraftEquipo = normalizarEquipoOtros(JSON.parse(JSON.stringify(tramite.equipo || blankEquipo(cliente.ultimoEquipoConocido))));
         render();
         const panel = root.querySelector('#form-panel');
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2509,7 +2921,10 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       const estadoPec = estadoForzado || root.querySelector('#t-estado').value;
       const detalle = root.querySelector('#t-detalle').value.trim();
       const motivoIncompleto = estadoPec === 'incompleto' ? root.querySelector('#t-motivo').value.trim() : '';
+      const obleaAnterior = root.querySelector('#t-oblea-anterior').value.trim();
+      const obleaNueva = root.querySelector('#t-oblea-nueva').value.trim();
 
+      let savedId;
       if (editingTramiteId) {
         const tIdx = clientes[idx].tramites.findIndex(t => t.id === editingTramiteId);
         if (tIdx !== -1) {
@@ -2517,13 +2932,17 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
           clientes[idx].tramites[tIdx] = {
             ...prev,
             tipo, fecha, equipo: tramiteDraftEquipo, detalle, estadoPec, motivoIncompleto,
+            obleaAnterior, obleaNueva,
             firma: currentSignature || prev.firma,
           };
+          savedId = prev.id;
         }
       } else {
+        savedId = 't' + Date.now() + Math.random().toString(36).slice(2, 7);
         clientes[idx].tramites.push({
-          id: 't' + Date.now() + Math.random().toString(36).slice(2, 7),
+          id: savedId,
           tipo, fecha, equipo: tramiteDraftEquipo, detalle, estadoPec, motivoIncompleto,
+          obleaAnterior, obleaNueva,
           firma: currentSignature,
           creadoEn: new Date().toISOString(),
         });
@@ -2537,15 +2956,29 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       tramiteDraftEquipo = null;
       editingTramiteId = null;
       render();
+      return savedId;
     }
 
     const btnSaveTramite = root.querySelector('#btn-save-tramite');
     if (btnSaveTramite) btnSaveTramite.addEventListener('click', () => guardarTramite(null));
 
     const btnSendPecTramite = root.querySelector('#btn-send-pec-tramite');
-    if (btnSendPecTramite) btnSendPecTramite.addEventListener('click', () => {
+    if (btnSendPecTramite) btnSendPecTramite.addEventListener('click', async () => {
       if (!currentSignature) { alert('Falta la firma del propietario antes de enviar al PEC.'); return; }
-      guardarTramite('enviado');
+      const clienteId = editingId;
+      const firmaParaPdf = currentSignature;
+      const tramiteId = await guardarTramite('enviado');
+      if (!tramiteId) return;
+      const cliente = clientes.find(c => c.id === clienteId);
+      const tramite = cliente && cliente.tramites.find(t => t.id === tramiteId);
+      if (!cliente || !tramite) return;
+      try {
+        const { blob, filename } = await generarPecPdf(cliente, tramite, firmaParaPdf);
+        await compartirPecPdf(blob, filename, cliente);
+      } catch (e) {
+        console.error(e);
+        alert('El trámite se guardó y se marcó como enviado, pero no se pudo generar el PDF: ' + (e && e.message ? e.message : e));
+      }
     });
 
     root.querySelectorAll('[data-tramite-status]').forEach(sel => {
