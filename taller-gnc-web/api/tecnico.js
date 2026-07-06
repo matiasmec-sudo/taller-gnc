@@ -41,9 +41,14 @@ async function validarTecnico(tecnicoToken) {
   return hash;
 }
 
+// El trim() es defensivo: una clave pegada con un salto de línea al final
+// (pasa fácil al cargar variables por consola) rompe web-push.
+function vapidPublica() { return (process.env.VAPID_PUBLIC_KEY || '').trim(); }
 function configurarPush() {
-  if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return false;
-  webpush.setVapidDetails('mailto:estelitagnc@gmail.com', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+  const pub = vapidPublica();
+  const priv = (process.env.VAPID_PRIVATE_KEY || '').trim();
+  if (!pub || !priv) return false;
+  webpush.setVapidDetails('mailto:estelitagnc@gmail.com', pub, priv);
   return true;
 }
 
@@ -134,7 +139,7 @@ export default async function handler(req, res) {
       tokens.push(secreto);
       await escribirJson(`taller/${hash}/tecnicos.json`, { tokens });
       try { await del(v.url); } catch (e) { /* ya se usó, ok */ }
-      return res.status(200).json({ ok: true, tecnicoToken: `${hash}.${secreto}`, vapidPublicKey: process.env.VAPID_PUBLIC_KEY || null });
+      return res.status(200).json({ ok: true, tecnicoToken: `${hash}.${secreto}`, vapidPublicKey: vapidPublica() || null });
     }
 
     // ---- Acciones del TÉCNICO (requieren su token) ----
