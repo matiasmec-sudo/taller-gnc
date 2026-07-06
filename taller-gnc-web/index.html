@@ -890,10 +890,14 @@ Documentación para realizar la renovación:
     const hoyISO = ahora.toISOString().slice(0, 10);
     if (localStorage.getItem(AVISO_PENDIENTES_KEY) === hoyISO) return;
     const cantidad = pendientesItems().length;
-    if (cantidad === 0) return;
+    const turnosAviso = turnosParaAvisar().length;
+    if (cantidad === 0 && turnosAviso === 0) return;
+    const partes = [];
+    if (cantidad) partes.push(`${cantidad} trámite(s) pendiente(s) de enviar al PEC`);
+    if (turnosAviso) partes.push(`${turnosAviso} turno(s) de hoy o mañana sin recordatorio enviado — mandaselo desde el menú Turnos`);
     try {
       new Notification('Estelita', {
-        body: `Tenés ${cantidad} trámite(s) pendiente(s) de enviar al PEC.`,
+        body: 'Tenés ' + partes.join(' y '),
         icon: 'icon-192.png',
       });
     } catch (e) { /* algunos navegadores no soportan "new Notification" directo */ }
@@ -913,8 +917,102 @@ Documentación para realizar la renovación:
       if (!Array.isArray(c.tramites)) { c.tramites = []; changed = true; }
       if (!c.ultimoAvisoMes || typeof c.ultimoAvisoMes !== 'object') { c.ultimoAvisoMes = {}; changed = true; }
       if (typeof c.notas !== 'string') { c.notas = ''; changed = true; }
+      if (!Array.isArray(c.turnos)) { c.turnos = []; changed = true; }
     });
     return changed;
+  }
+
+  // ---- Turnos ----
+  // La fecha del día se calcula en hora LOCAL (toISOString es UTC y en
+  // Argentina cambia de día a las 21:00 — usarlo acá correría los turnos).
+  function fechaLocalISO(d) {
+    d = d || new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  function mananaISO() {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return fechaLocalISO(d);
+  }
+
+  // Turnos de hoy en adelante, ordenados por fecha y hora.
+  function turnosProximos() {
+    const hoy = fechaLocalISO();
+    const items = [];
+    clientes.forEach(c => (c.turnos || []).forEach(t => {
+      if (t.fecha && t.fecha >= hoy) items.push({ cliente: c, turno: t });
+    }));
+    items.sort((a, b) => (a.turno.fecha + (a.turno.hora || '')).localeCompare(b.turno.fecha + (b.turno.hora || '')));
+    return items;
+  }
+  // El próximo turno de un cliente puntual (para mostrarlo en su tarjeta).
+  function proximoTurnoDe(c) {
+    const hoy = fechaLocalISO();
+    return (c.turnos || []).filter(t => t.fecha && t.fecha >= hoy)
+      .sort((a, b) => (a.fecha + (a.hora || '')).localeCompare(b.fecha + (b.hora || '')))[0] || null;
+  }
+  // Turnos de hoy o mañana a los que todavía no se les mandó el recordatorio.
+  function turnosParaAvisar() {
+    const hoy = fechaLocalISO(), manana = mananaISO();
+    return turnosProximos().filter(({ cliente, turno }) =>
+      !turno.avisoEnviado && cliente.telefono && (turno.fecha === hoy || turno.fecha === manana));
+  }
+
+  function waLinkTurno(cliente, turno) {
+    const phone = cleanPhone(cliente.telefono);
+    const cuando = turno.fecha === fechaLocalISO() ? 'HOY ' + fmtDate(turno.fecha)
+      : turno.fecha === mananaISO() ? 'mañana ' + fmtDate(turno.fecha)
+      : 'el ' + fmtDate(turno.fecha);
+    const lugar = [tallerNombre, tallerConfig.direccion].filter(Boolean).join(', ');
+    const msg = `Hola${cliente.nombre && cliente.nombre !== cliente.patente ? ' ' + cliente.nombre : ''}! Te recordamos tu turno para ${cuando}${turno.hora ? ' a las ' + turno.hora + ' hs' : ''}${turno.motivo ? ' por: ' + turno.motivo : ''} en ${lugar}. ¡Te esperamos!`;
+    return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  }
+
+  // Modal para dar/cambiar un turno (calendario nativo + hora + motivo).
+  function mostrarModalTurno(valores) {
+    valores = valores || {};
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'gnc-modal-overlay';
+      overlay.innerHTML = `
+        <div class="gnc-modal-box">
+          <div class="gnc-modal-title" style="margin-bottom:12px;">${valores.fecha ? 'Cambiar turno' : 'Dar turno'}</div>
+          <div class="form-grid">
+            <label>Fecha
+              <input type="date" id="modal-turno-fecha" value="${escapeHtml(valores.fecha || '')}" min="${fechaLocalISO()}">
+            </label>
+            <label>Hora (opcional)
+              <input type="time" id="modal-turno-hora" value="${escapeHtml(valores.hora || '')}">
+            </label>
+            <label style="grid-column: 1/-1;">Motivo
+              <input type="text" id="modal-turno-motivo" value="${escapeHtml(valores.motivo || '')}" placeholder="Ej: reparación de frenos">
+            </label>
+          </div>
+          <div class="gnc-modal-actions">
+            ${valores.fecha ? '<button type="button" class="btn btn-sm btn-danger-outline" id="modal-turno-borrar">Borrar turno</button>' : ''}
+            <button type="button" class="btn btn-sm btn-ghost" id="modal-turno-cancelar">Cancelar</button>
+            <button type="button" class="btn btn-sm btn-primary" id="modal-turno-guardar">Guardar</button>
+          </div>
+        </div>`;
+      function cerrar(valor) {
+        overlay.classList.add('closing');
+        setTimeout(() => { overlay.remove(); resolve(valor); }, 150);
+      }
+      overlay.querySelector('#modal-turno-cancelar').addEventListener('click', () => cerrar(null));
+      const btnBorrar = overlay.querySelector('#modal-turno-borrar');
+      if (btnBorrar) btnBorrar.addEventListener('click', () => cerrar({ borrar: true }));
+      overlay.querySelector('#modal-turno-guardar').addEventListener('click', () => {
+        const fecha = overlay.querySelector('#modal-turno-fecha').value;
+        if (!fecha) { overlay.querySelector('#modal-turno-fecha').focus(); return; }
+        cerrar({
+          fecha,
+          hora: overlay.querySelector('#modal-turno-hora').value || '',
+          motivo: overlay.querySelector('#modal-turno-motivo').value.trim(),
+        });
+      });
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(null); });
+      document.body.appendChild(overlay);
+    });
   }
 
   const TRAMITE_TIPOS = [
@@ -1387,6 +1485,41 @@ Documentación para realizar la renovación:
   // taller (aunque hoy venga a reparar, no a renovar la oblea) — con
   // patente y teléfono ya entra al circuito de avisos de vencimiento. La
   // documentación se completa después, al iniciar un trámite.
+  // Panel de turnos: los que vienen, agrupados, con el recordatorio de
+  // WhatsApp listo para los de hoy y mañana.
+  function turnosPanel(entrando) {
+    const items = turnosProximos();
+    const hoy = fechaLocalISO(), manana = mananaISO();
+    const grupos = [
+      { titulo: 'Hoy', items: items.filter(i => i.turno.fecha === hoy) },
+      { titulo: 'Mañana', items: items.filter(i => i.turno.fecha === manana) },
+      { titulo: 'Próximos', items: items.filter(i => i.turno.fecha > manana) },
+    ].filter(g => g.items.length);
+    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="turnos-panel">
+      <h2 style="margin-top:0;">Turnos ${infoAyuda('ayuda-turnos')}</h2>
+      ${ayudaBloque('ayuda-turnos', 'Los turnos se agendan desde el alta de un cliente nuevo o con el botón "Turno" de su tarjeta. Para los de hoy y mañana aparece el botón de WhatsApp con el recordatorio ya escrito; una vez enviado queda marcado y no se repite. Estelita también te avisa a vos con la notificación diaria si hay turnos para mañana sin avisar.')}
+      ${grupos.length ? grupos.map(g => `
+        <div class="hist-dia">${g.titulo}</div>
+        <div class="tramites-list">
+          ${g.items.map(({ cliente, turno }) => `
+            <div class="tramite-row">
+              <div>
+                <div class="hist-patente">${escapeHtml(cliente.patente || 'SIN PATENTE')}</div>
+                <div class="hist-tipo">${fmtDate(turno.fecha)}${turno.hora ? ' · ' + escapeHtml(turno.hora) + ' hs' : ''}${turno.motivo ? ' — ' + escapeHtml(turno.motivo) : ''}</div>
+                <div class="hist-nombre">${escapeHtml(cliente.nombre)}${cliente.telefono ? ' · ' + escapeHtml(cliente.telefono) : ''}</div>
+              </div>
+              ${cliente.telefono ? (turno.avisoEnviado
+                ? '<button type="button" class="btn btn-ghost btn-sm" disabled>Aviso enviado</button>'
+                : `<button type="button" class="btn btn-wa btn-sm" data-aviso-turno-cliente="${cliente.id}" data-aviso-turno-id="${turno.id}">Recordar por WhatsApp</button>`) : ''}
+              <button type="button" class="btn btn-trash" data-borrar-turno-cliente="${cliente.id}" data-borrar-turno-id="${turno.id}" title="Borrar turno" aria-label="Borrar turno">${trashSvg()}</button>
+            </div>`).join('')}
+        </div>`).join('') : `<div class="empty">${emptyIconSvg()}No hay turnos agendados. Se agendan desde el alta de un cliente o con el botón "Turno" de su tarjeta.</div>`}
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="btn-close-turnos">Cerrar</button>
+      </div>
+    </div>`;
+  }
+
   function quickAddPanel(entrando) {
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="quick-add-panel">
       <h2>Nuevo cliente</h2>
@@ -1403,6 +1536,19 @@ Documentación para realizar la renovación:
         </label>
         <label>Vencimiento de oblea (si lo sabés)
           <input type="date" id="qa-fecha-oblea">
+        </label>
+      </div>
+      <h3>Turno (opcional)</h3>
+      <p class="scan-sub">Si vino por una reparación o quedó en volver, agendale el turno acá: un día antes vas a poder mandarle el recordatorio por WhatsApp con un toque, y Estelita te avisa a vos.</p>
+      <div class="form-grid">
+        <label>Fecha del turno
+          <input type="date" id="qa-turno-fecha" min="${fechaLocalISO()}">
+        </label>
+        <label>Hora (opcional)
+          <input type="time" id="qa-turno-hora">
+        </label>
+        <label style="grid-column: 1/-1;">Motivo
+          <input type="text" id="qa-turno-motivo" placeholder="Ej: reparación de frenos">
         </label>
       </div>
       <div class="form-actions">
@@ -1729,12 +1875,19 @@ Documentación para realizar la renovación:
             ${c.telefono ? `<a class="btn btn-wa" target="_blank" rel="noopener" href="${waLinkGeneral(c)}">WhatsApp</a>` : ''}
             <button class="btn btn-ghost" data-fotos="${c.id}" ${tieneFotos ? '' : 'disabled title="Este cliente todavía no tiene fotos de documentación guardadas"'}>Documentación</button>
             <button class="btn btn-ghost" data-actualizar="${c.id}">Actualizar datos</button>
+            <button class="btn btn-ghost" data-turno="${c.id}">Turno</button>
             <button class="btn btn-agent" data-tramite="${c.id}">Inicio de trámite</button>
           </div>
         </div>
         <div class="docs">
           ${docRowOblea(c)}
           ${docRowPH(c)}
+          ${(() => {
+            const t = proximoTurnoDe(c);
+            if (!t) return '';
+            const cuando = t.fecha === fechaLocalISO() ? 'HOY' : t.fecha === mananaISO() ? 'Mañana' : fmtDate(t.fecha);
+            return `<div class="doc-row"><span class="doc-label">Turno</span><span class="badge ${t.fecha === fechaLocalISO() ? 'badge-danger' : 'badge-warn'}">${cuando}${t.hora ? ' ' + escapeHtml(t.hora) : ''}${t.motivo ? ' — ' + escapeHtml(t.motivo) : ''}</span></div>`;
+          })()}
         </div>
         <div class="form-actions" style="margin-top:10px;">
           <button type="button" class="btn btn-ghost btn-sm" data-toggle-detalle="${c.id}">${expandido ? 'Ocultar detalle' : `Ver datos y trámites${c.tramites.length ? ` (${c.tramites.length})` : ''}`}</button>
@@ -2893,6 +3046,8 @@ Documentación para realizar la renovación:
   // consultando, '' = no hay copia, texto = fecha de la última copia.
   let showRespaldo = false;
   let respaldoUltima = null;
+  // Panel de turnos (agenda del taller).
+  let showTurnos = false;
   // El asistente en modo "Actualizar datos": muestra solo el paso 1 y
   // guarda los datos del cliente sin crear un trámite (ej. para refrescar
   // el vencimiento de la oblea desde ENARGAS y que el aviso de WhatsApp
@@ -3745,7 +3900,8 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     // (quedaban abajo del formulario y recargaban la pantalla).
     const wizardAbiertoRender = !!(showForm || editing);
     const pendCount = pendientesItems().length;
-    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo;
+    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo || showTurnos;
+    const turnosAvisoCount = turnosParaAvisar().length;
 
     // Para que la animación de entrada de un panel se dispare solo cuando
     // recién se abre — no en cada re-render mientras sigue abierto (ej. al
@@ -3763,11 +3919,13 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       enargasPaste: enargasPasteOpen && !prevPanelState.enargasPaste,
       quickAdd: showQuickAdd && !prevPanelState.quickAdd,
       respaldo: showRespaldo && !prevPanelState.respaldo,
+      turnos: showTurnos && !prevPanelState.turnos,
     };
     prevPanelState = {
       wizard: wizardAbierto, wizardStep, fotos: !!showFotosFor, historial: showHistorial,
       pendientes: showPendientes, bulkImport: showBulkImport, tallerConfig: showTallerConfig,
       enargasPaste: enargasPasteOpen, quickAdd: showQuickAdd, respaldo: showRespaldo,
+      turnos: showTurnos,
     };
 
     root.innerHTML = `
@@ -3775,9 +3933,10 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         <div class="topbar">
           <div class="brand">
             <div class="menu-wrap">
-              <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-menu" style="position:relative;">☰${pendCount ? `<span class="menu-badge">${pendCount}</span>` : ''}</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-menu" style="position:relative;">☰${(pendCount + turnosAvisoCount) ? `<span class="menu-badge">${pendCount + turnosAvisoCount}</span>` : ''}</button>
               ${menuOpen ? `<div class="menu-dropdown">
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-pendientes">Trámites pendientes${pendCount ? ` <span class="menu-badge-inline">${pendCount}</span>` : ''}</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-turnos">Turnos${turnosAvisoCount ? ` <span class="menu-badge-inline">${turnosAvisoCount}</span>` : ''}</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-historial">Historial de trámites</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-import">+ Importar clientes (Excel / cuaderno)</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-export-csv">Exportar CSV</button>
@@ -3813,6 +3972,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         ${showBulkImport ? bulkImportPanel(entrando.bulkImport) : ''}
         ${showHistorial ? historialPanel(entrando.historial) : ''}
         ${showRespaldo ? respaldoPanel(entrando.respaldo) : ''}
+        ${showTurnos ? turnosPanel(entrando.turnos) : ''}
 
         ${showForm || editing ? tramiteWizardPanel(editing, entrando.wizard, entrando.wizardPaso, entrando.enargasPaste) : ''}
         ${showFotosFor ? fotosPanel(clientes.find(c => c.id === showFotosFor), entrando.fotos) : ''}
@@ -3882,6 +4042,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         showHistorial = destino === 'historial' ? !showHistorial : false;
         showTallerConfig = destino === 'config' ? !showTallerConfig : false;
         showRespaldo = false;
+        showTurnos = false;
         menuOpen = false;
         render();
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -4095,12 +4256,23 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         await customAlert(`Ya hay un cliente con la patente ${patente} — te lo dejamos en pantalla. Si querés cambiarle algo, tocá "Actualizar datos".`, 'Cliente existente');
         return;
       }
+      const turnoFecha = root.querySelector('#qa-turno-fecha').value;
+      const turnos = [];
+      if (turnoFecha) {
+        turnos.push({
+          id: 't' + Date.now() + Math.random().toString(36).slice(2, 7),
+          fecha: turnoFecha,
+          hora: root.querySelector('#qa-turno-hora').value || '',
+          motivo: root.querySelector('#qa-turno-motivo').value.trim(),
+          avisoEnviado: false,
+        });
+      }
       clientes.push({
         id: 'c' + Date.now() + Math.random().toString(36).slice(2, 7),
         nombre: nombre || patente, dni: '', domicilio: '', provincia: '', ciudad: '',
         telefono, patente, marca: '', modelo: '',
         tipo_vehiculo: '', uso: '', fecha_oblea: fechaOblea, fecha_crpc: '',
-        tipo_cilindro: '5', notas: '', tramites: [], ultimoAvisoMes: {}
+        tipo_cilindro: '5', notas: '', tramites: [], ultimoAvisoMes: {}, turnos
       });
       await saveClientes();
       showQuickAdd = false;
@@ -4697,6 +4869,71 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         render();
         const panel = root.querySelector('#form-panel');
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+
+    // --- Turnos ---
+    const btnTurnos = root.querySelector('#btn-turnos');
+    if (btnTurnos) btnTurnos.addEventListener('click', () => {
+      menuOpen = false;
+      showHistorial = false; showPendientes = false; showBulkImport = false; showRespaldo = false;
+      showTurnos = !showTurnos;
+      render();
+    });
+    const btnCloseTurnos = root.querySelector('#btn-close-turnos');
+    if (btnCloseTurnos) btnCloseTurnos.addEventListener('click', () => { showTurnos = false; render(); });
+
+    // Dar / cambiar el turno desde la tarjeta del cliente.
+    root.querySelectorAll('[data-turno]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const c = clientes.find(x => x.id === btn.getAttribute('data-turno'));
+        if (!c) return;
+        const actual = proximoTurnoDe(c);
+        const r = await mostrarModalTurno(actual || {});
+        if (!r) return;
+        if (!Array.isArray(c.turnos)) c.turnos = [];
+        if (r.borrar) {
+          if (actual) c.turnos = c.turnos.filter(t => t.id !== actual.id);
+        } else if (actual) {
+          const t = c.turnos.find(t => t.id === actual.id);
+          // Si cambió la fecha, el recordatorio se puede volver a mandar.
+          if (t.fecha !== r.fecha || t.hora !== r.hora) t.avisoEnviado = false;
+          t.fecha = r.fecha; t.hora = r.hora; t.motivo = r.motivo;
+        } else {
+          c.turnos.push({
+            id: 't' + Date.now() + Math.random().toString(36).slice(2, 7),
+            fecha: r.fecha, hora: r.hora, motivo: r.motivo, avisoEnviado: false,
+          });
+        }
+        await saveClientes();
+        render();
+      });
+    });
+
+    // Recordatorio del turno por WhatsApp: un solo envío por turno.
+    root.querySelectorAll('[data-aviso-turno-cliente]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const c = clientes.find(x => x.id === btn.getAttribute('data-aviso-turno-cliente'));
+        if (!c) return;
+        const t = (c.turnos || []).find(x => x.id === btn.getAttribute('data-aviso-turno-id'));
+        if (!t || t.avisoEnviado) return;
+        window.open(waLinkTurno(c, t), '_blank');
+        t.avisoEnviado = true;
+        await saveClientes();
+        render();
+      });
+    });
+
+    root.querySelectorAll('[data-borrar-turno-cliente]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const c = clientes.find(x => x.id === btn.getAttribute('data-borrar-turno-cliente'));
+        if (!c) return;
+        const id = btn.getAttribute('data-borrar-turno-id');
+        const ok = await customConfirm(`¿Borrar el turno de ${c.nombre || c.patente}?`, { titulo: 'Borrar turno', danger: true, okLabel: 'Borrar' });
+        if (!ok) return;
+        c.turnos = (c.turnos || []).filter(t => t.id !== id);
+        await saveClientes();
+        render();
       });
     });
 
