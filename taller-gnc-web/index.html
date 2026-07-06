@@ -840,13 +840,16 @@ Documentación para realizar la renovación:
       tallerConfig = res3 ? { ...TALLER_CONFIG_DEFAULT, ...JSON.parse(res3.value) } : { ...TALLER_CONFIG_DEFAULT };
     } catch (e) { tallerConfig = { ...TALLER_CONFIG_DEFAULT }; }
     migrarPecsConfig(tallerConfig);
-    if (migrateClientes()) await saveClientes();
+    if (migrateClientes()) await saveClientes(false);
+    tomarSnapshotClientes();
+    syncUltima = localStorage.getItem(SYNC_ULTIMA_KEY);
     try {
       const listado = await window.storage.list('fotos:');
       clientesConFotos = new Set((listado.keys || []).map(k => k.slice('fotos:'.length)));
     } catch (e) { clientesConFotos = new Set(); }
     ready = true;
     render();
+    if (syncActiva()) sincronizar('apertura');
     iniciarAvisoPendientesDiario();
     // En segundo plano: saber si hay técnicos vinculados (muestra u oculta
     // el botón "Enviar al técnico" del paso 1).
@@ -944,7 +947,40 @@ Documentación para realizar la renovación:
     return list.slice().sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''))[0];
   }
 
-  async function saveClientes() {
+  // --- Detección centralizada de cambios para la sincronización ---
+  // En vez de perseguir cada lugar que modifica un cliente, saveClientes()
+  // compara cada cliente contra una foto del último guardado y les pone
+  // fecha de modificación (actualizadoEn) solo a los que cambiaron. La
+  // sincronización usa esa fecha para decidir qué versión gana.
+  let clientesSnapshot = {};
+  function claveComparacion(c) {
+    const { actualizadoEn, ...resto } = c;
+    return JSON.stringify(resto);
+  }
+  function tomarSnapshotClientes() {
+    clientesSnapshot = {};
+    clientes.forEach(c => { clientesSnapshot[c.id] = claveComparacion(c); });
+  }
+  function marcarClientesModificados() {
+    const ahora = new Date().toISOString();
+    let alguno = false;
+    clientes.forEach(c => {
+      if (clientesSnapshot[c.id] !== claveComparacion(c)) {
+        c.actualizadoEn = ahora;
+        alguno = true;
+      }
+    });
+    if (alguno) tomarSnapshotClientes();
+    return alguno;
+  }
+
+  async function saveClientes(bumpTs) {
+    if (bumpTs !== false) {
+      const cambio = marcarClientesModificados();
+      if (cambio) programarSync('cambios guardados');
+    } else {
+      tomarSnapshotClientes();
+    }
     try { await window.storage.set(STORAGE_KEY, JSON.stringify(clientes), false); }
     catch (e) { console.error('Error guardando clientes', e); }
   }
@@ -954,9 +990,26 @@ Documentación para realizar la renovación:
     catch (e) { console.error('Error guardando nombre del taller', e); }
   }
 
-  async function saveTallerConfig() {
+  async function saveTallerConfig(bumpTs) {
+    if (bumpTs !== false) {
+      tallerConfig.actualizadoEn = new Date().toISOString();
+      programarSync('config guardada');
+    }
     try { await window.storage.set(TALLER_CONFIG_KEY, JSON.stringify(tallerConfig), false); }
     catch (e) { console.error('Error guardando configuración del taller', e); }
+  }
+
+  // Lápidas de clientes eliminados: sin esto, la sincronización volvería a
+  // "resucitar" en este equipo a un cliente borrado en el otro.
+  const TOMBSTONES_KEY = 'gnc_eliminados_v1';
+  function leerTombstones() {
+    try { return JSON.parse(localStorage.getItem(TOMBSTONES_KEY) || '[]'); } catch (e) { return []; }
+  }
+  function registrarEliminado(id) {
+    const t = leerTombstones();
+    t.push({ id, en: new Date().toISOString() });
+    try { localStorage.setItem(TOMBSTONES_KEY, JSON.stringify(t)); } catch (e) { /* ok */ }
+    programarSync('cliente eliminado');
   }
 
   function computeCounts() {
@@ -1127,6 +1180,15 @@ Documentación para realizar la renovación:
         <button type="button" class="btn btn-ghost" id="btn-close-respaldo">Cerrar</button>
       </div>
       <div id="respaldo-status"></div>
+      <h3>Sincronización automática ${infoAyuda('ayuda-sync')}</h3>
+      ${ayudaBloque('ayuda-sync', 'Mantiene emparejados tus dispositivos (celular y computadora) a través de la nube cifrada: se sincroniza al abrir la app, después de cada cambio y cada 5 minutos. Activala en cada dispositivo con el mismo código de licencia y la misma clave. Si se modificó el mismo cliente en dos aparatos, queda la versión más reciente. Los clientes eliminados en un equipo también se eliminan en el otro.')}
+      <div class="agent-hint" id="sync-estado">${escapeHtml(textoEstadoSync())}</div>
+      <div class="form-actions" style="margin-top:6px;">
+        ${syncActiva()
+          ? `<button type="button" class="btn btn-primary btn-sm" id="btn-sync-ahora">Sincronizar ahora</button>
+             <button type="button" class="btn btn-ghost btn-sm" id="btn-sync-off">Desactivar</button>`
+          : `<button type="button" class="btn btn-primary btn-sm" id="btn-sync-on">Activar en este equipo</button>`}
+      </div>
     </div>`;
   }
 
@@ -3181,6 +3243,167 @@ Documentación para realizar la renovación:
     catch (e) { return iso || ''; }
   }
 
+  // ---- Sincronización automática entre dispositivos ----
+  // Usa la misma nube cifrada del respaldo. La clave se recuerda en cada
+  // dispositivo (se ingresa una sola vez al activar); el servidor sigue
+  // viendo únicamente paquetes cifrados. El merge es por cliente: gana la
+  // versión con fecha de modificación más nueva, y los eliminados se
+  // propagan con lápidas para que no "resuciten" en el otro equipo.
+  const SYNC_CLAVE_KEY = 'gnc_respaldo_clave_v1';
+  const SYNC_ON_KEY = 'gnc_sync_on_v1';
+  const SYNC_ULTIMA_KEY = 'gnc_sync_ultima_v1';
+  let syncUltima = null;
+  let syncEstado = '';
+  let sincronizando = false;
+  let syncTimer = null;
+
+  function syncActiva() {
+    return localStorage.getItem(SYNC_ON_KEY) === '1' && !!localStorage.getItem(SYNC_CLAVE_KEY);
+  }
+
+  // Debounce: varios guardados seguidos disparan UNA sincronización.
+  function programarSync(motivo) {
+    if (!syncActiva()) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => sincronizar(motivo), 8000);
+  }
+
+  function textoEstadoSync() {
+    if (!syncActiva()) return 'Sincronización automática: desactivada. Activala acá y en tus otros dispositivos (mismo código de licencia y misma clave) para que los datos se emparejen solos.';
+    if (sincronizando) return 'Sincronizando...';
+    if (syncEstado) return syncEstado;
+    return syncUltima ? 'Sincronizado por última vez: ' + fmtFechaHora(syncUltima) : 'Sincronización activada.';
+  }
+  function actualizarEstadoSyncUI() {
+    const el = root.querySelector('#sync-estado');
+    if (el) el.textContent = textoEstadoSync();
+  }
+
+  async function sincronizar(motivo) {
+    if (!syncActiva() || sincronizando || !ready) return;
+    sincronizando = true;
+    syncEstado = '';
+    actualizarEstadoSyncUI();
+    const clave = localStorage.getItem(SYNC_CLAVE_KEY);
+    try {
+      // 1) Bajar el estado remoto (si existe) y descifrarlo.
+      let bajada = null;
+      try {
+        bajada = await apiRespaldo({ accion: 'bajar', nombre: 'datos.json' });
+      } catch (e) {
+        if (!/ninguna copia/i.test(e.message || '')) throw e;
+      }
+      let remoto = null;
+      if (bajada) {
+        try { remoto = await descifrarRespaldo(bajada.contenido, clave); }
+        catch (e) { throw new Error('CLAVE'); }
+      }
+
+      // 2) Combinar lápidas de eliminados de ambos lados.
+      const tumbas = {};
+      leerTombstones().concat((remoto && remoto.eliminados) || []).forEach(t => {
+        if (t && t.id && (!tumbas[t.id] || tumbas[t.id] < t.en)) tumbas[t.id] = t.en;
+      });
+
+      // 3) Merge por cliente: gana la fecha de modificación más nueva.
+      const ts = c => (c && (c.actualizadoEn || c.creadoEn)) || '';
+      const porId = {};
+      clientes.forEach(c => { porId[c.id] = { local: c }; });
+      ((remoto && remoto.clientes) || []).forEach(c => { (porId[c.id] = porId[c.id] || {}).remoto = c; });
+
+      const fusionados = [];
+      const bajarFotosDe = [];
+      const subirFotosDe = [];
+      let cambioLocal = false;
+      let cambioRemoto = !remoto;
+      Object.entries(porId).forEach(([id, par]) => {
+        const mejor = !par.remoto ? par.local : (!par.local ? par.remoto : (ts(par.remoto) > ts(par.local) ? par.remoto : par.local));
+        if (tumbas[id] && tumbas[id] >= ts(mejor)) {
+          if (par.local) cambioLocal = true;
+          if (par.remoto) cambioRemoto = true;
+          return;
+        }
+        fusionados.push(mejor);
+        if (mejor !== par.local) cambioLocal = true;
+        if (mejor !== par.remoto) cambioRemoto = true;
+        const fL = (par.local && par.local.fotosTs) || '';
+        const fR = (par.remoto && par.remoto.fotosTs) || '';
+        if (fR > fL) bajarFotosDe.push(id);
+        else if (fL > fR) subirFotosDe.push(id);
+      });
+
+      // 4) Configuración del taller: gana la más nueva.
+      const tsCfgLocal = tallerConfig.actualizadoEn || '';
+      const tsCfgRemoto = (remoto && remoto.tallerConfig && remoto.tallerConfig.actualizadoEn) || '';
+      if (tsCfgRemoto > tsCfgLocal) {
+        tallerConfig = migrarPecsConfig({ ...TALLER_CONFIG_DEFAULT, ...remoto.tallerConfig });
+        if (remoto.tallerNombre) { tallerNombre = remoto.tallerNombre; await saveTaller(); }
+        await saveTallerConfig(false);
+        cambioLocal = true;
+      } else if (tsCfgLocal > tsCfgRemoto) {
+        cambioRemoto = true;
+      }
+
+      // 5) Aplicar el resultado local.
+      if (cambioLocal) {
+        clientes = fusionados;
+        await saveClientes(false);
+      }
+
+      // 6) Fotos: bajar las más nuevas del otro equipo, subir las nuestras.
+      for (const id of bajarFotosDe) {
+        try {
+          const b = await apiRespaldo({ accion: 'bajar', nombre: `fotos-${id}.json` });
+          const fotos = await descifrarRespaldo(b.contenido, clave);
+          await window.storage.set(`fotos:${id}`, JSON.stringify(fotos), false);
+          clientesConFotos.add(id);
+        } catch (e) { /* puede no haberse subido todavía: la próxima pasada la trae */ }
+      }
+      for (const id of subirFotosDe) {
+        const fotos = await fotosGuardadas(id);
+        if (fotos.foto1 || fotos.foto2) {
+          await apiRespaldo({ accion: 'subir', nombre: `fotos-${id}.json`, contenido: await cifrarParaRespaldo(fotos, clave) });
+        }
+      }
+
+      // 7) Subir el estado combinado si el remoto quedó desactualizado.
+      const tumbasLista = Object.entries(tumbas).map(([id, en]) => ({ id, en }))
+        .filter(t => (Date.now() - new Date(t.en).getTime()) < 90 * 24 * 3600 * 1000);
+      if (cambioRemoto) {
+        const datos = { v: 2, guardadoEn: new Date().toISOString(), tallerNombre, tallerConfig, clientes, eliminados: tumbasLista };
+        await apiRespaldo({ accion: 'subir', nombre: 'datos.json', contenido: await cifrarParaRespaldo(datos, clave) });
+      }
+      try { localStorage.setItem(TOMBSTONES_KEY, JSON.stringify(tumbasLista)); } catch (e) { /* ok */ }
+
+      syncUltima = new Date().toISOString();
+      try { localStorage.setItem(SYNC_ULTIMA_KEY, syncUltima); } catch (e) { /* ok */ }
+      // Redibujar solo si cambió algo y no hay un trámite a medias en pantalla.
+      if (cambioLocal && !showForm && !editingId) render();
+      else actualizarEstadoSyncUI();
+    } catch (e) {
+      if (e && e.message === 'CLAVE') {
+        syncEstado = 'La clave guardada en este equipo no abre la copia de la nube. Desactivá la sincronización y activala de nuevo con la clave correcta.';
+      } else {
+        syncEstado = 'Sin conexión con la nube — se vuelve a intentar solo.';
+      }
+      actualizarEstadoSyncUI();
+    } finally {
+      sincronizando = false;
+      actualizarEstadoSyncUI();
+    }
+  }
+
+  // Pasadas periódicas y al volver a la app (con el debounce de guardados
+  // esto mantiene los dispositivos emparejados sin que nadie toque nada).
+  setInterval(() => { if (ready && syncActiva()) sincronizar('periodico'); }, 5 * 60 * 1000);
+  let ultimoSyncPorFoco = 0;
+  window.addEventListener('focus', () => {
+    if (!ready || !syncActiva()) return;
+    if (Date.now() - ultimoSyncPorFoco < 60 * 1000) return;
+    ultimoSyncPorFoco = Date.now();
+    sincronizar('foco');
+  });
+
   // ---- App del técnico (revisión previa al envío al PEC) ----
   // Checklist de normativa que ve el técnico (definido acá: se manda dentro
   // de cada revisión, así la app del técnico no necesita actualizarse si
@@ -3941,6 +4164,49 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     const btnCloseRespaldo = root.querySelector('#btn-close-respaldo');
     if (btnCloseRespaldo) btnCloseRespaldo.addEventListener('click', () => { showRespaldo = false; render(); });
 
+    // --- Sincronización automática ---
+    const btnSyncOn = root.querySelector('#btn-sync-on');
+    if (btnSyncOn) btnSyncOn.addEventListener('click', async () => {
+      const clave = (root.querySelector('#respaldo-clave').value || '');
+      if (clave.trim().length < 4) {
+        await customAlert('Escribí arriba la clave de la copia (la misma en todos tus dispositivos) y volvé a tocar "Activar". Si es la primera vez, elegí una clave de al menos 4 caracteres y anotala.');
+        return;
+      }
+      btnSyncOn.disabled = true;
+      try {
+        // Si ya hay una copia en la nube, la clave tiene que poder abrirla.
+        let bajada = null;
+        try { bajada = await apiRespaldo({ accion: 'bajar', nombre: 'datos.json' }); }
+        catch (e) { if (!/ninguna copia/i.test(e.message || '')) throw e; }
+        if (bajada) {
+          try { await descifrarRespaldo(bajada.contenido, clave); }
+          catch (e) {
+            await customAlert('Esa clave no abre la copia que ya está en la nube. Usá la misma clave que pusiste en el otro dispositivo.');
+            return;
+          }
+        }
+        localStorage.setItem(SYNC_CLAVE_KEY, clave);
+        localStorage.setItem(SYNC_ON_KEY, '1');
+        render();
+        sincronizar('activacion');
+      } catch (e) {
+        await customAlert('No se pudo activar: ' + (e.message || e));
+      } finally {
+        btnSyncOn.disabled = false;
+      }
+    });
+
+    const btnSyncOff = root.querySelector('#btn-sync-off');
+    if (btnSyncOff) btnSyncOff.addEventListener('click', async () => {
+      const ok = await customConfirm('La sincronización se desactiva solo en este equipo (los datos ya sincronizados quedan). ¿Desactivar?', { titulo: 'Sincronización', okLabel: 'Desactivar' });
+      if (!ok) return;
+      localStorage.removeItem(SYNC_ON_KEY);
+      render();
+    });
+
+    const btnSyncAhora = root.querySelector('#btn-sync-ahora');
+    if (btnSyncAhora) btnSyncAhora.addEventListener('click', () => sincronizar('manual'));
+
     function respaldoStatus(clase, texto) {
       const el = root.querySelector('#respaldo-status');
       if (el) { el.className = 'agent-result ' + clase; el.textContent = texto; }
@@ -3959,7 +4225,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       respaldoBotones(true);
       try {
         respaldoStatus('', 'Cifrando y subiendo los datos del taller...');
-        const datos = { v: 1, guardadoEn: new Date().toISOString(), tallerNombre, tallerConfig, clientes };
+        const datos = { v: 2, guardadoEn: new Date().toISOString(), tallerNombre, tallerConfig, clientes, eliminados: leerTombstones() };
         await apiRespaldo({ accion: 'subir', nombre: 'datos.json', contenido: await cifrarParaRespaldo(datos, clave) });
         const vigentes = ['datos.json'];
         const ids = Array.from(clientesConFotos);
@@ -3973,6 +4239,9 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         }
         // Borrar de la nube lo que ya no corresponde (ej. clientes eliminados).
         await apiRespaldo({ accion: 'depurar', vigentes });
+        // Recordar la clave en este equipo: sirve para activar la
+        // sincronización automática sin volver a escribirla.
+        try { localStorage.setItem(SYNC_CLAVE_KEY, clave); } catch (e3) { /* ok */ }
         respaldoUltima = fmtFechaHora(new Date().toISOString());
         const hint = root.querySelector('#respaldo-ultima');
         if (hint) hint.textContent = 'Última copia guardada: ' + respaldoUltima;
@@ -4025,6 +4294,8 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
           await window.storage.set(`fotos:${id}`, JSON.stringify(fotos), false);
           clientesConFotos.add(id);
         }
+        try { localStorage.setItem(SYNC_CLAVE_KEY, clave); } catch (e4) { /* ok */ }
+        tomarSnapshotClientes();
         render();
         await customAlert(`Listo: se recuperaron ${clientes.length} cliente(s) y ${archivosFotos.length} con fotos desde la copia de la nube.`, 'Copia recuperada');
       } catch (e) {
@@ -4456,6 +4727,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         if (editingId === id) cerrarWizard();
         if (showFotosFor === id) showFotosFor = null;
         await saveClientes();
+        registrarEliminado(id);
         try { await window.storage.delete(`fotos:${id}`, false); } catch (e) { /* no tenía fotos, ok */ }
         clientesConFotos.delete(id);
       }
@@ -4816,6 +5088,10 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         if (anyPhoto) {
           await window.storage.set(`fotos:${clientId}`, JSON.stringify(scanFiles), false);
           clientesConFotos.add(clientId);
+          // Marca de tiempo de las fotos: la sincronización la usa para
+          // saber qué dispositivo tiene la versión más nueva.
+          const cFoto = clientes.find(x => x.id === clientId);
+          if (cFoto) cFoto.fotosTs = new Date().toISOString();
         } else {
           try { await window.storage.delete(`fotos:${clientId}`, false); } catch (e) { /* no existía, ok */ }
           clientesConFotos.delete(clientId);
