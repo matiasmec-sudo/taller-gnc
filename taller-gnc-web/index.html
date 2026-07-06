@@ -422,6 +422,10 @@ window.storage = {
 #gnc-app .hist-patente { font-family: var(--display); font-weight: 800; font-size: 18px; letter-spacing: 1px; }
 #gnc-app .hist-tipo { font-size: 13.5px; font-weight: 700; margin-top: 1px; }
 #gnc-app .hist-nombre { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+/* Bloques de PEC en la configuración del taller (puede haber varios). */
+#gnc-app .pec-bloque { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; background: var(--surface); }
+#gnc-app .pec-bloque-titulo { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 800; margin-bottom: 8px; color: var(--flame); }
+#gnc-app .pec-bloque-titulo .btn-trash { margin-left: 8px; }
 #gnc-app .client-detalle-grid {
   display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 16px; font-size: 12px; margin-bottom: 10px;
 }
@@ -558,8 +562,38 @@ window.storage = {
     razonSocial: '', direccion: '', horario: '', cuit: '',
     tecnicoNombre: '', tecnicoMatricula: '',
     codigoPec: '', codigoTaller: '',
-    pecRazonSocial: '', pecDireccion: '', pecTelefono: '', pecIngeniero: '', pecMatriculaCipba: ''
+    pecRazonSocial: '', pecDireccion: '', pecTelefono: '', pecIngeniero: '', pecMatriculaCipba: '',
+    // Lista de PECs del taller (algunos talleres trabajan con más de uno).
+    // Los campos pec* planos de arriba quedan como espejo del primer PEC
+    // por compatibilidad con datos ya guardados.
+    pecs: []
   };
+
+  function blankPec() {
+    return { codigoPec: '', razonSocial: '', direccion: '', telefono: '', ingeniero: '', matriculaCipba: '' };
+  }
+
+  // Migra la config vieja (un solo PEC en campos planos) a la lista pecs.
+  function migrarPecsConfig(tc) {
+    if (!Array.isArray(tc.pecs)) tc.pecs = [];
+    if (!tc.pecs.length && (tc.pecRazonSocial || tc.codigoPec || tc.pecTelefono || tc.pecIngeniero || tc.pecDireccion)) {
+      tc.pecs.push({
+        codigoPec: tc.codigoPec || '', razonSocial: tc.pecRazonSocial || '',
+        direccion: tc.pecDireccion || '', telefono: tc.pecTelefono || '',
+        ingeniero: tc.pecIngeniero || '', matriculaCipba: tc.pecMatriculaCipba || '',
+      });
+    }
+    if (!tc.pecs.length) tc.pecs.push(blankPec());
+    return tc;
+  }
+
+  // PEC al que corresponde un trámite (elegido al iniciarlo). Si el trámite
+  // es viejo y no tiene pecIndex, se usa el primero.
+  function pecDeTramite(tramite) {
+    const pecs = (tallerConfig.pecs && tallerConfig.pecs.length) ? tallerConfig.pecs : [blankPec()];
+    const i = tramite && Number.isInteger(tramite.pecIndex) ? tramite.pecIndex : 0;
+    return pecs[i] || pecs[0];
+  }
 
   let clientes = [];
   let tallerNombre = 'Mi Taller GNC';
@@ -760,6 +794,7 @@ Documentación para realizar la renovación:
       const res3 = await window.storage.get(TALLER_CONFIG_KEY, false);
       tallerConfig = res3 ? { ...TALLER_CONFIG_DEFAULT, ...JSON.parse(res3.value) } : { ...TALLER_CONFIG_DEFAULT };
     } catch (e) { tallerConfig = { ...TALLER_CONFIG_DEFAULT }; }
+    migrarPecsConfig(tallerConfig);
     if (migrateClientes()) await saveClientes();
     try {
       const listado = await window.storage.list('fotos:');
@@ -1356,6 +1391,10 @@ Documentación para realizar la renovación:
   // completa (se sacó del paso 3). Devuelve {tipo, fecha} o null si se
   // cancela (en ese caso no se abre el asistente).
   function mostrarModalTipoFecha(valoresIniciales) {
+    // Si el taller trabaja con más de un PEC, acá también se elige a cuál
+    // se envía este trámite (con uno solo no hace falta preguntar).
+    const pecs = tallerConfig.pecs || [];
+    const pecInicial = Number.isInteger(valoresIniciales.pecIndex) ? valoresIniciales.pecIndex : 0;
     return new Promise(resolve => {
       const overlay = document.createElement('div');
       overlay.className = 'gnc-modal-overlay';
@@ -1371,6 +1410,11 @@ Documentación para realizar la renovación:
             <label>Fecha
               <input type="date" id="modal-t-fecha" value="${escapeHtml(valoresIniciales.fecha)}">
             </label>
+            ${pecs.length > 1 ? `<label>Enviar al PEC
+              <select id="modal-t-pec">
+                ${pecs.map((p, i) => `<option value="${i}" ${pecInicial === i ? 'selected' : ''}>${escapeHtml(p.razonSocial || p.codigoPec || ('PEC ' + (i + 1)))}</option>`).join('')}
+              </select>
+            </label>` : ''}
           </div>
           <div class="gnc-modal-actions">
             <button type="button" class="btn btn-sm btn-ghost" id="modal-t-cancelar">Cancelar</button>
@@ -1385,7 +1429,9 @@ Documentación para realizar la renovación:
       overlay.querySelector('#modal-t-continuar').addEventListener('click', () => {
         const tipo = overlay.querySelector('#modal-t-tipo').value;
         const fecha = overlay.querySelector('#modal-t-fecha').value || valoresIniciales.fecha;
-        cerrar({ tipo, fecha });
+        const selPec = overlay.querySelector('#modal-t-pec');
+        const pecIndex = selPec ? Number(selPec.value) : pecInicial;
+        cerrar({ tipo, fecha, pecIndex });
       });
       overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(null); });
       document.body.appendChild(overlay);
@@ -1866,32 +1912,67 @@ Documentación para realizar la renovación:
           <input type="text" id="tc-codigo-taller" value="${escapeHtml(t.codigoTaller)}" placeholder="Ej: LET0238">
         </label>
       </div>
-      <h3>Productor de Equipos Completos (PEC)</h3>
-      <div class="form-grid">
-        <label>Código PEC
-          <input type="text" id="tc-codigo-pec" value="${escapeHtml(t.codigoPec)}" placeholder="Ej: 3441">
-        </label>
-        <label>Razón Social del PEC
-          <input type="text" id="tc-pec-razon-social" value="${escapeHtml(t.pecRazonSocial)}" placeholder="Ej: 752 T.L.MDQ Argentina S.A.">
-        </label>
-        <label>Dirección del PEC
-          <input type="text" id="tc-pec-direccion" value="${escapeHtml(t.pecDireccion)}" placeholder="Ej: Talcahuano 752, Mar del Plata, Bs. As.">
-        </label>
-        <label>Teléfono del PEC
-          <input type="text" id="tc-pec-telefono" value="${escapeHtml(t.pecTelefono)}" placeholder="Ej: (0223) 481-0414">
-        </label>
-        <label>Ingeniero responsable del PEC
-          <input type="text" id="tc-pec-ingeniero" value="${escapeHtml(t.pecIngeniero)}" placeholder="Ej: Nestor Ariel Breitman">
-        </label>
-        <label>Matrícula CIPBA del ingeniero
-          <input type="text" id="tc-pec-matricula" value="${escapeHtml(t.pecMatriculaCipba)}" placeholder="Ej: 54.526">
-        </label>
+      <h3>Productores de Equipos Completos (PEC) ${infoAyuda('ayuda-pecs')}</h3>
+      ${ayudaBloque('ayuda-pecs', 'Si tu taller trabaja con más de un PEC, agregalos acá. Al iniciar cada trámite vas a poder elegir a cuál se envía la ficha técnica, y el WhatsApp va a salir directo al teléfono de ese PEC.')}
+      ${(t.pecs || []).map((p, i) => `
+      <div class="pec-bloque">
+        <div class="pec-bloque-titulo">
+          <span>PEC ${i + 1}${p.razonSocial ? ' — ' + escapeHtml(p.razonSocial) : ''}</span>
+          ${t.pecs.length > 1 ? `<button type="button" class="btn btn-trash btn-sm" data-remove-pec="${i}" title="Quitar este PEC" aria-label="Quitar este PEC">${trashSvg()}</button>` : ''}
+        </div>
+        <div class="form-grid">
+          <label>Código PEC
+            <input type="text" id="tc-pec-codigo-${i}" value="${escapeHtml(p.codigoPec)}" placeholder="Ej: 3441">
+          </label>
+          <label>Razón Social del PEC
+            <input type="text" id="tc-pec-razon-social-${i}" value="${escapeHtml(p.razonSocial)}" placeholder="Ej: 752 T.L.MDQ Argentina S.A.">
+          </label>
+          <label>Dirección del PEC
+            <input type="text" id="tc-pec-direccion-${i}" value="${escapeHtml(p.direccion)}" placeholder="Ej: Talcahuano 752, Mar del Plata, Bs. As.">
+          </label>
+          <label>Teléfono del PEC (WhatsApp al que se envían las fichas)
+            <input type="text" id="tc-pec-telefono-${i}" value="${escapeHtml(p.telefono)}" placeholder="Ej: 2234810414">
+          </label>
+          <label>Ingeniero responsable del PEC
+            <input type="text" id="tc-pec-ingeniero-${i}" value="${escapeHtml(p.ingeniero)}" placeholder="Ej: Nestor Ariel Breitman">
+          </label>
+          <label>Matrícula CIPBA del ingeniero
+            <input type="text" id="tc-pec-matricula-${i}" value="${escapeHtml(p.matriculaCipba)}" placeholder="Ej: 54.526">
+          </label>
+        </div>
+      </div>`).join('')}
+      <div class="form-actions" style="margin-top:4px;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-add-pec">+ Agregar PEC</button>
       </div>
       <div class="form-actions">
         <button class="btn btn-primary" id="btn-save-taller-config">Guardar configuración</button>
         <button class="btn btn-ghost" id="btn-cancel-taller-config">Cerrar</button>
       </div>
     </div>`;
+  }
+
+  // Vuelca lo tipeado en el panel de configuración al objeto en memoria —
+  // necesario antes de cualquier render() con el panel abierto (agregar o
+  // quitar un PEC redibuja el formulario y sin esto pisaría lo tipeado).
+  function syncTallerConfigFromDOM() {
+    const el = id => root.querySelector('#' + id);
+    if (!el('tc-razon-social')) return; // el panel no está en pantalla
+    tallerConfig.razonSocial = el('tc-razon-social').value;
+    tallerConfig.direccion = el('tc-direccion').value;
+    tallerConfig.horario = el('tc-horario').value;
+    tallerConfig.cuit = el('tc-cuit').value;
+    tallerConfig.tecnicoNombre = el('tc-tecnico-nombre').value;
+    tallerConfig.tecnicoMatricula = el('tc-tecnico-matricula').value;
+    tallerConfig.codigoTaller = el('tc-codigo-taller').value;
+    (tallerConfig.pecs || []).forEach((p, i) => {
+      if (!el(`tc-pec-codigo-${i}`)) return;
+      p.codigoPec = el(`tc-pec-codigo-${i}`).value;
+      p.razonSocial = el(`tc-pec-razon-social-${i}`).value;
+      p.direccion = el(`tc-pec-direccion-${i}`).value;
+      p.telefono = el(`tc-pec-telefono-${i}`).value;
+      p.ingeniero = el(`tc-pec-ingeniero-${i}`).value;
+      p.matriculaCipba = el(`tc-pec-matricula-${i}`).value;
+    });
   }
 
   function blankClienteBase() {
@@ -2142,6 +2223,8 @@ Documentación para realizar la renovación:
   // arma con CSS normal en vez de calcular coordenadas a mano con jsPDF.
   function pecFormHtml(cliente, tramite, firmaDataUrl) {
     const tc = tallerConfig;
+    // Datos del PEC elegido para este trámite (puede haber varios).
+    const pec = pecDeTramite(tramite);
     const eq = tramite.equipo || blankEquipo(null);
     const fVenc = pecPartesFecha(pecFechaMasUnAnio(tramite.fecha));
     const fHab = pecPartesFecha(tramite.fecha);
@@ -2171,15 +2254,15 @@ Documentación para realizar la renovación:
         <div style="flex:2; display:flex; gap:8px;">
           <div style="width:46px; height:46px; border-radius:50%; background:#1a1a1a; color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:bold; flex-shrink:0;">e</div>
           <div style="font-size:9px; line-height:1.35;">
-            <div style="font-weight:bold; font-size:11px;">${escapeHtml(tc.pecRazonSocial || 'Razón social del PEC')}</div>
-            <div>${escapeHtml(tc.pecDireccion || '')}</div>
-            <div>${escapeHtml(tc.pecTelefono || '')}</div>
+            <div style="font-weight:bold; font-size:11px;">${escapeHtml(pec.razonSocial || 'Razón social del PEC')}</div>
+            <div>${escapeHtml(pec.direccion || '')}</div>
+            <div>${escapeHtml(pec.telefono || '')}</div>
           </div>
           <div style="font-size:9px; line-height:1.35; border-left:1px solid #000; padding-left:8px;">
             <div style="font-size:7.5px;">REPRESENTANTE TÉCNICO</div>
-            <div style="font-weight:bold;">${escapeHtml(tc.pecIngeniero || '')}</div>
+            <div style="font-weight:bold;">${escapeHtml(pec.ingeniero || '')}</div>
             <div>INGENIERO MECÁNICO</div>
-            <div>Mat. CIPBA ${escapeHtml(tc.pecMatriculaCipba || '')}</div>
+            <div>Mat. CIPBA ${escapeHtml(pec.matriculaCipba || '')}</div>
           </div>
         </div>
         <div style="flex:1; border-left:1px solid #000; padding-left:8px;">
@@ -2208,7 +2291,7 @@ Documentación para realizar la renovación:
         </div>
         <div style="width:150px; display:flex; flex-direction:column; gap:3px; padding-left:6px;">
           <div style="border:1px solid #000; text-align:center; padding:2px;">
-            <div style="font-size:12px; font-weight:bold;">${escapeHtml(tc.codigoPec || '')}</div>
+            <div style="font-size:12px; font-weight:bold;">${escapeHtml(pec.codigoPec || '')}</div>
             <div style="font-size:7px;">CÓDIGO PEC</div>
           </div>
           <div style="border:1px solid #000; text-align:center; padding:2px;">
@@ -2388,8 +2471,8 @@ Documentación para realizar la renovación:
             </div>
             <div style="flex:1; text-align:center; font-size:8px;">
               <div style="height:28px;"></div>
-              <div style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(tc.pecIngeniero || '')}</div>
-              <div style="font-size:7px;">Ingeniero Mecánico — Mat. CIPBA ${escapeHtml(tc.pecMatriculaCipba || '')}</div>
+              <div style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(pec.ingeniero || '')}</div>
+              <div style="font-size:7px;">Ingeniero Mecánico — Mat. CIPBA ${escapeHtml(pec.matriculaCipba || '')}</div>
               <div style="font-size:6px; color:#666;">Firma, aclaración y N° Matrícula del Representante Técnico del PEC</div>
             </div>
           </div>
@@ -2471,9 +2554,32 @@ Documentación para realizar la renovación:
   // nativo con archivos, se abre directo con el PDF adjunto y el contacto
   // se elige ahí mismo. Si no (ej. en escritorio), se descarga el PDF y se
   // abre WhatsApp Web con el mensaje ya armado para adjuntarlo a mano.
-  async function compartirPecPdf(blob, filename, cliente, fotosIncluidas) {
+  function descargarBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  // Envío del PDF al PEC del trámite. Si ese PEC tiene teléfono cargado, el
+  // chat de WhatsApp se abre DIRECTO con ese número (pedido del usuario: que
+  // vaya al número del PEC, sin elegir contacto a mano) — el PDF se descarga
+  // primero y queda como el archivo más reciente al tocar adjuntar →
+  // Documento. Si no hay teléfono, se usa el compartir del sistema.
+  async function compartirPecPdf(blob, filename, cliente, fotosIncluidas, pec) {
     const notaFotos = fotosIncluidas ? ' Incluye las fotos de la documentación.' : '';
     const mensaje = `Hola! Te comparto la ficha técnica del trámite de GNC de la patente ${cliente.patente || 's/d'} para el PEC.${notaFotos}`;
+    const pecPhone = cleanPhone(pec && pec.telefono);
+    if (pecPhone) {
+      descargarBlob(blob, filename);
+      await customAlert('El PDF ya se descargó. Se va a abrir el chat de WhatsApp del PEC: tocá el clip (adjuntar) → "Documento" → es el primer archivo de la lista, y envialo.', 'Enviar al PEC');
+      window.open(`https://wa.me/${pecPhone}?text=${encodeURIComponent(mensaje)}`, '_blank');
+      return;
+    }
     const file = new File([blob], filename, { type: 'application/pdf' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
@@ -2483,16 +2589,8 @@ Documentación para realizar la renovación:
         if (e && e.name === 'AbortError') return;
       }
     }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 30000);
-    const pecPhone = cleanPhone(tallerConfig.pecTelefono);
-    window.open(`https://wa.me/${pecPhone}?text=${encodeURIComponent(mensaje + ' (adjuntá el PDF que se acaba de descargar)')}`, '_blank');
+    descargarBlob(blob, filename);
+    window.open(`https://wa.me/?text=${encodeURIComponent(mensaje + ' (adjuntá el PDF que se acaba de descargar)')}`, '_blank');
   }
 
   function tramiteRow(clienteId, t) {
@@ -2783,6 +2881,7 @@ Documentación para realizar la renovación:
       motivo: (t && t.motivoIncompleto) || '',
       obleaAnterior: (t && t.obleaAnterior) || '',
       obleaNueva: (t && t.obleaNueva) || '',
+      pecIndex: (t && Number.isInteger(t.pecIndex)) ? t.pecIndex : 0,
     };
   }
   const TRAMITE_DRAFT_CAMPOS_IDS = {
@@ -3156,6 +3255,10 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     const counts = computeCounts();
     const list = currentQuery.trim() ? sortedFiltered(currentQuery) : [];
     const editing = editingId ? clientes.find(c => c.id === editingId) : null;
+    // Con el asistente abierto, la pantalla se dedica solo al trámite: se
+    // ocultan los chips de resumen, el buscador y las tarjetas de clientes
+    // (quedaban abajo del formulario y recargaban la pantalla).
+    const wizardAbiertoRender = !!(showForm || editing);
     const pendCount = pendientesItems().length;
     const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd;
 
@@ -3202,22 +3305,22 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
           </div>
         </div>
 
-        <div class="resumen-chips">
+        ${wizardAbiertoRender ? '' : `<div class="resumen-chips">
           <div class="chip chip-danger"><div class="chip-num">${counts.danger}</div><div class="chip-lbl">Vencidos</div></div>
           <div class="chip chip-warn"><div class="chip-num">${counts.warn}</div><div class="chip-lbl">Por vencer (${WARN_DAYS}d)</div></div>
           <div class="chip chip-ok"><div class="chip-num">${counts.ok}</div><div class="chip-lbl">Al día</div></div>
-        </div>
+        </div>`}
 
         ${showTallerConfig ? tallerConfigPanel(entrando.tallerConfig) : ''}
         ${reminderBanner()}
         ${showPendientes ? pendientesPanel(entrando.pendientes) : ''}
 
-        <div class="controls">
+        ${wizardAbiertoRender ? '' : `<div class="controls">
           <input class="search-input" type="text" id="search-input" placeholder="Buscar por nombre o patente..." value="${escapeHtml(currentQuery)}">
           <button type="button" class="btn btn-primary search-lupa" id="btn-buscar" title="Buscar" aria-label="Buscar"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
           <button class="btn btn-primary" id="btn-new">+ Nuevo cliente</button>
           <button type="button" class="btn btn-ghost" id="btn-enargas-directo" title="Abrir la consulta por dominio de ENARGAS">ENARGAS ↗</button>
-        </div>
+        </div>`}
 
         ${showQuickAdd ? quickAddPanel(entrando.quickAdd) : ''}
         ${showBulkImport ? bulkImportPanel(entrando.bulkImport) : ''}
@@ -3226,7 +3329,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         ${showForm || editing ? tramiteWizardPanel(editing, entrando.wizard, entrando.wizardPaso, entrando.enargasPaste) : ''}
         ${showFotosFor ? fotosPanel(clientes.find(c => c.id === showFotosFor), entrando.fotos) : ''}
 
-        ${list.length === 0
+        ${wizardAbiertoRender ? '' : list.length === 0
           ? `<div class="empty">${emptyIconSvg()}${
               clientes.length === 0
                 ? 'Todavía no cargaste clientes. Sumá el primero con "+ Nuevo cliente".'
@@ -3316,24 +3419,49 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
     const btnSaveTallerConfig = root.querySelector('#btn-save-taller-config');
     if (btnSaveTallerConfig) btnSaveTallerConfig.addEventListener('click', async () => {
+      syncTallerConfigFromDOM();
+      const pecs = (tallerConfig.pecs || []).map(p => ({
+        codigoPec: (p.codigoPec || '').trim(), razonSocial: (p.razonSocial || '').trim(),
+        direccion: (p.direccion || '').trim(), telefono: (p.telefono || '').trim(),
+        ingeniero: (p.ingeniero || '').trim(), matriculaCipba: (p.matriculaCipba || '').trim(),
+      }));
+      const p0 = pecs[0] || blankPec();
       tallerConfig = {
-        razonSocial: root.querySelector('#tc-razon-social').value.trim(),
-        direccion: root.querySelector('#tc-direccion').value.trim(),
-        horario: root.querySelector('#tc-horario').value.trim(),
-        cuit: root.querySelector('#tc-cuit').value.trim(),
-        tecnicoNombre: root.querySelector('#tc-tecnico-nombre').value.trim(),
-        tecnicoMatricula: root.querySelector('#tc-tecnico-matricula').value.trim(),
-        codigoPec: root.querySelector('#tc-codigo-pec').value.trim(),
-        codigoTaller: root.querySelector('#tc-codigo-taller').value.trim(),
-        pecRazonSocial: root.querySelector('#tc-pec-razon-social').value.trim(),
-        pecDireccion: root.querySelector('#tc-pec-direccion').value.trim(),
-        pecTelefono: root.querySelector('#tc-pec-telefono').value.trim(),
-        pecIngeniero: root.querySelector('#tc-pec-ingeniero').value.trim(),
-        pecMatriculaCipba: root.querySelector('#tc-pec-matricula').value.trim(),
+        razonSocial: (tallerConfig.razonSocial || '').trim(),
+        direccion: (tallerConfig.direccion || '').trim(),
+        horario: (tallerConfig.horario || '').trim(),
+        cuit: (tallerConfig.cuit || '').trim(),
+        tecnicoNombre: (tallerConfig.tecnicoNombre || '').trim(),
+        tecnicoMatricula: (tallerConfig.tecnicoMatricula || '').trim(),
+        codigoTaller: (tallerConfig.codigoTaller || '').trim(),
+        // Campos planos = espejo del primer PEC, por compatibilidad con
+        // datos y funciones anteriores a la lista de PECs.
+        codigoPec: p0.codigoPec, pecRazonSocial: p0.razonSocial, pecDireccion: p0.direccion,
+        pecTelefono: p0.telefono, pecIngeniero: p0.ingeniero, pecMatriculaCipba: p0.matriculaCipba,
+        pecs,
       };
       await saveTallerConfig();
       showTallerConfig = false;
       render();
+    });
+
+    const btnAddPec = root.querySelector('#btn-add-pec');
+    if (btnAddPec) btnAddPec.addEventListener('click', () => {
+      syncTallerConfigFromDOM();
+      tallerConfig.pecs.push(blankPec());
+      render();
+    });
+
+    root.querySelectorAll('[data-remove-pec]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        syncTallerConfigFromDOM();
+        const i = Number(btn.getAttribute('data-remove-pec'));
+        const p = tallerConfig.pecs[i];
+        const ok = await customConfirm(`¿Quitar el PEC ${p && p.razonSocial ? '"' + p.razonSocial + '"' : i + 1}? Los trámites ya enviados no se modifican.`, { titulo: 'Quitar PEC', danger: true, okLabel: 'Quitar' });
+        if (!ok) return;
+        if (tallerConfig.pecs.length > 1) tallerConfig.pecs.splice(i, 1);
+        render();
+      });
     });
 
     const btnChangeLicense = root.querySelector('#btn-change-license');
@@ -3388,6 +3516,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       tramiteDraftCampos = blankTramiteCampos(null);
       tramiteDraftCampos.tipo = elegido.tipo;
       tramiteDraftCampos.fecha = elegido.fecha;
+      tramiteDraftCampos.pecIndex = elegido.pecIndex || 0;
       editingTramiteId = null;
       wizardStep = 1;
       currentSignature = null;
@@ -3538,7 +3667,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         if (!cliente) return;
         const tramite = cliente.tramites.find(t => t.id === tramiteId);
         if (!tramite) return;
-        const elegido = await mostrarModalTipoFecha({ tipo: tramite.tipo, fecha: tramite.fecha });
+        const elegido = await mostrarModalTipoFecha({ tipo: tramite.tipo, fecha: tramite.fecha, pecIndex: tramite.pecIndex });
         if (!elegido) return;
         showHistorial = false; showForm = false; showBulkImport = false; showPendientes = false; menuOpen = false;
         editingId = clienteId;
@@ -3558,6 +3687,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         tramiteDraftCampos = blankTramiteCampos(tramite);
         tramiteDraftCampos.tipo = elegido.tipo;
         tramiteDraftCampos.fecha = elegido.fecha;
+        tramiteDraftCampos.pecIndex = Number.isInteger(elegido.pecIndex) ? elegido.pecIndex : (tramite.pecIndex || 0);
         render();
         const panel = root.querySelector('#form-panel');
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -3873,6 +4003,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         tramiteDraftCampos = blankTramiteCampos(null);
         tramiteDraftCampos.tipo = elegido.tipo;
         tramiteDraftCampos.fecha = elegido.fecha;
+        tramiteDraftCampos.pecIndex = elegido.pecIndex || 0;
         render();
         const panel = root.querySelector('#form-panel');
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -4304,6 +4435,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
             ...prev,
             tipo, fecha, equipo: tramiteDraftEquipo, detalle, estadoPec, motivoIncompleto,
             obleaAnterior, obleaNueva,
+            pecIndex: (tramiteDraftCampos && Number.isInteger(tramiteDraftCampos.pecIndex)) ? tramiteDraftCampos.pecIndex : (prev.pecIndex || 0),
             firma: currentSignature || prev.firma,
           };
           savedTramiteId = prev.id;
@@ -4314,6 +4446,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
           id: savedTramiteId,
           tipo, fecha, equipo: tramiteDraftEquipo, detalle, estadoPec, motivoIncompleto,
           obleaAnterior, obleaNueva,
+          pecIndex: (tramiteDraftCampos && Number.isInteger(tramiteDraftCampos.pecIndex)) ? tramiteDraftCampos.pecIndex : 0,
           firma: currentSignature,
           creadoEn: new Date().toISOString(),
         });
@@ -4359,7 +4492,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       if (!cliente || !tramite) return;
       try {
         const { blob, filename, fotosIncluidas } = await generarPecPdf(cliente, tramite, firmaParaPdf);
-        await compartirPecPdf(blob, filename, cliente, fotosIncluidas);
+        await compartirPecPdf(blob, filename, cliente, fotosIncluidas, pecDeTramite(tramite));
       } catch (e) {
         console.error(e);
         await customAlert('El trámite se guardó y se marcó como enviado, pero no se pudo generar el PDF: ' + (e && e.message ? e.message : e));
