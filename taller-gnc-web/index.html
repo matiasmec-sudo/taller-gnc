@@ -2459,6 +2459,9 @@ Documentación para realizar la renovación:
     if (eq.regulador && (eq.regulador.codigo || eq.regulador.serie)) {
       partes.push(`Regulador ${[eq.regulador.codigo, eq.regulador.serie].filter(Boolean).join('/')}`);
     }
+    if (eq.reguladorBaja && (eq.reguladorBaja.codigo || eq.reguladorBaja.serie)) {
+      partes.push(`Regulador BAJA ${[eq.reguladorBaja.codigo, eq.reguladorBaja.serie].filter(Boolean).join('/')}`);
+    }
     (eq.cilindros || []).forEach(cil => {
       if (cil.codigo || cil.serie) partes.push(`Cilindro ${[cil.codigo, cil.serie].filter(Boolean).join('/')}`);
     });
@@ -2701,7 +2704,7 @@ Documentación para realizar la renovación:
                 ${pecCasillaConLabel(eq.regulador.operacion === 'sigue', 'S/Cambio')}
                 ${pecCasillaConLabel(eq.regulador.operacion === 'montaje', 'Montaje')}
                 ${pecCasillaConLabel(eq.regulador.operacion === 'desmontaje', 'Desmontaje')}
-                ${pecCasillaConLabel(eq.regulador.operacion === 'baja', 'Baja')}
+                ${pecCasillaConLabel(eq.regulador.operacion === 'baja' || !!eq.reguladorBaja, 'Baja')}
               </div>
               <div style="font-size:8px;">
                 ${pecCasillaConLabel(eq.regulador.nuevoUsado === 'nuevo', 'Nuevo')}
@@ -2761,9 +2764,15 @@ Documentación para realizar la renovación:
             <div style="flex:3; border-left:1px solid #000;"></div>
           </div>
 
-          <!-- Observaciones -->
+          <!-- Observaciones (con el detalle del regulador dado de baja, si
+               hubo reemplazo: el recuadro de arriba lleva el nuevo) -->
           <div style="margin-top:6px;">
-            <div class="pec-valor" style="border-bottom:1px solid #000; min-height:16px; font-size:10px;">${escapeHtml(tramite.detalle || '')}</div>
+            <div class="pec-valor" style="border-bottom:1px solid #000; min-height:16px; font-size:10px;">${escapeHtml([
+              tramite.detalle || '',
+              (eq.reguladorBaja && (eq.reguladorBaja.codigo || eq.reguladorBaja.serie))
+                ? `Se da de BAJA regulador ${[eq.reguladorBaja.codigo, eq.reguladorBaja.serie ? 'serie ' + eq.reguladorBaja.serie : ''].filter(Boolean).join(' ')}`
+                : ''
+            ].filter(Boolean).join(' — '))}</div>
             <div style="font-size:7px; color:#333;">Observaciones</div>
           </div>
         </div>
@@ -3002,7 +3011,21 @@ Documentación para realizar la renovación:
           </select>
         </label>
         ${operacionSelect('eq-regulador-operacion', eq.regulador.operacion)}
-      </div>`;
+      </div>
+      ${eq.reguladorBaja ? `
+      <div class="equipo-grupo" style="border:1px dashed var(--danger); border-radius:10px; padding:10px; margin-top:8px;">
+        <div style="font-size:12.5px; font-weight:700; color:var(--danger); margin-bottom:6px;">Regulador dado de BAJA (el que se retira del vehículo)</div>
+        <div class="equipo-fila">
+          <label>Código<input type="text" id="eq-regbaja-codigo" value="${escapeHtml(eq.reguladorBaja.codigo || '')}"></label>
+          <label>N° Serie<input type="text" id="eq-regbaja-serie" value="${escapeHtml(eq.reguladorBaja.serie || '')}"></label>
+        </div>
+        <div class="form-actions" style="margin-top:8px;">
+          <button type="button" class="btn btn-danger-outline btn-sm" id="btn-quitar-regulador-baja">Deshacer el reemplazo</button>
+        </div>
+      </div>` : `
+      <div class="form-actions" style="margin-top:6px;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-reemplazar-regulador">Reemplazar regulador (dar de baja el actual)</button>
+      </div>`}`;
   }
 
   function cilindroRow(i, cil) {
@@ -3336,6 +3359,9 @@ Documentación para realizar la renovación:
     const vals = (seed && seed.valvulas && seed.valvulas.length) ? seed.valvulas : [{}];
     return {
       regulador: { codigo: (reg && reg.codigo) || '', serie: (reg && reg.serie) || '', nuevoUsado: (reg && reg.nuevoUsado) || 'usado', operacion: '' },
+      // Regulador que se retira del vehículo en un reemplazo (Modificación).
+      // null = no hay reemplazo de regulador en este trámite.
+      reguladorBaja: null,
       cilindros: cils.map(c => ({
         codigo: c.codigo || '', serie: c.serie || '', periodicidad: c.periodicidad || '5',
         nuevoUsado: c.nuevoUsado || 'usado', fabricadoMes: c.fabricadoMes || '', fabricadoAnio: c.fabricadoAnio || '',
@@ -3350,6 +3376,7 @@ Documentación para realizar la renovación:
   function equipoTieneBaja(eq) {
     if (!eq) return false;
     if (eq.regulador.operacion === 'baja') return true;
+    if (eq.reguladorBaja) return true;
     if (eq.cilindros.some(c => c.msdb === 'baja')) return true;
     if (eq.valvulas.some(v => v.msb === 'baja')) return true;
     return false;
@@ -3369,6 +3396,11 @@ Documentación para realizar la renovación:
       codigo: val('#eq-regulador-codigo'), serie: val('#eq-regulador-serie'), nuevoUsado: val('#eq-regulador-nuevousado') || 'usado',
       operacion: val('#eq-regulador-operacion'),
     };
+    if (tramiteDraftEquipo.reguladorBaja && root.querySelector('#eq-regbaja-codigo')) {
+      tramiteDraftEquipo.reguladorBaja = {
+        codigo: val('#eq-regbaja-codigo'), serie: val('#eq-regbaja-serie'), operacion: 'baja',
+      };
+    }
     tramiteDraftEquipo.cilindros = tramiteDraftEquipo.cilindros.map((_, i) => ({
       codigo: val(`#eq-cil-codigo-${i}`), serie: val(`#eq-cil-serie-${i}`), periodicidad: val(`#eq-cil-periodicidad-${i}`) || '5',
       nuevoUsado: val(`#eq-cil-nuevousado-${i}`) || 'usado',
@@ -3695,6 +3727,9 @@ Documentación para realizar la renovación:
     const componentes = [];
     if (eq.regulador && (eq.regulador.codigo || eq.regulador.serie)) {
       componentes.push({ nombre: 'Regulador ' + (eq.regulador.codigo || ''), detalle: 'Serie ' + (eq.regulador.serie || 's/d') });
+    }
+    if (eq.reguladorBaja && (eq.reguladorBaja.codigo || eq.reguladorBaja.serie)) {
+      componentes.push({ nombre: 'Regulador dado de BAJA ' + (eq.reguladorBaja.codigo || ''), detalle: 'Serie ' + (eq.reguladorBaja.serie || 's/d') + ' (verificar que se retira)' });
     }
     (eq.cilindros || []).forEach((cil, i) => {
       if (cil.codigo || cil.serie) componentes.push({ nombre: `Cilindro ${i + 1} ${cil.codigo || ''}`, detalle: `Serie ${cil.serie || 's/d'}${cil.crpc ? ' · CRPC ' + cil.crpc : ''}` });
@@ -5305,6 +5340,37 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
     }
 
 
+    // Reemplazo de regulador (Modificación): el actual pasa al bloque de
+    // BAJA y el principal queda listo para cargar el regulador nuevo.
+    const btnReemplazarRegulador = root.querySelector('#btn-reemplazar-regulador');
+    if (btnReemplazarRegulador) btnReemplazarRegulador.addEventListener('click', () => {
+      syncEquipoFromDOM();
+      syncTramiteCamposFromDOM();
+      tramiteDraftEquipo.reguladorBaja = {
+        codigo: tramiteDraftEquipo.regulador.codigo,
+        serie: tramiteDraftEquipo.regulador.serie,
+        operacion: 'baja',
+      };
+      tramiteDraftEquipo.regulador = { codigo: '', serie: '', nuevoUsado: 'nuevo', operacion: 'montaje' };
+      render();
+    });
+
+    const btnQuitarReguladorBaja = root.querySelector('#btn-quitar-regulador-baja');
+    if (btnQuitarReguladorBaja) btnQuitarReguladorBaja.addEventListener('click', () => {
+      syncEquipoFromDOM();
+      syncTramiteCamposFromDOM();
+      // Si todavía no se cargó el regulador nuevo, se restaura el que estaba.
+      if (!tramiteDraftEquipo.regulador.codigo && !tramiteDraftEquipo.regulador.serie) {
+        tramiteDraftEquipo.regulador = {
+          codigo: tramiteDraftEquipo.reguladorBaja.codigo,
+          serie: tramiteDraftEquipo.reguladorBaja.serie,
+          nuevoUsado: 'usado', operacion: '',
+        };
+      }
+      tramiteDraftEquipo.reguladorBaja = null;
+      render();
+    });
+
     const btnAddCilindro = root.querySelector('#btn-add-cilindro');
     if (btnAddCilindro) btnAddCilindro.addEventListener('click', () => {
       syncEquipoFromDOM();
@@ -5360,9 +5426,43 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       const fecha = tramiteDraftCampos.fecha;
       if (!fecha) { await customAlert('Poné una fecha para el trámite.'); return; }
 
+      // Una MODIFICACIÓN es un reemplazo: exige un componente dado de BAJA
+      // y su reemplazo en MONTAJE, del mismo tipo (cilindro por cilindro,
+      // regulador por regulador). Sin eso no se puede guardar ni enviar.
+      if (tipo === 'modificacion') {
+        const eq = tramiteDraftEquipo;
+        const parRegulador = !!eq.reguladorBaja && eq.regulador.operacion === 'montaje';
+        const parCilindro = eq.cilindros.some(c => c.msdb === 'baja') && eq.cilindros.some(c => c.msdb === 'montaje');
+        if (!parRegulador && !parCilindro) {
+          const eleccion = await mostrarModal({
+            titulo: 'Modificación incompleta',
+            mensaje: 'Una Modificación es un reemplazo: necesita un componente dado de BAJA y su reemplazo en MONTAJE, del mismo tipo (cilindro por cilindro, regulador por regulador). Para el regulador, usá el botón "Reemplazar regulador" del paso 2; para el cilindro, marcá el viejo en Baja y agregá el nuevo en Montaje. Si en realidad no es una modificación, cambiá el tipo de trámite.',
+            danger: true,
+            botones: [
+              { label: 'Cambiar tipo de trámite', value: 'tipo', variant: 'ghost' },
+              { label: 'Corregir el equipo', value: 'corregir', variant: 'primary' },
+            ],
+          });
+          if (eleccion === 'tipo') {
+            const elegido = await mostrarModalTipoFecha({ tipo, fecha, pecIndex: tramiteDraftCampos.pecIndex });
+            if (elegido) {
+              tramiteDraftCampos.tipo = elegido.tipo;
+              tramiteDraftCampos.fecha = elegido.fecha;
+              if (Number.isInteger(elegido.pecIndex)) tramiteDraftCampos.pecIndex = elegido.pecIndex;
+              render();
+            }
+          } else if (eleccion === 'corregir') {
+            wizardStep = 2;
+            render();
+          }
+          return;
+        }
+      }
+
       if (equipoTieneBaja(tramiteDraftEquipo)) {
         const partes = [];
         if (tramiteDraftEquipo.regulador.operacion === 'baja') partes.push('Regulador');
+        if (tramiteDraftEquipo.reguladorBaja) partes.push(`Regulador ${[tramiteDraftEquipo.reguladorBaja.codigo, tramiteDraftEquipo.reguladorBaja.serie].filter(Boolean).join(' ') || '(reemplazado)'}`);
         tramiteDraftEquipo.cilindros.forEach((c, i) => { if (c.msdb === 'baja') partes.push(`Cilindro ${i + 1}`); });
         tramiteDraftEquipo.valvulas.forEach((v, i) => { if (v.msb === 'baja') partes.push(`Válvula ${i + 1}`); });
         const ok = await customConfirm(`Atención TDM: vas a dar de BAJA — ${partes.join(', ')}. ¿Confirmás que querés continuar con el trámite?`, { titulo: 'Confirmar baja', danger: true, okLabel: 'Continuar' });
