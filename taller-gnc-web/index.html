@@ -2823,41 +2823,174 @@ Documentación para realizar la renovación:
     </div>`;
   }
 
-  // PDF de "solo datos" para imprimir sobre la planilla preimpresa: misma
-  // geometría que la planilla completa, pero solo se ven los datos cargados
-  // (los casilleros ya están en el papel). Sin firma dibujada: en el papel
-  // firma el cliente a mano.
+  // --- Impresión "solo datos" sobre la planilla PREIMPRESA de PecMar ---
+  // A diferencia del PDF completo (que rasteriza nuestra réplica), acá cada
+  // dato se escribe como TEXTO directo del PDF en una coordenada fija en
+  // milímetros, medida sobre la planilla física de PecMar (foto del
+  // usuario, hoja A4). Si un campo cae corrido en la impresora, se corrige
+  // su número acá — y los ajustes globales de la configuración corren todo
+  // junto. Los datos que la planilla ya trae impresos (PEC, ingeniero,
+  // técnico) no se escriben.
+  const PECMAR_MAPA = {
+    // Taller (TdM)
+    tallerRazonSocial: { x: 40, y: 53 },
+    tallerDireccion: { x: 40, y: 61 },
+    tallerCuit: { x: 46, y: 69 },
+    codigoTaller: { x: 168, y: 47, size: 11 },
+    // Fecha (dd mm aa en casilleros separados) y oblea
+    fechaHab: { xs: [121, 133, 145], y: 28 },
+    fechaVenc: { xs: [121, 133, 145], y: 39 },
+    obleaAnterior: { x: 170, y: 25 },
+    obleaNueva: { x: 170, y: 37 },
+    // Vehículo
+    marca: { x: 25, y: 68 },
+    modelo: { x: 85, y: 68 },
+    anio: { x: 140, y: 68 },
+    dominio: { x: 25, y: 79 },
+    inyeccionSi: { x: 63, y: 78 },
+    inyeccionNo: { x: 71, y: 78 },
+    tipoVehiculo: { xs: { moto: 88, taxi: 96, 'pick up': 106, bus: 118, oficial: 125, otros: 133 }, y: 78 },
+    // Tipo de operación (casillas de la derecha)
+    tipoOperacion: {
+      conversion: { x: 196, y: 63 }, modificacion: { x: 196, y: 67.5 },
+      revision_anual: { x: 196, y: 72 }, prueba_hidraulica: { x: 196, y: 76.5 },
+      desmontaje: { x: 196, y: 81 }, baja: { x: 163, y: 78 },
+    },
+    // Propietario
+    propNombre: { x: 25, y: 88 },
+    propCalle: { x: 103, y: 88 },
+    propCpa: { x: 179, y: 88 },
+    propLocalidad: { x: 28, y: 96 },
+    propProvincia: { x: 88, y: 96 },
+    propTelefono: { x: 122, y: 96 },
+    propDocumento: { x: 160, y: 96 },
+    // Regulador: el código y la serie van EN LA COLUMNA de la operación
+    // (S/Cambio, Montaje, Desmontaje o Baja) — así la PecMar muestra el
+    // reemplazo completo: el nuevo en Montaje y el viejo en Baja.
+    reguladorColX: { sigue: 25, montaje: 46, desmontaje: 67, baja: 87 },
+    reguladorCodigoY: 112,
+    reguladorSerieY: 118.5,
+    reguladorNuevo: { x: 104, y: 112 },
+    reguladorUsado: { x: 113, y: 112 },
+    // Manómetro / Accesorio P/Tubería / Tubería alta presión
+    manometro: { codX: 139, serieX: 133, codY: 111.5, serieY: 118.5 },
+    accesorioTuberia: { codX: 168, serieX: 162, codY: 111.5, serieY: 118.5 },
+    tuberiaAltaPresion: { codX: 196, serieX: 190, codY: 111.5, serieY: 118.5 },
+    // Cilindros (4 filas) y válvulas
+    cilindroYs: [133, 140.5, 148, 155.5],
+    cilindroCols: { codigo: 12, serie: 38, nuevo: 70, usado: 76, fabMes: 82, fabAnio: 88, revMes: 95, revAnio: 101, crpc: 109, op: 122 },
+    valvulaCols: { codigo: 146, serie: 168, op: 196 },
+    // Otros accesorios (dos filas de bloques)
+    otrosFila1: { keys: ['dispSujecionCilindro', 'electrovalvulaNafta', 'electrovalvulaGnc', 'dosifMezclador', 'sistemaVenteo', 'llaveConmutadora'], codXs: [36, 70, 103, 136, 169, 196], serieXs: [16, 50, 83, 116, 150, 183], codY: 167, serieY: 174.5 },
+    otrosFila2: { keys: ['valCargaInterna', 'valCargaExterna', 'mangueraBajaPresion'], codXs: [36, 70, 103], serieXs: [16, 50, 83], codY: 181.5, serieY: 189 },
+    observaciones: { x: 15, y: 200, maxW: 185 },
+    // Aclaración del propietario (la firma va a mano)
+    aclNombre: { x: 140, y: 238 },
+    aclDocumento: { x: 140, y: 243 },
+  };
+
   async function generarPecPdfSoloDatos(cliente, tramite) {
     await cargarLibreriasPec();
-    const cont = document.createElement('div');
-    cont.style.position = 'fixed';
-    cont.style.left = '-99999px';
-    cont.style.top = '0';
-    cont.innerHTML = pecFormHtml(cliente, tramite, null, true);
-    document.body.appendChild(cont);
-    let blob;
-    try {
-      const hoja = cont.querySelector('#pec-hoja');
-      const canvas = await window.html2canvas(hoja, { scale: 2, backgroundColor: '#ffffff' });
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-      const pageW = doc.internal.pageSize.getWidth();
-      const pageH = doc.internal.pageSize.getHeight();
-      const ratio = canvas.height / canvas.width;
-      let w = pageW, h = pageW * ratio;
-      if (h > pageH) { h = pageH; w = pageH / ratio; }
-      // Ajuste fino en milímetros por si la planilla preimpresa no salió de
-      // Estelita y los datos caen corridos (se configura en el taller).
-      const ajX = Number(tallerConfig.impresionAjusteX) || 0;
-      const ajY = Number(tallerConfig.impresionAjusteY) || 0;
-      const x = (pageW - w) / 2 + ajX, y = (pageH - h) / 2 + ajY;
-      // JPEG y no PNG: jsPDF infla los PNG (una hoja salía 22 MB).
-      doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', x, y, w, h);
-      blob = doc.output('blob');
-    } finally {
-      document.body.removeChild(cont);
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const ajX = Number(tallerConfig.impresionAjusteX) || 0;
+    const ajY = Number(tallerConfig.impresionAjusteY) || 0;
+    doc.setFont('helvetica', 'bold');
+    const M = PECMAR_MAPA;
+    const T = (texto, x, y, size, maxW) => {
+      if (texto === null || texto === undefined || texto === '') return;
+      doc.setFontSize(size || 9);
+      doc.text(String(texto), x + ajX, y + ajY, maxW ? { maxWidth: maxW } : undefined);
+    };
+    const XX = (pos) => { if (pos) T('X', pos.x, pos.y, 9); };
+
+    const tc = tallerConfig;
+    const eq = tramite.equipo || blankEquipo(null);
+    T(tc.razonSocial, M.tallerRazonSocial.x, M.tallerRazonSocial.y);
+    T(tc.direccion, M.tallerDireccion.x, M.tallerDireccion.y);
+    T(tc.cuit, M.tallerCuit.x, M.tallerCuit.y);
+    T(tc.codigoTaller, M.codigoTaller.x, M.codigoTaller.y, M.codigoTaller.size);
+
+    const fHab = pecPartesFecha(tramite.fecha);
+    const fVenc = pecPartesFecha(pecFechaMasUnAnio(tramite.fecha));
+    [fHab.d, fHab.m, fHab.a].forEach((v, i) => T(v, M.fechaHab.xs[i], M.fechaHab.y));
+    [fVenc.d, fVenc.m, fVenc.a].forEach((v, i) => T(v, M.fechaVenc.xs[i], M.fechaVenc.y));
+    T(tramite.obleaAnterior, M.obleaAnterior.x, M.obleaAnterior.y);
+    T(tramite.obleaNueva, M.obleaNueva.x, M.obleaNueva.y);
+
+    T(cliente.marca, M.marca.x, M.marca.y);
+    T(cliente.modelo, M.modelo.x, M.modelo.y);
+    T(cliente.anio, M.anio.x, M.anio.y);
+    T((cliente.patente || '').toUpperCase(), M.dominio.x, M.dominio.y, 10);
+    XX((cliente.inyeccion || '').toLowerCase().startsWith('s') ? M.inyeccionSi : M.inyeccionNo);
+    const usoNorm = (cliente.uso || '').toLowerCase();
+    const usoX = M.tipoVehiculo.xs[usoNorm] !== undefined ? M.tipoVehiculo.xs[usoNorm] : (usoNorm ? M.tipoVehiculo.xs.otros : null);
+    if (usoX !== null && usoNorm) T('X', usoX, M.tipoVehiculo.y, 9);
+    XX(M.tipoOperacion[tramite.tipo]);
+
+    T(cliente.nombre, M.propNombre.x, M.propNombre.y);
+    T(cliente.domicilio, M.propCalle.x, M.propCalle.y);
+    T(cliente.cpa, M.propCpa.x, M.propCpa.y);
+    T(cliente.ciudad, M.propLocalidad.x, M.propLocalidad.y);
+    T(cliente.provincia, M.propProvincia.x, M.propProvincia.y);
+    T(cliente.telefono, M.propTelefono.x, M.propTelefono.y);
+    T([cliente.tipo_documento, cliente.dni].filter(Boolean).join(' '), M.propDocumento.x, M.propDocumento.y);
+
+    // Regulador principal en la columna de su operación (+ Nuevo/Usado)
+    const opReg = eq.regulador.operacion || 'sigue';
+    if (eq.regulador.codigo || eq.regulador.serie) {
+      const colX = M.reguladorColX[opReg] !== undefined ? M.reguladorColX[opReg] : M.reguladorColX.sigue;
+      T(eq.regulador.codigo, colX, M.reguladorCodigoY, 8);
+      T(eq.regulador.serie, colX, M.reguladorSerieY, 8);
+      XX(eq.regulador.nuevoUsado === 'nuevo' ? M.reguladorNuevo : M.reguladorUsado);
     }
-    return blob;
+    // Regulador dado de baja (reemplazo): columna Baja
+    if (eq.reguladorBaja && (eq.reguladorBaja.codigo || eq.reguladorBaja.serie)) {
+      T(eq.reguladorBaja.codigo, M.reguladorColX.baja, M.reguladorCodigoY, 8);
+      T(eq.reguladorBaja.serie, M.reguladorColX.baja, M.reguladorSerieY, 8);
+    }
+    const otrosDatos = eq.otros || {};
+    ['manometro', 'accesorioTuberia', 'tuberiaAltaPresion'].forEach(k => {
+      const o = otrosDatos[k];
+      if (!o) return;
+      T(o.codigo, M[k].codX, M[k].codY, 8);
+      T(o.serie, M[k].serieX, M[k].serieY, 8);
+    });
+
+    (eq.cilindros || []).slice(0, M.cilindroYs.length).forEach((c, i) => {
+      const y = M.cilindroYs[i];
+      const col = M.cilindroCols;
+      T(c.codigo, col.codigo, y, 8);
+      T(c.serie, col.serie, y, 8);
+      if (c.codigo || c.serie) T('X', c.nuevoUsado === 'nuevo' ? col.nuevo : col.usado, y, 8);
+      T(c.fabricadoMes, col.fabMes, y, 8);
+      T(c.fabricadoAnio ? String(c.fabricadoAnio).slice(-2) : '', col.fabAnio, y, 8);
+      T(c.revisadoMes, col.revMes, y, 8);
+      T(c.revisadoAnio ? String(c.revisadoAnio).slice(-2) : '', col.revAnio, y, 8);
+      T(c.crpc, col.crpc, y, 8);
+      T(pecOperacionLetra(c.msdb), col.op, y, 8);
+    });
+    (eq.valvulas || []).slice(0, M.cilindroYs.length).forEach((v, i) => {
+      const y = M.cilindroYs[i];
+      T(v.codigo, M.valvulaCols.codigo, y, 8);
+      T(v.serie, M.valvulaCols.serie, y, 8);
+      T(pecOperacionLetra(v.msb), M.valvulaCols.op, y, 8);
+    });
+
+    [M.otrosFila1, M.otrosFila2].forEach(fila => {
+      fila.keys.forEach((k, i) => {
+        const o = otrosDatos[k];
+        if (!o) return;
+        T(o.codigo, fila.codXs[i], fila.codY, 8);
+        T(o.serie, fila.serieXs[i], fila.serieY, 8);
+      });
+    });
+
+    T(tramite.detalle, M.observaciones.x, M.observaciones.y, 8, M.observaciones.maxW);
+    T(cliente.nombre, M.aclNombre.x, M.aclNombre.y, 8);
+    T([cliente.tipo_documento, cliente.dni].filter(Boolean).join(' '), M.aclDocumento.x, M.aclDocumento.y, 8);
+
+    return doc.output('blob');
   }
 
   function pecCargarImagen(src) {
