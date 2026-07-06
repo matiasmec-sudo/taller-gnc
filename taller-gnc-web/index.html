@@ -2838,63 +2838,66 @@ Documentación para realizar la renovación:
   // Coordenadas calibradas con la 2.ª impresión de prueba del usuario
   // (foto frontal de la PecMar con los datos impresos: se midió el
   // corrimiento de cada campo contra su casillero).
+  // Coordenadas leídas directamente de la GRILLA de calibración impresa
+  // sobre la planilla PecMar (foto con la regla de mm encima de los
+  // casilleros): cada valor es la posición real en mm del campo.
   const PECMAR_MAPA = {
     // Taller (TdM)
-    tallerRazonSocial: { x: 43, y: 40.5 },
-    tallerDireccion: { x: 30, y: 46.5 },
-    tallerCuit: { x: 42, y: 53.5 },
-    codigoTaller: { x: 170, y: 50.5, size: 11 },
+    tallerRazonSocial: { x: 44, y: 45 },
+    tallerDireccion: { x: 30, y: 51 },
+    tallerCuit: { x: 47, y: 60 },
+    codigoTaller: { x: 186, y: 50, size: 11 },
     // Fecha (dd mm aa en casilleros separados) y oblea
-    fechaHab: { xs: [121, 133, 145], y: 28 },
-    fechaVenc: { xs: [121, 133, 145], y: 39 },
-    obleaAnterior: { x: 170, y: 30 },
-    obleaNueva: { x: 170, y: 43 },
+    fechaHab: { xs: [122, 135, 148], y: 30 },
+    fechaVenc: { xs: [122, 135, 148], y: 42 },
+    obleaAnterior: { x: 184, y: 30 },
+    obleaNueva: { x: 184, y: 43 },
     // Vehículo
-    marca: { x: 20, y: 74.5 },
-    modelo: { x: 75, y: 74.5 },
-    anio: { x: 117, y: 74.5 },
-    dominio: { x: 15, y: 85 },
-    inyeccionSi: { x: 64, y: 84.5 },
-    inyeccionNo: { x: 72, y: 84.5 },
-    tipoVehiculo: { xs: { moto: 88, taxi: 98, 'pick up': 106, bus: 119, oficial: 126, otros: 133 }, y: 84.5 },
-    // Tipo de operación (la X de Modificación cayó bien en la prueba)
+    marca: { x: 18, y: 73 },
+    modelo: { x: 74, y: 73 },
+    anio: { x: 138, y: 73 },
+    dominio: { x: 14, y: 83 },
+    inyeccionSi: { x: 64, y: 81 },
+    inyeccionNo: { x: 72, y: 81 },
+    tipoVehiculo: { xs: { moto: 90, taxi: 99, 'pick up': 107, bus: 119, oficial: 126, otros: 133 }, y: 81 },
+    // Tipo de operación (casillas de la derecha, letra C/M/R/P/D)
     tipoOperacion: {
-      conversion: { x: 196, y: 63 }, modificacion: { x: 196, y: 67.5 },
-      revision_anual: { x: 196, y: 72 }, prueba_hidraulica: { x: 196, y: 76.5 },
-      desmontaje: { x: 196, y: 81 }, baja: { x: 163, y: 78 },
+      conversion: { x: 204, y: 66 }, modificacion: { x: 204, y: 70.5 },
+      revision_anual: { x: 204, y: 75 }, prueba_hidraulica: { x: 204, y: 79.5 },
+      desmontaje: { x: 204, y: 84 }, baja: { x: 164, y: 83 },
     },
-    // Propietario
-    propNombre: { x: 20, y: 98.5 },
-    propCalle: { x: 100, y: 98.5 },
-    propCpa: { x: 197, y: 98.5 },
-    propLocalidad: { x: 25, y: 104.5 },
-    propProvincia: { x: 95, y: 104.5 },
-    propTelefono: { x: 132, y: 104.5 },
-    propDocumento: { x: 170, y: 104.5 },
+    // Propietario (dos filas)
+    propNombre: { x: 20, y: 96 },
+    propCalle: { x: 120, y: 96 },
+    propCpa: { x: 197, y: 96 },
+    propLocalidad: { x: 25, y: 106 },
+    propProvincia: { x: 95, y: 106 },
+    propTelefono: { x: 135, y: 106 },
+    propDocumento: { x: 170, y: 106 },
     // Regulador: el código y la serie van EN LA COLUMNA de la operación
     // (S/Cambio, Montaje, Desmontaje o Baja) — así la PecMar muestra el
     // reemplazo completo: el nuevo en Montaje y el viejo en Baja.
-    reguladorColX: { sigue: 21, montaje: 43, desmontaje: 65, baja: 87 },
-    reguladorCodigoY: 124,
-    reguladorSerieY: 129,
-    reguladorNuevo: { x: 109, y: 124 },
-    reguladorUsado: { x: 117, y: 124 },
+    reguladorColX: { sigue: 22, montaje: 44, desmontaje: 65, baja: 87 },
+    reguladorCodigoY: 122,
+    reguladorSerieY: 132,
+    reguladorNuevo: { x: 106, y: 122 },
+    reguladorUsado: { x: 114, y: 122 },
     // Manómetro / Accesorio P/Tubería / Tubería alta presión
-    manometro: { codX: 146, serieX: 137, codY: 121, serieY: 130 },
-    accesorioTuberia: { codX: 175, serieX: 168, codY: 121, serieY: 130 },
-    tuberiaAltaPresion: { codX: 200, serieX: 195, codY: 121, serieY: 130 },
+    manometro: { codX: 148, serieX: 140, codY: 120, serieY: 131 },
+    accesorioTuberia: { codX: 176, serieX: 168, codY: 120, serieY: 131 },
+    tuberiaAltaPresion: { codX: 202, serieX: 195, codY: 120, serieY: 131 },
     // Cilindros (4 filas) y válvulas
-    cilindroYs: [146, 155.5, 165, 174],
-    cilindroCols: { codigo: 12, serie: 44, nuevo: 85, usado: 93, fabMes: 100, fabAnio: 107, revMes: 114, revAnio: 121, crpc: 129, op: 140 },
-    valvulaCols: { codigo: 153, serie: 172, op: 197 },
+    cilindroYs: [143, 153, 162, 171],
+    cilindroCols: { codigo: 12, serie: 40, nuevo: 82, usado: 90, fabMes: 97, fabAnio: 104, revMes: 111, revAnio: 118, crpc: 127, op: 140 },
+    valvulaCols: { codigo: 152, serie: 170, op: 197 },
     // Otros accesorios (dos filas de bloques)
-    otrosFila1: { keys: ['dispSujecionCilindro', 'electrovalvulaNafta', 'electrovalvulaGnc', 'dosifMezclador', 'sistemaVenteo', 'llaveConmutadora'], codXs: [22, 56, 91, 125, 160, 194], serieXs: [10, 45, 80, 114, 149, 184], codY: 187, serieY: 197 },
-    otrosFila2: { keys: ['valCargaInterna', 'valCargaExterna', 'mangueraBajaPresion'], codXs: [22, 56, 91], serieXs: [10, 45, 80], codY: 211, serieY: 219 },
-    observaciones: { x: 15, y: 226, maxW: 185 },
+    otrosFila1: { keys: ['dispSujecionCilindro', 'electrovalvulaNafta', 'electrovalvulaGnc', 'dosifMezclador', 'sistemaVenteo', 'llaveConmutadora'], codXs: [22, 56, 91, 125, 159, 194], serieXs: [22, 56, 91, 125, 159, 194], codY: 185, serieY: 194 },
+    otrosFila2: { keys: ['valCargaInterna', 'valCargaExterna', 'mangueraBajaPresion'], codXs: [22, 56, 91], serieXs: [22, 56, 91], codY: 207, serieY: 216 },
+    observaciones: { x: 42, y: 222, maxW: 150 },
     // Aclaración del propietario, sobre la línea "Aclaración y N° de
-    // Documento" del bloque Propietario (la firma va a mano, más arriba).
-    aclNombre: { x: 140, y: 274 },
-    aclDocumento: { x: 140, y: 279 },
+    // Documento" (la firma va a mano, más arriba).
+    aclNombre: { x: 135, y: 267 },
+    aclDocumento: { x: 135, y: 267 },
   };
 
   // Grilla de calibración: una regla en milímetros para imprimir SOBRE una
