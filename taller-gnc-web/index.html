@@ -807,10 +807,64 @@ window.storage = {
 
   function cleanPhone(p) { return (p || '').replace(/\D/g, ''); }
 
-  // Mensaje de aviso de vencimiento. A pedido del usuario NO incluye el
-  // nombre del cliente (a veces no lo tenemos cargado). El horario y la
-  // dirección salen de la configuración del taller, con valores por defecto
-  // razonables si todavía no se completaron.
+  // --- Mensajes de WhatsApp editables por el taller ---
+  // Cada taller puede reescribir estos textos en la configuración para
+  // ponerle su impronta. Las {etiquetas} se reemplazan al enviar. Para
+  // sumar un mensaje nuevo en el futuro, alcanza con agregarlo acá.
+  const MENSAJES_DEFAULT = {
+    vencimiento: {
+      label: 'Aviso de vencimiento (oblea / prueba hidráulica)',
+      etiquetas: ['nombre', 'patente', 'estado', 'que', 'taller', 'direccion', 'horario'],
+      texto: `¡Buen día! 😊
+Te recordamos que {estado} {que} de tu vehículo (patente {patente}).
+
+Documentación para realizar la renovación:
+✅ Cédula del gas
+✅ Cédula verde
+✅ DNI
+
+📅 Podés venir a renovarla de {horario}
+📍 {taller} – {direccion}
+
+¡Te esperamos! 😊`,
+    },
+    obleaLista: {
+      label: 'Aviso "llegó tu oblea"',
+      etiquetas: ['nombre', 'patente', 'taller', 'direccion', 'horario'],
+      texto: `Hola {nombre}! Queríamos avisarte que llegó tu oblea. Podés pasar a retirarla por {taller}, {direccion}, {horario}. ¡Te esperamos!`,
+    },
+    turno: {
+      label: 'Recordatorio de turno',
+      etiquetas: ['nombre', 'patente', 'fecha', 'hora', 'motivo', 'taller', 'direccion', 'horario'],
+      texto: `Hola {nombre}! Te recordamos tu turno para {fecha}{hora}{motivo} en {taller}, {direccion}. ¡Te esperamos!`,
+    },
+    saludo: {
+      label: 'Saludo general (botón WhatsApp de la tarjeta)',
+      etiquetas: ['nombre', 'patente', 'taller'],
+      texto: `Hola {nombre}! Te escribimos de {taller}.`,
+    },
+  };
+
+  function plantillaMensaje(key) {
+    const custom = tallerConfig.mensajes && tallerConfig.mensajes[key];
+    return (typeof custom === 'string' && custom.trim()) ? custom : MENSAJES_DEFAULT[key].texto;
+  }
+  // Reemplaza {etiquetas} por sus valores; las que no vengan se borran.
+  function renderMensaje(key, vars) {
+    let t = plantillaMensaje(key);
+    Object.entries(vars || {}).forEach(([k, v]) => { t = t.split('{' + k + '}').join(v == null ? '' : String(v)); });
+    return t.replace(/\{[a-zA-Z]+\}/g, '').replace(/[ \t]{2,}/g, ' ');
+  }
+  function varsTaller() {
+    return {
+      taller: tallerNombre || '',
+      direccion: tallerConfig.direccion || '',
+      horario: tallerConfig.horario || 'lunes a viernes de 9 a 17 hs',
+    };
+  }
+
+  // Mensaje de aviso de vencimiento. Por defecto NO incluye el nombre (a
+  // veces no lo tenemos), pero el taller puede sumar {nombre} si quiere.
   function waLink(cliente, tipo) {
     const phone = cleanPhone(cliente.telefono);
     let status, queVence;
@@ -823,21 +877,13 @@ window.storage = {
       queVence = 'la revisión periódica del cilindro (Prueba Hidráulica / CRPC)';
     }
     const vencida = status.days !== null && status.days < 0;
-    const patenteTxt = cliente.patente ? ` (patente ${cliente.patente})` : '';
-    const horario = tallerConfig.horario || 'lunes a viernes de 9 a 17 hs';
-    const lugar = [tallerNombre, tallerConfig.direccion].filter(Boolean).join(' – ');
-    const msg = `¡Buen día! 😊
-Te recordamos que ${vencida ? 'venció' : 'este mes vence'} ${queVence} de tu vehículo${patenteTxt}.
-
-Documentación para realizar la renovación:
-✅ Cédula del gas
-✅ Cédula verde
-✅ DNI
-
-📅 Podés venir a renovarla de ${horario}
-📍 ${lugar}
-
-¡Te esperamos! 😊`;
+    const msg = renderMensaje('vencimiento', {
+      ...varsTaller(),
+      nombre: cliente.nombre || '',
+      patente: cliente.patente || '',
+      estado: vencida ? 'venció' : 'este mes vence',
+      que: queVence,
+    });
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   }
 
@@ -845,7 +891,7 @@ Documentación para realizar la renovación:
   // cliente por cualquier motivo desde su tarjeta.
   function waLinkGeneral(cliente) {
     const phone = cleanPhone(cliente.telefono);
-    const msg = `Hola ${cliente.nombre}! Te escribimos de ${tallerNombre}.`;
+    const msg = renderMensaje('saludo', { ...varsTaller(), nombre: cliente.nombre || '', patente: cliente.patente || '' });
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   }
 
@@ -973,8 +1019,14 @@ Documentación para realizar la renovación:
     const cuando = turno.fecha === fechaLocalISO() ? 'HOY ' + fmtDate(turno.fecha)
       : turno.fecha === mananaISO() ? 'mañana ' + fmtDate(turno.fecha)
       : 'el ' + fmtDate(turno.fecha);
-    const lugar = [tallerNombre, tallerConfig.direccion].filter(Boolean).join(', ');
-    const msg = `Hola${cliente.nombre && cliente.nombre !== cliente.patente ? ' ' + cliente.nombre : ''}! Te recordamos tu turno para ${cuando}${turno.hora ? ' a las ' + turno.hora + ' hs' : ''}${turno.motivo ? ' por: ' + turno.motivo : ''} en ${lugar}. ¡Te esperamos!`;
+    const msg = renderMensaje('turno', {
+      ...varsTaller(),
+      nombre: cliente.nombre && cliente.nombre !== cliente.patente ? cliente.nombre : '',
+      patente: cliente.patente || '',
+      fecha: cuando,
+      hora: turno.hora ? ' a las ' + turno.hora + ' hs' : '',
+      motivo: turno.motivo ? ' por: ' + turno.motivo : '',
+    });
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   }
 
@@ -1246,9 +1298,7 @@ Documentación para realizar la renovación:
   // dirección y horario del taller cargados en la configuración.
   function waLinkObleaLista(cliente) {
     const phone = cleanPhone(cliente.telefono);
-    const horario = tallerConfig.horario || 'lunes a viernes de 9 a 17 hs';
-    const lugar = [tallerNombre, tallerConfig.direccion].filter(Boolean).join(', ');
-    const msg = `Hola ${cliente.nombre}! Queríamos avisarte que llegó tu oblea. Podés pasar a retirarla por ${lugar}, ${horario}. ¡Te esperamos!`;
+    const msg = renderMensaje('obleaLista', { ...varsTaller(), nombre: cliente.nombre || '', patente: cliente.patente || '' });
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   }
 
@@ -1286,7 +1336,10 @@ Documentación para realizar la renovación:
                 : `<button type="button" class="btn btn-wa btn-sm" data-aviso-oblea-cliente="${cliente.id}" data-aviso-oblea-tramite="${tramite.id}">Avisar: llegó tu oblea</button>`
             ) : ''}
           </div>
-          ${abierto ? `<div class="hist-detalle">${clienteDatosBlock(cliente)}</div>` : ''}`;
+          ${abierto ? `<div class="hist-detalle">${clienteDatosBlock(cliente)}
+            <div class="form-actions" style="margin-top:8px;">
+              <button type="button" class="btn btn-ghost btn-sm" data-ultimo-tramite="${cliente.id}">Ver último trámite</button>
+            </div></div>` : ''}`;
         }).join('')}
         </div>`).join('') : `<div class="empty">${emptyIconSvg()}Todavía no hay trámites cargados.</div>`}
       <div class="form-actions">
@@ -2335,6 +2388,14 @@ Documentación para realizar la renovación:
         ${tecnicosVinculados ? '<button type="button" class="btn btn-danger-outline btn-sm" id="btn-desvincular-tecnicos">Desvincular todos</button>' : ''}
       </div>
       <div id="vinculo-codigo"></div>
+      <h3>Mensajes de WhatsApp ${infoAyuda('ayuda-mensajes')}</h3>
+      ${ayudaBloque('ayuda-mensajes', 'Editá el texto de los mensajes que se mandan a los clientes para ponerle la impronta de tu taller. Las palabras entre llaves como {nombre} o {patente} se reemplazan solas al enviar — dejalas tal cual donde quieras que aparezca ese dato. Debajo de cada mensaje están las etiquetas que podés usar.')}
+      ${Object.entries(MENSAJES_DEFAULT).map(([key, def]) => `
+        <label style="display:block; margin-top:8px;">${def.label}
+          <textarea id="tc-msg-${key}" rows="4" style="font-family:inherit; font-size:13px;">${escapeHtml(plantillaMensaje(key))}</textarea>
+        </label>
+        <div class="agent-hint" style="margin-top:2px;">Etiquetas: ${def.etiquetas.map(e => '{' + e + '}').join(', ')} · <button type="button" class="license-link" data-restaurar-msg="${key}">restaurar texto original</button></div>
+      `).join('')}
       <div class="form-actions">
         <button class="btn btn-primary" id="btn-save-taller-config">Guardar configuración</button>
         <button class="btn btn-ghost" id="btn-cancel-taller-config">Cerrar</button>
@@ -2366,6 +2427,17 @@ Documentación para realizar la renovación:
       p.ingeniero = el(`tc-pec-ingeniero-${i}`).value;
       p.matriculaCipba = el(`tc-pec-matricula-${i}`).value;
     });
+    // Mensajes editables: se guarda el texto solo si difiere del original.
+    if (el('tc-msg-vencimiento')) {
+      tallerConfig.mensajes = tallerConfig.mensajes || {};
+      Object.keys(MENSAJES_DEFAULT).forEach(key => {
+        const ta = el('tc-msg-' + key);
+        if (!ta) return;
+        const val = ta.value;
+        if (val.trim() && val !== MENSAJES_DEFAULT[key].texto) tallerConfig.mensajes[key] = val;
+        else delete tallerConfig.mensajes[key];
+      });
+    }
   }
 
   function blankClienteBase() {
@@ -4481,6 +4553,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     const btnSaveTallerConfig = root.querySelector('#btn-save-taller-config');
     if (btnSaveTallerConfig) btnSaveTallerConfig.addEventListener('click', async () => {
       syncTallerConfigFromDOM();
+      const mensajes = tallerConfig.mensajes || {};
       const pecs = (tallerConfig.pecs || []).map(p => ({
         codigoPec: (p.codigoPec || '').trim(), razonSocial: (p.razonSocial || '').trim(),
         direccion: (p.direccion || '').trim(), telefono: (p.telefono || '').trim(),
@@ -4497,6 +4570,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         codigoTaller: (tallerConfig.codigoTaller || '').trim(),
         impresionAjusteX: Number(tallerConfig.impresionAjusteX) || 0,
         impresionAjusteY: Number(tallerConfig.impresionAjusteY) || 0,
+        mensajes,
         // Campos planos = espejo del primer PEC, por compatibilidad con
         // datos y funciones anteriores a la lista de PECs.
         codigoPec: p0.codigoPec, pecRazonSocial: p0.razonSocial, pecDireccion: p0.direccion,
@@ -4513,6 +4587,15 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       syncTallerConfigFromDOM();
       tallerConfig.pecs.push(blankPec());
       render();
+    });
+
+    // Restaurar el texto original de un mensaje de WhatsApp.
+    root.querySelectorAll('[data-restaurar-msg]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-restaurar-msg');
+        const ta = root.querySelector('#tc-msg-' + key);
+        if (ta && MENSAJES_DEFAULT[key]) ta.value = MENSAJES_DEFAULT[key].texto;
+      });
     });
 
     const btnVincularTecnico = root.querySelector('#btn-vincular-tecnico');
@@ -5656,6 +5739,22 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
           valvulas: tramiteDraftEquipo.valvulas.map(v => ({ ...v })),
           otros: JSON.parse(JSON.stringify(tramiteDraftEquipo.otros)),
         };
+      }
+
+      // Aviso: entre la renovación de la oblea (hoy) y el vencimiento de la
+      // prueba hidráulica del cilindro no puede haber menos de 7 meses. Se
+      // calcula con la fecha de revisión del cilindro + 5 años.
+      const cilAviso = tramiteDraftEquipo.cilindros[0];
+      if (cilAviso && cilAviso.revisadoMes && cilAviso.revisadoAnio) {
+        const vencMesTotal = (Number(cilAviso.revisadoAnio) + 5) * 12 + (Number(cilAviso.revisadoMes) - 1);
+        const hoy = new Date();
+        const meses = vencMesTotal - (hoy.getFullYear() * 12 + hoy.getMonth());
+        if (meses < 7) {
+          const detalle = meses < 0
+            ? `la prueba hidráulica del cilindro está VENCIDA hace ${Math.abs(meses)} mes(es)`
+            : `faltan ${meses} mes(es) para el vencimiento de la prueba hidráulica del cilindro`;
+          customAlert(`Atención: ${detalle}. Entre la renovación de la oblea y el vencimiento del cilindro no puede haber menos de 7 meses — revisalo antes de continuar.`, 'Atención — prueba hidráulica');
+        }
       }
 
       if (aplicados.length > 0) {
