@@ -36,6 +36,8 @@ export default async function handler(req, res) {
       await put(`${carpeta}/${nombre}`, JSON.stringify(contenido), {
         access: 'private', addRandomSuffix: false, allowOverwrite: true,
         contentType: 'application/json',
+        // Evita que el CDN sirva una copia vieja tras sobrescribir.
+        cacheControlMaxAge: 0,
       });
       return res.status(200).json({ ok: true });
     }
@@ -54,15 +56,27 @@ export default async function handler(req, res) {
 
     if (accion === 'bajar') {
       if (!NOMBRE_VALIDO.test(nombre || '')) return res.status(400).json({ error: 'Nombre de archivo inválido.' });
-      const l = await list({ prefix: `${carpeta}/${nombre}` });
-      const blob = l.blobs.find(b => b.pathname === `${carpeta}/${nombre}`);
-      if (!blob) return res.status(404).json({ error: 'No hay ninguna copia guardada con ese nombre.' });
-      const r = await fetch(blob.url, {
-        headers: { authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
-      });
+      // Lectura por URL directa (consistente al instante) en vez de list()
+      // (consistencia eventual: puede no ver archivos recién subidos).
+      const partes = (process.env.BLOB_READ_WRITE_TOKEN || '').split('_');
+      const url = `https://${(partes[3] || '').toLowerCase()}.private.blob.vercel-storage.com/${carpeta}/${nombre}`;
+      // El parámetro anti-caché evita 404 viejos o versiones anteriores
+      // servidas por el CDN; el reintento cubre el caché negativo (~1s) de
+      // rutas consultadas antes de existir.
+      let r;
+      for (let intento = 0; ; intento++) {
+        r = await fetch(`${url}?nc=${Date.now()}`, {
+          headers: { authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+          cache: 'no-store',
+        });
+        if (r.status !== 404 || intento >= 2) break;
+        await new Promise(res2 => setTimeout(res2, 800));
+      }
+      if (r.status === 404) return res.status(404).json({ error: 'No hay ninguna copia guardada con ese nombre.' });
       if (!r.ok) return res.status(500).json({ error: 'No se pudo leer la copia del storage.' });
       const datos = await r.json();
-      return res.status(200).json({ ok: true, contenido: datos, subido: blob.uploadedAt });
+      const lm = r.headers.get('last-modified');
+      return res.status(200).json({ ok: true, contenido: datos, subido: lm ? new Date(lm).toISOString() : null });
     }
 
     if (accion === 'depurar') {
