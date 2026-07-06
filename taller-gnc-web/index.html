@@ -2908,34 +2908,36 @@ Documentación para realizar la renovación:
     const ajX = Number(tallerConfig.impresionAjusteX) || 0;
     const ajY = Number(tallerConfig.impresionAjusteY) || 0;
     const W = 210, H = 297;
-    // Líneas finas cada 5 mm (las de cada 10 mm un poco más marcadas).
+    // Líneas cada 5 mm (las de 10 más marcadas, las de 50 aún más). Todo en
+    // escala de grises — el rojo salía casi invisible en muchas impresoras.
     for (let x = 0; x <= W; x += 5) {
-      doc.setDrawColor(x % 10 === 0 ? 120 : 200);
-      doc.setLineWidth(x % 10 === 0 ? 0.2 : 0.1);
+      const g = x % 50 === 0 ? 60 : x % 10 === 0 ? 110 : 190;
+      doc.setDrawColor(g);
+      doc.setLineWidth(x % 50 === 0 ? 0.3 : x % 10 === 0 ? 0.2 : 0.1);
       doc.line(x + ajX, ajY, x + ajX, H + ajY);
     }
     for (let y = 0; y <= H; y += 5) {
-      doc.setDrawColor(y % 10 === 0 ? 120 : 200);
-      doc.setLineWidth(y % 10 === 0 ? 0.2 : 0.1);
+      const g = y % 50 === 0 ? 60 : y % 10 === 0 ? 110 : 190;
+      doc.setDrawColor(g);
+      doc.setLineWidth(y % 50 === 0 ? 0.3 : y % 10 === 0 ? 0.2 : 0.1);
       doc.line(ajX, y + ajY, W + ajX, y + ajY);
     }
-    // Números de mm cada 10, repetidos en varias columnas/filas para poder
-    // leerlos en cualquier zona de la hoja aunque los tape el formulario.
-    doc.setTextColor(200, 0, 0);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(5);
-    const colsX = [1, 70, 140, 200];
-    for (let y = 10; y < H; y += 10) {
-      colsX.forEach(cx => doc.text(String(y), cx + ajX, y + ajY + 1.6));
-    }
-    const filasY = [4, 100, 200, 292];
-    for (let x = 10; x < W; x += 10) {
-      filasY.forEach(cy => doc.text(String(x), x + ajX - 1.5, cy + ajY));
-    }
-    doc.setFontSize(8);
-    doc.setTextColor(200, 0, 0);
-    doc.text('GRILLA DE CALIBRACIÓN — imprimir sobre una planilla en blanco', 20 + ajX, 6 + ajY);
+    // Números de mm cada 10, en NEGRO y bien visibles, repetidos en varias
+    // columnas/filas para leerlos en cualquier zona aunque el formulario los
+    // tape en parte.
     doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    const colsX = [2, 104, 200];   // números "y" (mm verticales)
+    for (let y = 10; y < H; y += 10) {
+      colsX.forEach(cx => doc.text(String(y), cx + ajX, y + ajY + 2));
+    }
+    const filasY = [6, 150, 293];  // números "x" (mm horizontales)
+    for (let x = 10; x < W; x += 10) {
+      filasY.forEach(cy => doc.text(String(x), x + ajX - 2, cy + ajY));
+    }
+    doc.setFontSize(9);
+    doc.text('GRILLA DE CALIBRACIÓN — imprimir sobre planilla en blanco al 100%', 24 + ajX, 4 + ajY);
     return doc.output('blob');
   }
 
