@@ -2644,23 +2644,21 @@ Documentación para realizar la renovación:
     setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
 
-  // Envío del PDF al PEC del trámite. Si ese PEC tiene teléfono cargado, el
-  // chat de WhatsApp se abre DIRECTO con ese número (pedido del usuario: que
-  // vaya al número del PEC, sin elegir contacto a mano) — el PDF se descarga
-  // primero y queda como el archivo más reciente al tocar adjuntar →
-  // Documento. Si no hay teléfono, se usa el compartir del sistema.
+  // Envío del PDF al PEC del trámite. Limitación de WhatsApp que manda acá:
+  // un link de WhatsApp (wa.me) puede llevar SOLO texto, nunca un archivo —
+  // probado en la vida real: llegaba el mensaje sin la planilla. Por eso en
+  // el celular se usa la hoja de compartir del sistema, que SÍ adjunta el
+  // PDF: un toque en WhatsApp, se elige el chat del PEC (tras la primera
+  // vez queda arriba de la lista) y sale todo junto. El mensaje va con el
+  // nombre del PEC para encontrarlo fácil. En escritorio (sin hoja de
+  // compartir) se descarga el PDF y se abre el chat directo del PEC.
   async function compartirPecPdf(blob, filename, cliente, fotosIncluidas, pec) {
     const notaFotos = fotosIncluidas ? ' Incluye las fotos de la documentación.' : '';
-    const mensaje = `Hola! Te comparto la ficha técnica del trámite de GNC de la patente ${cliente.patente || 's/d'} para el PEC.${notaFotos}`;
-    const pecPhone = cleanPhone(pec && pec.telefono);
-    if (pecPhone) {
-      descargarBlob(blob, filename);
-      await customAlert('El PDF ya se descargó. Se va a abrir el chat de WhatsApp del PEC: tocá el clip (adjuntar) → "Documento" → es el primer archivo de la lista, y envialo.', 'Enviar al PEC');
-      window.open(`https://wa.me/${pecPhone}?text=${encodeURIComponent(mensaje)}`, '_blank');
-      return;
-    }
+    const nombrePec = (pec && pec.razonSocial) ? pec.razonSocial : 'el PEC';
+    const mensaje = `Hola! Ficha técnica del trámite de GNC de la patente ${cliente.patente || 's/d'} para ${nombrePec}.${notaFotos}`;
     const file = new File([blob], filename, { type: 'application/pdf' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await customAlert(`Se abre el menú de compartir CON el PDF ya adjunto: elegí WhatsApp y después el chat de ${nombrePec}. El archivo viaja solo, no hay que adjuntar nada.`, 'Enviar al PEC');
       try {
         await navigator.share({ files: [file], title: filename, text: mensaje });
         return;
@@ -2668,8 +2666,11 @@ Documentación para realizar la renovación:
         if (e && e.name === 'AbortError') return;
       }
     }
+    // Escritorio o navegador sin compartir: descarga + chat directo del PEC
+    // (acá adjuntar a mano es fácil: arrastrás el PDF a la ventana).
     descargarBlob(blob, filename);
-    window.open(`https://wa.me/?text=${encodeURIComponent(mensaje + ' (adjuntá el PDF que se acaba de descargar)')}`, '_blank');
+    const pecPhone = cleanPhone(pec && pec.telefono);
+    window.open(`https://wa.me/${pecPhone || ''}?text=${encodeURIComponent(mensaje + ' (adjuntá el PDF que se acaba de descargar)')}`, '_blank');
   }
 
   function tramiteRow(clienteId, t) {
