@@ -38,10 +38,18 @@
     <ul>
       <li><b>Datos de clientes del taller</b> (nombre, documento, domicilio, teléfono, vehículo, equipo de GNC, trámites, firma, fotos de documentación): quedan guardados únicamente en el almacenamiento local del dispositivo donde se usa Estelita.</li>
       <li><b>Datos del taller</b> (razón social, CUIT, técnico, códigos de taller y PEC): ídem, solo en el dispositivo.</li>
-      <li><b>Código de licencia</b>: se guarda en el dispositivo y se envía a nuestro servidor únicamente para validar que la licencia esté activa cuando se usa la lectura con inteligencia artificial.</li>
+      <li><b>Código de licencia</b>: se guarda en el dispositivo y se envía a nuestro servidor únicamente para validar que la licencia esté activa cuando se usan la lectura con inteligencia artificial o la copia de seguridad.</li>
     </ul>
 
-    <h2>3. Lectura de documentos con inteligencia artificial</h2>
+    <h2>3. Copia de seguridad cifrada (opcional)</h2>
+    <p>El taller puede guardar una copia de seguridad de sus datos en la nube. Esa copia se cifra <b>en el dispositivo del taller</b> (cifrado AES-GCM) con una clave que elige y conoce únicamente el taller, antes de subirse a un almacenamiento privado.</p>
+    <ul>
+      <li>Lo único que se sube y se guarda es el paquete cifrado: <b>no podemos leer su contenido</b>, ni recuperar la clave si el taller la olvida.</li>
+      <li>El almacenamiento es privado: los archivos no son accesibles públicamente por internet.</li>
+      <li>Cada copia nueva reemplaza a la anterior. El taller puede pedir la eliminación de su copia escribiendo a los contactos de esta política.</li>
+    </ul>
+
+    <h2>3 bis. Lectura de documentos con inteligencia artificial</h2>
     <p>Cuando el taller usa la función de lectura de fotos (por ejemplo, para leer un DNI o una cédula), las imágenes se envían en forma segura (cifrado HTTPS) a nuestro servicio, que las procesa con la API de inteligencia artificial de Anthropic para extraer los datos y devolverlos a la aplicación.</p>
     <ul>
       <li>Las imágenes se usan solo para esa lectura puntual: <b>no las almacenamos</b> en nuestros servidores.</li>
@@ -63,7 +71,7 @@
     <p>Los datos quedan en el dispositivo del taller y pueden borrarse desde el propio navegador o dispositivo. La baja de la licencia no borra los datos locales.</p>
 
     <h2>8. Cambios en esta política</h2>
-    <p>Si esta política cambia en algo relevante (por ejemplo, si se incorpora un servicio de respaldo en la nube), lo comunicaremos dentro de la aplicación antes de que el cambio entre en vigencia.</p>
+    <p>Si esta política cambia en algo relevante (por ejemplo, si se incorpora un nuevo servicio que trate datos de otra manera), lo comunicaremos dentro de la aplicación antes de que el cambio entre en vigencia.</p>
   </div>
 </div>
 </body>

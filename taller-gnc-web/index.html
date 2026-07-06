@@ -1060,6 +1060,24 @@ Documentación para realizar la renovación:
     </div>`;
   }
 
+  // Panel de copia de seguridad cifrada en la nube.
+  function respaldoPanel(entrando) {
+    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="respaldo-panel">
+      <h2 style="margin-top:0;">Copia de seguridad en la nube ${infoAyuda('ayuda-respaldo')}</h2>
+      ${ayudaBloque('ayuda-respaldo', 'La copia incluye los clientes, trámites, firmas, fotos de documentación y la configuración del taller. Antes de subirse se cifra EN TU EQUIPO con la clave que elijas: sin esa clave nadie puede leer la copia — ni siquiera nosotros. Anotá la clave en un lugar seguro: si la perdés, la copia no se puede recuperar. Para pasar los datos a un celular nuevo: instalá Estelita, activala con tu código de licencia y usá "Recuperar copia" con la misma clave.')}
+      <div class="agent-hint" id="respaldo-ultima">${respaldoUltima === null ? 'Consultando si hay copias guardadas...' : (respaldoUltima ? 'Última copia guardada: ' + respaldoUltima : 'Todavía no hay ninguna copia en la nube.')}</div>
+      <label style="display:block; margin-top:10px;">Clave de la copia (elegila vos y anotala)
+        <input type="password" id="respaldo-clave" placeholder="Una frase que puedas recordar" autocomplete="off">
+      </label>
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" id="btn-respaldo-subir">Guardar copia ahora</button>
+        <button type="button" class="btn btn-agent" id="btn-respaldo-bajar">Recuperar copia</button>
+        <button type="button" class="btn btn-ghost" id="btn-close-respaldo">Cerrar</button>
+      </div>
+      <div id="respaldo-status"></div>
+    </div>`;
+  }
+
   // --- Importación masiva ---
 
   function parseCSV(text) {
@@ -2733,6 +2751,10 @@ Documentación para realizar la renovación:
   // — para registrar cualquier auto que pasa por el taller aunque hoy no
   // haga un trámite de GNC.
   let showQuickAdd = false;
+  // Panel de copia de seguridad en la nube. respaldoUltima: null = todavía
+  // consultando, '' = no hay copia, texto = fecha de la última copia.
+  let showRespaldo = false;
+  let respaldoUltima = null;
   // El asistente en modo "Actualizar datos": muestra solo el paso 1 y
   // guarda los datos del cliente sin crear un trámite (ej. para refrescar
   // el vencimiento de la oblea desde ENARGAS y que el aviso de WhatsApp
@@ -3032,6 +3054,66 @@ Documentación para realizar la renovación:
     });
   }
 
+  // ---- Respaldo cifrado en la nube ----
+  // Todo se cifra EN ESTE DISPOSITIVO (AES-GCM, clave derivada con PBKDF2 de
+  // una frase que solo el taller conoce) antes de subirse. El servidor y el
+  // storage solo ven paquetes cifrados.
+
+  function bufAB64(buf) {
+    const bytes = new Uint8Array(buf);
+    let out = '';
+    // En bloques: btoa(String.fromCharCode(...bytesGrandes)) revienta la
+    // pila con las fotos (cientos de KB).
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      out += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(out);
+  }
+  function b64ABuf(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes.buffer;
+  }
+
+  async function claveRespaldo(frase, salt) {
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(frase), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: 150000, hash: 'SHA-256' },
+      base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+    );
+  }
+
+  async function cifrarParaRespaldo(obj, frase) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await claveRespaldo(frase, salt);
+    const datos = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(obj)));
+    return { v: 1, salt: bufAB64(salt), iv: bufAB64(iv), datos: bufAB64(datos) };
+  }
+
+  async function descifrarRespaldo(paquete, frase) {
+    const key = await claveRespaldo(frase, new Uint8Array(b64ABuf(paquete.salt)));
+    const plano = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(b64ABuf(paquete.iv)) }, key, b64ABuf(paquete.datos));
+    return JSON.parse(new TextDecoder().decode(plano));
+  }
+
+  async function apiRespaldo(body) {
+    const r = await fetch('/api/respaldo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ license: localStorage.getItem(LICENSE_KEY), ...body }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || ('Error ' + r.status + ' del servidor de respaldo'));
+    return data;
+  }
+
+  function fmtFechaHora(iso) {
+    try { return new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+    catch (e) { return iso || ''; }
+  }
+
   // Fotos de documentación guardadas de un cliente (clave fotos:<id>).
   // Devuelve siempre un objeto { foto1, foto2 } (con null si no hay).
   async function fotosGuardadas(clienteId) {
@@ -3260,7 +3342,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     // (quedaban abajo del formulario y recargaban la pantalla).
     const wizardAbiertoRender = !!(showForm || editing);
     const pendCount = pendientesItems().length;
-    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd;
+    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo;
 
     // Para que la animación de entrada de un panel se dispare solo cuando
     // recién se abre — no en cada re-render mientras sigue abierto (ej. al
@@ -3277,11 +3359,12 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       tallerConfig: showTallerConfig && !prevPanelState.tallerConfig,
       enargasPaste: enargasPasteOpen && !prevPanelState.enargasPaste,
       quickAdd: showQuickAdd && !prevPanelState.quickAdd,
+      respaldo: showRespaldo && !prevPanelState.respaldo,
     };
     prevPanelState = {
       wizard: wizardAbierto, wizardStep, fotos: !!showFotosFor, historial: showHistorial,
       pendientes: showPendientes, bulkImport: showBulkImport, tallerConfig: showTallerConfig,
-      enargasPaste: enargasPasteOpen, quickAdd: showQuickAdd,
+      enargasPaste: enargasPasteOpen, quickAdd: showQuickAdd, respaldo: showRespaldo,
     };
 
     root.innerHTML = `
@@ -3295,6 +3378,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-historial">Historial de trámites</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-import">+ Importar clientes (Excel / cuaderno)</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-export-csv">Exportar CSV</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-respaldo">Copia de seguridad en la nube</button>
                 ${showInstallButton ? `<button type="button" class="btn btn-ghost btn-sm" id="btn-install-app">📲 Instalar app</button>` : ''}
               </div>` : ''}
             </div>
@@ -3325,6 +3409,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         ${showQuickAdd ? quickAddPanel(entrando.quickAdd) : ''}
         ${showBulkImport ? bulkImportPanel(entrando.bulkImport) : ''}
         ${showHistorial ? historialPanel(entrando.historial) : ''}
+        ${showRespaldo ? respaldoPanel(entrando.respaldo) : ''}
 
         ${showForm || editing ? tramiteWizardPanel(editing, entrando.wizard, entrando.wizardPaso, entrando.enargasPaste) : ''}
         ${showFotosFor ? fotosPanel(clientes.find(c => c.id === showFotosFor), entrando.fotos) : ''}
@@ -3393,6 +3478,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         showPendientes = destino === 'pendientes' ? !showPendientes : false;
         showHistorial = destino === 'historial' ? !showHistorial : false;
         showTallerConfig = destino === 'config' ? !showTallerConfig : false;
+        showRespaldo = false;
         menuOpen = false;
         render();
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -3627,6 +3713,123 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       showPendientes = false;
       showHistorial = !showHistorial;
       render();
+    });
+
+    // --- Copia de seguridad en la nube ---
+    const btnRespaldoMenu = root.querySelector('#btn-respaldo');
+    if (btnRespaldoMenu) btnRespaldoMenu.addEventListener('click', async () => {
+      menuOpen = false;
+      showHistorial = false; showPendientes = false; showBulkImport = false;
+      showRespaldo = true;
+      respaldoUltima = null;
+      render();
+      // Consultar en segundo plano si ya hay una copia guardada.
+      try {
+        const l = await apiRespaldo({ accion: 'listar' });
+        const datos = (l.archivos || []).find(a => a.nombre === 'datos.json');
+        respaldoUltima = datos ? fmtFechaHora(datos.subido) : '';
+      } catch (e) {
+        respaldoUltima = '';
+      }
+      const hint = root.querySelector('#respaldo-ultima');
+      if (hint) hint.textContent = respaldoUltima ? 'Última copia guardada: ' + respaldoUltima : 'Todavía no hay ninguna copia en la nube.';
+    });
+
+    const btnCloseRespaldo = root.querySelector('#btn-close-respaldo');
+    if (btnCloseRespaldo) btnCloseRespaldo.addEventListener('click', () => { showRespaldo = false; render(); });
+
+    function respaldoStatus(clase, texto) {
+      const el = root.querySelector('#respaldo-status');
+      if (el) { el.className = 'agent-result ' + clase; el.textContent = texto; }
+    }
+    function respaldoBotones(deshabilitar) {
+      ['#btn-respaldo-subir', '#btn-respaldo-bajar', '#btn-close-respaldo'].forEach(sel => {
+        const b = root.querySelector(sel);
+        if (b) b.disabled = deshabilitar;
+      });
+    }
+
+    const btnRespaldoSubir = root.querySelector('#btn-respaldo-subir');
+    if (btnRespaldoSubir) btnRespaldoSubir.addEventListener('click', async () => {
+      const clave = (root.querySelector('#respaldo-clave').value || '');
+      if (clave.trim().length < 4) { await customAlert('Elegí una clave de al menos 4 caracteres y anotala en un lugar seguro: sin ella, la copia no se puede recuperar.'); return; }
+      respaldoBotones(true);
+      try {
+        respaldoStatus('', 'Cifrando y subiendo los datos del taller...');
+        const datos = { v: 1, guardadoEn: new Date().toISOString(), tallerNombre, tallerConfig, clientes };
+        await apiRespaldo({ accion: 'subir', nombre: 'datos.json', contenido: await cifrarParaRespaldo(datos, clave) });
+        const vigentes = ['datos.json'];
+        const ids = Array.from(clientesConFotos);
+        for (let i = 0; i < ids.length; i++) {
+          respaldoStatus('', `Cifrando y subiendo fotos (${i + 1} de ${ids.length})...`);
+          const fotos = await fotosGuardadas(ids[i]);
+          if (!fotos.foto1 && !fotos.foto2) continue;
+          const nombre = `fotos-${ids[i]}.json`;
+          await apiRespaldo({ accion: 'subir', nombre, contenido: await cifrarParaRespaldo(fotos, clave) });
+          vigentes.push(nombre);
+        }
+        // Borrar de la nube lo que ya no corresponde (ej. clientes eliminados).
+        await apiRespaldo({ accion: 'depurar', vigentes });
+        respaldoUltima = fmtFechaHora(new Date().toISOString());
+        const hint = root.querySelector('#respaldo-ultima');
+        if (hint) hint.textContent = 'Última copia guardada: ' + respaldoUltima;
+        respaldoStatus('ok', `Copia guardada: ${clientes.length} cliente(s), ${vigentes.length - 1} con fotos. Guardá bien tu clave — sin ella la copia no se puede leer.`);
+      } catch (e) {
+        console.error(e);
+        respaldoStatus('err', 'No se pudo guardar la copia: ' + (e.message || e));
+      } finally {
+        respaldoBotones(false);
+      }
+    });
+
+    const btnRespaldoBajar = root.querySelector('#btn-respaldo-bajar');
+    if (btnRespaldoBajar) btnRespaldoBajar.addEventListener('click', async () => {
+      const clave = (root.querySelector('#respaldo-clave').value || '');
+      if (!clave.trim()) { await customAlert('Escribí la clave con la que guardaste la copia.'); return; }
+      respaldoBotones(true);
+      try {
+        respaldoStatus('', 'Buscando la copia en la nube...');
+        const bajada = await apiRespaldo({ accion: 'bajar', nombre: 'datos.json' });
+        let datos;
+        try {
+          datos = await descifrarRespaldo(bajada.contenido, clave);
+        } catch (e2) {
+          respaldoStatus('err', 'Esa clave no corresponde a la copia guardada. Revisala y probá de nuevo.');
+          respaldoBotones(false);
+          return;
+        }
+        respaldoBotones(false);
+        const ok = await customConfirm(`Se van a REEMPLAZAR todos los datos de este equipo por la copia del ${fmtFechaHora(bajada.subido)} (${(datos.clientes || []).length} cliente(s)). Esta acción no se puede deshacer.`, { titulo: 'Recuperar copia', danger: true, okLabel: 'Reemplazar' });
+        if (!ok) return;
+        respaldoBotones(true);
+        respaldoStatus('', 'Restaurando datos...');
+        clientes = datos.clientes || [];
+        if (migrateClientes()) { /* defaults al día */ }
+        tallerConfig = migrarPecsConfig({ ...TALLER_CONFIG_DEFAULT, ...(datos.tallerConfig || {}) });
+        if (datos.tallerNombre) tallerNombre = datos.tallerNombre;
+        await saveClientes();
+        await saveTallerConfig();
+        try { await window.storage.set(TALLER_KEY, JSON.stringify(tallerNombre), false); } catch (e3) { /* ok */ }
+        // Fotos: bajar una por una y reconstruir el índice local.
+        const lista = await apiRespaldo({ accion: 'listar' });
+        const archivosFotos = (lista.archivos || []).filter(a => /^fotos-[a-z0-9]+\.json$/i.test(a.nombre));
+        clientesConFotos = new Set();
+        for (let i = 0; i < archivosFotos.length; i++) {
+          respaldoStatus('', `Recuperando fotos (${i + 1} de ${archivosFotos.length})...`);
+          const b = await apiRespaldo({ accion: 'bajar', nombre: archivosFotos[i].nombre });
+          const fotos = await descifrarRespaldo(b.contenido, clave);
+          const id = archivosFotos[i].nombre.slice('fotos-'.length, -'.json'.length);
+          await window.storage.set(`fotos:${id}`, JSON.stringify(fotos), false);
+          clientesConFotos.add(id);
+        }
+        render();
+        await customAlert(`Listo: se recuperaron ${clientes.length} cliente(s) y ${archivosFotos.length} con fotos desde la copia de la nube.`, 'Copia recuperada');
+      } catch (e) {
+        console.error(e);
+        respaldoStatus('err', 'No se pudo recuperar la copia: ' + (e.message || e));
+      } finally {
+        respaldoBotones(false);
+      }
     });
 
     const btnPendientes = root.querySelector('#btn-pendientes');
