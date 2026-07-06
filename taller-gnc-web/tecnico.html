@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estelita Técnico</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="icon-192.png">
+<link rel="manifest" href="manifest-tecnico.json">
+<meta name="theme-color" content="#1D5BD8">
+<style>
+  :root {
+    --fondo: #F4F6FA; --blanco: #fff; --linea: #E3E8F0; --azul: #1D5BD8; --azul-oscuro: #123C8F;
+    --tinta: #16233B; --suave: #5A6B85; --verde: #1D9E75; --verde-bg: #E1F5EE; --verde-tx: #085041;
+    --rojo: #C0281A; --rojo-bg: #FDE8E5; --naranja-bg: #FDF0E1; --naranja-tx: #854F0B;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Segoe UI", system-ui, Roboto, Arial, sans-serif; background: var(--fondo); color: var(--tinta); line-height: 1.5; padding-bottom: 40px; }
+  .top { background: var(--blanco); border-bottom: 1px solid var(--linea); padding: 12px 16px; display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 5; }
+  .top img { width: 30px; height: 30px; border-radius: 8px; }
+  .top b { letter-spacing: 2px; color: var(--azul-oscuro); font-size: 15px; }
+  .top .sub { font-size: 11px; color: var(--suave); letter-spacing: 1px; }
+  .wrap { max-width: 560px; margin: 0 auto; padding: 14px; }
+  .card { background: var(--blanco); border: 1px solid var(--linea); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 4px 14px rgba(18,60,143,.06); }
+  h2 { font-size: 17px; margin-bottom: 6px; }
+  p.ayuda { font-size: 13.5px; color: var(--suave); margin-bottom: 10px; }
+  input[type=text], input[type=tel], textarea { width: 100%; border: 1.5px solid var(--linea); border-radius: 10px; padding: 11px 12px; font-size: 16px; font-family: inherit; }
+  input:focus, textarea:focus { outline: none; border-color: var(--azul); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: none; cursor: pointer; font-family: inherit; font-weight: 700; font-size: 14px; border-radius: 11px; padding: 12px 16px; min-height: 44px; }
+  .btn:active { transform: scale(.97); }
+  .btn-azul { background: var(--azul); color: #fff; }
+  .btn-verde { background: var(--verde); color: #fff; }
+  .btn-rojo-borde { background: var(--blanco); border: 1.5px solid #F0999B; color: var(--rojo); }
+  .btn-gris { background: #EEF2F9; color: var(--azul-oscuro); }
+  .btn-block { width: 100%; margin-top: 10px; }
+  .fila-botones { display: flex; gap: 8px; margin-top: 12px; }
+  .fila-botones .btn { flex: 1; }
+  .patente { font-size: 22px; font-weight: 800; letter-spacing: 1.5px; }
+  .vehiculo { font-size: 13px; color: var(--suave); margin-bottom: 4px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+  .badge.pendiente { background: var(--naranja-bg); color: var(--naranja-tx); }
+  .badge.aprobada { background: var(--verde-bg); color: var(--verde-tx); }
+  .badge.observada { background: var(--rojo-bg); color: var(--rojo); }
+  .comp { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 9px 0; border-top: 1px solid #EEF2F9; }
+  .comp .datos { font-size: 14px; }
+  .comp .serie { font-size: 12.5px; color: var(--suave); }
+  .comp .opciones { display: flex; gap: 4px; flex-shrink: 0; }
+  .comp .opciones button { border: 1.5px solid var(--linea); background: var(--blanco); border-radius: 999px; font-size: 12px; font-weight: 700; padding: 6px 11px; cursor: pointer; font-family: inherit; color: var(--suave); }
+  .comp .opciones button.si.activo { background: var(--verde-bg); border-color: var(--verde); color: var(--verde-tx); }
+  .comp .opciones button.no.activo { background: var(--rojo-bg); border-color: var(--rojo); color: var(--rojo); }
+  .check-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-top: 1px solid #EEF2F9; font-size: 14.5px; }
+  .check-item input[type=checkbox] { width: 22px; height: 22px; margin-top: 1px; flex-shrink: 0; accent-color: var(--verde); }
+  .titulo-seccion { font-size: 12px; font-weight: 800; color: var(--azul-oscuro); letter-spacing: .5px; text-transform: uppercase; margin: 12px 0 2px; }
+  .msj { border-radius: 10px; padding: 10px 12px; font-size: 13.5px; margin-top: 10px; }
+  .msj.ok { background: var(--verde-bg); color: var(--verde-tx); }
+  .msj.err { background: var(--rojo-bg); color: var(--rojo); }
+  .vacio { text-align: center; color: var(--suave); font-size: 14px; padding: 30px 10px; }
+  .codigo-input { text-align: center; font-size: 26px !important; letter-spacing: 8px; font-weight: 700; }
+  .refrescar { background: none; border: none; color: var(--azul); font-family: inherit; font-weight: 700; font-size: 13px; cursor: pointer; padding: 8px; }
+  .spinner { display: inline-block; width: 15px; height: 15px; border: 2px solid var(--linea); border-top-color: var(--azul); border-radius: 50%; animation: gira .8s linear infinite; vertical-align: middle; }
+  @keyframes gira { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="top">
+  <img src="icon-192.png" alt="">
+  <div><b>ESTELITA</b> <span class="sub">TÉCNICO</span></div>
+</div>
+<div class="wrap" id="app"><p class="vacio"><span class="spinner"></span> Cargando...</p></div>
+
+<script>
+(function () {
+  const TOKEN_KEY = 'gnc_tecnico_token_v1';
+  const app = document.getElementById('app');
+  let revisiones = [];
+  let abierta = null; // revisión abierta en detalle
+  let respuesta = null; // estado del checklist en curso { comps: {}, items: {}, nota }
+  let cargando = false;
+  let vapidPublicKey = null;
+
+  function esc(s) { return (s || '').toString().replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])); }
+
+  async function api(body) {
+    const r = await fetch('/api/tecnico', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tecnicoToken: localStorage.getItem(TOKEN_KEY), ...body }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) { const e = new Error(data.error || 'Error ' + r.status); e.status = r.status; throw e; }
+    return data;
+  }
+
+  // ---- Vinculación ----
+  function pantallaVincular(msj) {
+    app.innerHTML = `
+      <div class="card">
+        <h2>Vincular con el taller</h2>
+        <p class="ayuda">Pedile al dueño del taller que abra Estelita → Configurar datos del taller → "Vincular un técnico". Le va a aparecer un código de 6 números: escribilo acá.</p>
+        <input type="tel" inputmode="numeric" maxlength="6" class="codigo-input" id="codigo" placeholder="000000" autocomplete="off">
+        <button class="btn btn-azul btn-block" id="btn-vincular">Vincular este celular</button>
+        ${msj ? `<div class="msj err">${esc(msj)}</div>` : ''}
+      </div>`;
+    document.getElementById('btn-vincular').addEventListener('click', async () => {
+      const codigo = document.getElementById('codigo').value.trim();
+      if (!/^\d{6}$/.test(codigo)) { pantallaVincular('El código tiene 6 números.'); return; }
+      try {
+        const r = await api({ accion: 'vincular-canjear', codigo });
+        localStorage.setItem(TOKEN_KEY, r.tecnicoToken);
+        if (r.vapidPublicKey) localStorage.setItem('gnc_tecnico_vapid_v1', r.vapidPublicKey);
+        vapidPublicKey = r.vapidPublicKey;
+        await activarNotificaciones();
+        await cargarPendientes();
+      } catch (e) {
+        pantallaVincular(e.message);
+      }
+    });
+  }
+
+  // ---- Notificaciones push ----
+  function b64aUint8(base64) {
+    const pad = '='.repeat((4 - base64.length % 4) % 4);
+    const b = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(b);
+    const arr = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+    return arr;
+  }
+  async function activarNotificaciones() {
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window) || !vapidPublicKey) return;
+      const reg = await navigator.serviceWorker.register('/sw-tecnico.js', { scope: '/tecnico.html' });
+      const permiso = await Notification.requestPermission();
+      if (permiso !== 'granted') return;
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64aUint8(vapidPublicKey) });
+      await api({ accion: 'push-suscribir', subscription: sub.toJSON() });
+    } catch (e) { console.error('push:', e); }
+  }
+
+  // ---- Lista de revisiones ----
+  async function cargarPendientes() {
+    if (cargando) return;
+    cargando = true;
+    try {
+      const r = await api({ accion: 'revision-pendientes' });
+      revisiones = r.revisiones || [];
+      pintarLista();
+    } catch (e) {
+      if (e.status === 403) { localStorage.removeItem(TOKEN_KEY); pantallaVincular(e.message); }
+      else app.innerHTML = `<div class="card"><div class="msj err">${esc(e.message)}</div><button class="btn btn-gris btn-block" onclick="location.reload()">Reintentar</button></div>`;
+    } finally { cargando = false; }
+  }
+
+  function pintarLista() {
+    const pendientes = revisiones.filter(r => r.estado === 'pendiente');
+    const resueltas = revisiones.filter(r => r.estado !== 'pendiente').slice(0, 5);
+    app.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <div style="font-size:13px; color:var(--suave);">${pendientes.length ? pendientes.length + ' revisión(es) pendiente(s)' : 'Sin revisiones pendientes'}</div>
+        <button class="refrescar" id="btn-refrescar">Actualizar</button>
+      </div>
+      ${pendientes.length ? pendientes.map(tarjeta).join('') : '<div class="card"><div class="vacio">Cuando el taller te envíe una revisión, va a aparecer acá (y te va a llegar una notificación).</div></div>'}
+      ${resueltas.length ? `<div class="titulo-seccion">Últimas resueltas</div>${resueltas.map(tarjeta).join('')}` : ''}
+    `;
+    document.getElementById('btn-refrescar').addEventListener('click', cargarPendientes);
+    app.querySelectorAll('[data-abrir]').forEach(b => b.addEventListener('click', () => {
+      abierta = revisiones.find(r => r.id === b.getAttribute('data-abrir'));
+      respuesta = { comps: {}, items: {}, nota: '' };
+      pintarDetalle();
+    }));
+  }
+
+  function tarjeta(r) {
+    return `<div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+        <div>
+          <div class="patente">${esc(r.patente || 'SIN PATENTE')}</div>
+          <div class="vehiculo">${esc(r.vehiculo || '')} · ${esc(r.tipoTramite || '')}</div>
+        </div>
+        <span class="badge ${r.estado}">${r.estado === 'pendiente' ? 'Pendiente' : r.estado === 'aprobada' ? 'Aprobada' : 'Con observaciones'}</span>
+      </div>
+      ${r.estado === 'pendiente' ? `<button class="btn btn-azul btn-block" data-abrir="${esc(r.id)}">Revisar</button>` : (r.observaciones ? `<div class="msj err" style="margin-top:8px;">${esc(r.observaciones)}</div>` : '')}
+    </div>`;
+  }
+
+  // ---- Detalle / checklist ----
+  function pintarDetalle() {
+    const r = abierta;
+    const comps = r.componentes || [];
+    const items = r.checklist || [];
+    app.innerHTML = `
+      <div class="card">
+        <div class="patente">${esc(r.patente || 'SIN PATENTE')}</div>
+        <div class="vehiculo">${esc(r.vehiculo || '')} · ${esc(r.tipoTramite || '')}</div>
+        <div class="titulo-seccion">Componentes según el sistema</div>
+        <p class="ayuda" style="margin-bottom:2px;">Compará cada número con el que está grabado en el componente del auto.</p>
+        ${comps.map((c, i) => `
+          <div class="comp">
+            <div class="datos">${esc(c.nombre)}<div class="serie">${esc(c.detalle || '')}</div></div>
+            <div class="opciones">
+              <button type="button" class="si" data-comp="${i}" data-valor="si">Coincide</button>
+              <button type="button" class="no" data-comp="${i}" data-valor="no">No</button>
+            </div>
+          </div>`).join('')}
+        <div class="titulo-seccion">Control según normativa</div>
+        ${items.map((it, i) => `
+          <label class="check-item"><input type="checkbox" data-item="${i}"> <span>${esc(it)}</span></label>`).join('')}
+        <div class="titulo-seccion">Observaciones</div>
+        <textarea id="nota" rows="2" placeholder="Anotá acá cualquier problema que encuentres"></textarea>
+        <div class="fila-botones">
+          <button class="btn btn-verde" id="btn-aprobar">Todo en condiciones</button>
+          <button class="btn btn-rojo-borde" id="btn-observar">Informar problema</button>
+        </div>
+        <button class="btn btn-gris btn-block" id="btn-volver">Volver</button>
+        <div id="detalle-msj"></div>
+      </div>`;
+
+    app.querySelectorAll('[data-comp]').forEach(b => b.addEventListener('click', () => {
+      const i = b.getAttribute('data-comp');
+      respuesta.comps[i] = b.getAttribute('data-valor');
+      app.querySelectorAll(`[data-comp="${i}"]`).forEach(x => x.classList.toggle('activo', x === b));
+    }));
+    app.querySelectorAll('[data-item]').forEach(ch => ch.addEventListener('change', () => {
+      respuesta.items[ch.getAttribute('data-item')] = ch.checked;
+    }));
+    document.getElementById('btn-volver').addEventListener('click', () => { abierta = null; pintarLista(); });
+    document.getElementById('btn-aprobar').addEventListener('click', () => responder('aprobada'));
+    document.getElementById('btn-observar').addEventListener('click', () => responder('observada'));
+  }
+
+  async function responder(estado) {
+    const r = abierta;
+    const comps = r.componentes || [];
+    const items = r.checklist || [];
+    const nota = document.getElementById('nota').value.trim();
+    const msj = document.getElementById('detalle-msj');
+    if (estado === 'aprobada') {
+      const compsSinMarcar = comps.filter((c, i) => respuesta.comps[i] !== 'si');
+      const itemsSinTildar = items.filter((it, i) => !respuesta.items[i]);
+      if (compsSinMarcar.length || itemsSinTildar.length) {
+        msj.innerHTML = '<div class="msj err">Para aprobar, marcá "Coincide" en todos los componentes y tildá todos los puntos del control. Si algo está mal, usá "Informar problema".</div>';
+        return;
+      }
+    } else {
+      const hayProblema = comps.some((c, i) => respuesta.comps[i] === 'no');
+      if (!hayProblema && !nota) {
+        msj.innerHTML = '<div class="msj err">Contanos qué encontraste: marcá "No" en el componente que no coincide o escribí una observación.</div>';
+        return;
+      }
+    }
+    try {
+      msj.innerHTML = '<div class="msj ok"><span class="spinner"></span> Enviando...</div>';
+      const detalleComps = comps.map((c, i) => `${c.nombre}: ${respuesta.comps[i] === 'si' ? 'coincide' : respuesta.comps[i] === 'no' ? 'NO COINCIDE' : 'sin revisar'}`);
+      await api({
+        accion: 'revision-responder', id: r.id,
+        resultado: {
+          estado,
+          items: { componentes: respuesta.comps, control: respuesta.items },
+          observaciones: estado === 'observada' ? [nota, ...detalleComps.filter(d => d.includes('NO COINCIDE'))].filter(Boolean).join(' · ') : nota,
+        },
+      });
+      abierta = null;
+      await cargarPendientes();
+    } catch (e) {
+      msj.innerHTML = `<div class="msj err">${esc(e.message)}</div>`;
+    }
+  }
+
+  // ---- Arranque ----
+  if (!localStorage.getItem(TOKEN_KEY)) {
+    pantallaVincular();
+  } else {
+    vapidPublicKey = localStorage.getItem('gnc_tecnico_vapid_v1');
+    cargarPendientes();
+    // Si el permiso ya está dado, reafirmar la suscripción push en cada
+    // apertura (cubre cambios de navegador o suscripciones vencidas).
+    if ('serviceWorker' in navigator && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      activarNotificaciones();
+    } else if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw-tecnico.js', { scope: '/tecnico.html' }).catch(() => {});
+    }
+  }
+  // Refresco automático cada 30 segundos con la app abierta.
+  setInterval(() => { if (localStorage.getItem(TOKEN_KEY) && !abierta) cargarPendientes(); }, 30000);
+  window.addEventListener('focus', () => { if (localStorage.getItem(TOKEN_KEY) && !abierta) cargarPendientes(); });
+})();
+</script>
+</body>
+</html>
