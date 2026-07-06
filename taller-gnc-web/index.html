@@ -2221,6 +2221,10 @@ Documentación para realizar la renovación:
         </label>
       </div>
       ${ayudaBloque('ayuda-ajuste-imp', 'Solo para "Imprimir solo los datos" sobre una planilla preimpresa: si los datos salen corridos respecto de los casilleros, ajustá acá cuántos milímetros moverlos. Positivo = hacia la derecha / abajo; negativo = hacia la izquierda / arriba.')}
+      <div class="form-actions" style="margin-top:2px;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-grilla-calibracion">Imprimir grilla de calibración ${infoAyuda('ayuda-grilla')}</button>
+      </div>
+      ${ayudaBloque('ayuda-grilla', 'Imprime una regla en milímetros. Poné una planilla EN BLANCO en la impresora e imprimí esta grilla encima (al 100%). Después sacale una foto y mandánosla: con la regla sobre los casilleros podemos ubicar cada dato en el lugar exacto de una sola vez.')}
       <h3>Productores de Equipos Completos (PEC) ${infoAyuda('ayuda-pecs')}</h3>
       ${ayudaBloque('ayuda-pecs', 'Si tu taller trabaja con más de un PEC, agregalos acá. Al iniciar cada trámite vas a poder elegir a cuál se envía la ficha técnica, y el WhatsApp va a salir directo al teléfono de ese PEC.')}
       ${(t.pecs || []).map((p, i) => `
@@ -2892,6 +2896,48 @@ Documentación para realizar la renovación:
     aclNombre: { x: 140, y: 274 },
     aclDocumento: { x: 140, y: 279 },
   };
+
+  // Grilla de calibración: una regla en milímetros para imprimir SOBRE una
+  // planilla en blanco. Con la regla encima de los casilleros, se puede leer
+  // la coordenada exacta de cada campo directamente de la foto, sin importar
+  // el ángulo — así se calibra el mapa en una sola pasada.
+  async function generarGrillaCalibracion() {
+    await cargarLibreriasPec();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const ajX = Number(tallerConfig.impresionAjusteX) || 0;
+    const ajY = Number(tallerConfig.impresionAjusteY) || 0;
+    const W = 210, H = 297;
+    // Líneas finas cada 5 mm (las de cada 10 mm un poco más marcadas).
+    for (let x = 0; x <= W; x += 5) {
+      doc.setDrawColor(x % 10 === 0 ? 120 : 200);
+      doc.setLineWidth(x % 10 === 0 ? 0.2 : 0.1);
+      doc.line(x + ajX, ajY, x + ajX, H + ajY);
+    }
+    for (let y = 0; y <= H; y += 5) {
+      doc.setDrawColor(y % 10 === 0 ? 120 : 200);
+      doc.setLineWidth(y % 10 === 0 ? 0.2 : 0.1);
+      doc.line(ajX, y + ajY, W + ajX, y + ajY);
+    }
+    // Números de mm cada 10, repetidos en varias columnas/filas para poder
+    // leerlos en cualquier zona de la hoja aunque los tape el formulario.
+    doc.setTextColor(200, 0, 0);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(5);
+    const colsX = [1, 70, 140, 200];
+    for (let y = 10; y < H; y += 10) {
+      colsX.forEach(cx => doc.text(String(y), cx + ajX, y + ajY + 1.6));
+    }
+    const filasY = [4, 100, 200, 292];
+    for (let x = 10; x < W; x += 10) {
+      filasY.forEach(cy => doc.text(String(x), x + ajX - 1.5, cy + ajY));
+    }
+    doc.setFontSize(8);
+    doc.setTextColor(200, 0, 0);
+    doc.text('GRILLA DE CALIBRACIÓN — imprimir sobre una planilla en blanco', 20 + ajX, 6 + ajY);
+    doc.setTextColor(0, 0, 0);
+    return doc.output('blob');
+  }
 
   async function generarPecPdfSoloDatos(cliente, tramite) {
     await cargarLibreriasPec();
@@ -4306,6 +4352,24 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     if (btnCancelTallerConfig) btnCancelTallerConfig.addEventListener('click', () => {
       showTallerConfig = false;
       render();
+    });
+
+    const btnGrillaCalibracion = root.querySelector('#btn-grilla-calibracion');
+    if (btnGrillaCalibracion) btnGrillaCalibracion.addEventListener('click', async () => {
+      // Tomar los ajustes de mm que estén tipeados sin obligar a guardar.
+      syncTallerConfigFromDOM();
+      btnGrillaCalibracion.disabled = true;
+      try {
+        const blob = await generarGrillaCalibracion();
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch (e) {
+        console.error(e);
+        await customAlert('No se pudo generar la grilla: ' + (e.message || e));
+      } finally {
+        btnGrillaCalibracion.disabled = false;
+      }
     });
 
     const btnSaveTallerConfig = root.querySelector('#btn-save-taller-config');
