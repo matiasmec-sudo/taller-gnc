@@ -1958,6 +1958,7 @@ Documentación para realizar la renovación:
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="taller-config-panel">
       <h2>Configuración del taller</h2>
       <p class="scan-sub">Estos datos son fijos (no cambian de cliente en cliente) y van a completar automáticamente la planilla que se manda al PEC.</p>
+      <div class="agent-hint" style="margin-bottom:12px;">Código de licencia de este equipo: <b>${escapeHtml(localStorage.getItem(LICENSE_KEY) || '(sin activar)')}</b> — es el que tenés que usar para activar Estelita en otro dispositivo y recuperar ahí tu copia de seguridad.</div>
       <h3 style="margin-top:0;">Taller de montaje</h3>
       <div class="form-grid">
         <label>Razón Social del Taller
