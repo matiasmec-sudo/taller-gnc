@@ -576,6 +576,9 @@ window.storage = {
     tecnicoNombre: '', tecnicoMatricula: '',
     codigoPec: '', codigoTaller: '',
     pecRazonSocial: '', pecDireccion: '', pecTelefono: '', pecIngeniero: '', pecMatriculaCipba: '',
+    // Corrimiento en milímetros para "Imprimir solo los datos" sobre una
+    // planilla preimpresa que no salió de Estelita.
+    impresionAjusteX: 0, impresionAjusteY: 0,
     // Lista de PECs del taller (algunos talleres trabajan con más de uno).
     // Los campos pec* planos de arriba quedan como espejo del primer PEC
     // por compatibilidad con datos ya guardados.
@@ -2210,7 +2213,14 @@ Documentación para realizar la renovación:
         <label>Código Taller
           <input type="text" id="tc-codigo-taller" value="${escapeHtml(t.codigoTaller)}" placeholder="Ej: LET0238">
         </label>
+        <label>Ajuste de impresión horizontal (mm) ${infoAyuda('ayuda-ajuste-imp')}
+          <input type="number" step="0.5" id="tc-ajuste-x" value="${escapeHtml(String(t.impresionAjusteX || 0))}">
+        </label>
+        <label>Ajuste de impresión vertical (mm)
+          <input type="number" step="0.5" id="tc-ajuste-y" value="${escapeHtml(String(t.impresionAjusteY || 0))}">
+        </label>
       </div>
+      ${ayudaBloque('ayuda-ajuste-imp', 'Solo para "Imprimir solo los datos" sobre una planilla preimpresa: si los datos salen corridos respecto de los casilleros, ajustá acá cuántos milímetros moverlos. Positivo = hacia la derecha / abajo; negativo = hacia la izquierda / arriba.')}
       <h3>Productores de Equipos Completos (PEC) ${infoAyuda('ayuda-pecs')}</h3>
       ${ayudaBloque('ayuda-pecs', 'Si tu taller trabaja con más de un PEC, agregalos acá. Al iniciar cada trámite vas a poder elegir a cuál se envía la ficha técnica, y el WhatsApp va a salir directo al teléfono de ese PEC.')}
       ${(t.pecs || []).map((p, i) => `
@@ -2271,6 +2281,8 @@ Documentación para realizar la renovación:
     tallerConfig.tecnicoNombre = el('tc-tecnico-nombre').value;
     tallerConfig.tecnicoMatricula = el('tc-tecnico-matricula').value;
     tallerConfig.codigoTaller = el('tc-codigo-taller').value;
+    tallerConfig.impresionAjusteX = Number(el('tc-ajuste-x').value) || 0;
+    tallerConfig.impresionAjusteY = Number(el('tc-ajuste-y').value) || 0;
     (tallerConfig.pecs || []).forEach((p, i) => {
       if (!el(`tc-pec-codigo-${i}`)) return;
       p.codigoPec = el(`tc-pec-codigo-${i}`).value;
@@ -2412,6 +2424,7 @@ Documentación para realizar la renovación:
       </div>
       <div class="form-actions">
         <button class="btn btn-ghost" id="btn-wizard-back-3">← Atrás</button>
+        <button class="btn btn-ghost" id="btn-imprimir-datos">Imprimir</button>
         <button class="btn btn-primary" id="btn-save-tramite">Guardar trámite</button>
         <button class="btn btn-agent" id="btn-send-pec-tramite">Enviar al PEC</button>
         <button class="btn btn-ghost" id="btn-wizard-cancel">Cancelar</button>
@@ -2493,8 +2506,12 @@ Documentación para realizar la renovación:
     return { d: d || '', m: m || '', a: y ? y.slice(2) : '' };
   }
 
+  // La clase "pec-valor" marca los DATOS cargados (en oposición a las
+  // etiquetas y bordes fijos de la planilla): el modo "solo datos" para
+  // imprimir sobre una planilla preimpresa vuelve transparente todo lo que
+  // no tenga esta clase.
   function pecCasilla(marcada) {
-    return `<span style="display:inline-block;width:12px;height:12px;border:1px solid #000;text-align:center;line-height:11px;font-size:10px;margin-right:4px;vertical-align:middle;font-weight:bold;">${marcada ? '✕' : ''}</span>`;
+    return `<span ${marcada ? 'class="pec-valor"' : ''} style="display:inline-block;width:12px;height:12px;border:1px solid #000;text-align:center;line-height:11px;font-size:10px;margin-right:4px;vertical-align:middle;font-weight:bold;">${marcada ? '✕' : ''}</span>`;
   }
 
   function pecCasillaConLabel(marcada, label) {
@@ -2503,7 +2520,7 @@ Documentación para realizar la renovación:
 
   function pecCampo(valor, etiqueta, flex) {
     return `<div style="flex:${flex || 1}; min-width:0; padding:0 5px; box-sizing:border-box;">
-      <div style="border-bottom:1px solid #000; min-height:15px; font-size:11px; font-weight:600; padding-bottom:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(valor || '')}</div>
+      <div class="pec-valor" style="border-bottom:1px solid #000; min-height:15px; font-size:11px; font-weight:600; padding-bottom:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(valor || '')}</div>
       <div style="font-size:7px; color:#333; margin-top:1px;">${etiqueta}</div>
     </div>`;
   }
@@ -2514,9 +2531,9 @@ Documentación para realizar la renovación:
   function pecAccesorio(label, codigo, serie, flex) {
     return `<div style="flex:${flex || 1}; min-width:0; padding:2px 5px; box-sizing:border-box; border-left:1px solid #000;">
       <div style="font-size:7.5px; font-weight:600;">${escapeHtml(label)}</div>
-      <div style="border-bottom:1px solid #000; min-height:13px; font-size:10px; font-weight:600;">${escapeHtml(codigo || '')}</div>
+      <div class="pec-valor" style="border-bottom:1px solid #000; min-height:13px; font-size:10px; font-weight:600;">${escapeHtml(codigo || '')}</div>
       <div style="font-size:6.5px; color:#333;">Código</div>
-      <div style="border-bottom:1px solid #000; min-height:13px; font-size:10px; font-weight:600;">${escapeHtml(serie || '')}</div>
+      <div class="pec-valor" style="border-bottom:1px solid #000; min-height:13px; font-size:10px; font-weight:600;">${escapeHtml(serie || '')}</div>
       <div style="font-size:6.5px; color:#333;">N° Serie</div>
     </div>`;
   }
@@ -2529,7 +2546,7 @@ Documentación para realizar la renovación:
   // PEC/ENARGAS) para un trámite puntual. Se renderiza off-screen y se
   // rasteriza con html2canvas antes de meterlo en el PDF — así el layout se
   // arma con CSS normal en vez de calcular coordenadas a mano con jsPDF.
-  function pecFormHtml(cliente, tramite, firmaDataUrl) {
+  function pecFormHtml(cliente, tramite, firmaDataUrl, soloDatos) {
     const tc = tallerConfig;
     // Datos del PEC elegido para este trámite (puede haber varios).
     const pec = pecDeTramite(tramite);
@@ -2551,7 +2568,13 @@ Documentación para realizar la renovación:
     while (cilindroFilas.length < valvulaFilas.length) cilindroFilas.push({});
     while (valvulaFilas.length < cilindroFilas.length) valvulaFilas.push({});
 
-    return `<div style="width:1000px; min-height:1414px; background:#fff; color:#000; font-family: Arial, Helvetica, sans-serif; box-sizing:border-box; border:2px solid #000; padding:16px; position:relative;">
+    // soloDatos: modo para imprimir sobre la planilla preimpresa — el layout
+    // es EXACTAMENTE el mismo (así los datos caen en los casilleros), pero
+    // todo lo que no sea un dato cargado se vuelve transparente.
+    return `${soloDatos ? `<style>
+      #pec-hoja.pec-solo-datos, #pec-hoja.pec-solo-datos * { border-color: transparent !important; color: transparent !important; background: transparent !important; }
+      #pec-hoja.pec-solo-datos .pec-valor, #pec-hoja.pec-solo-datos .pec-valor * { color: #000 !important; }
+    </style>` : ''}<div id="pec-hoja" class="${soloDatos ? 'pec-solo-datos' : ''}" style="width:1000px; min-height:1414px; background:#fff; color:#000; font-family: Arial, Helvetica, sans-serif; box-sizing:border-box; border:2px solid #000; padding:16px; position:relative;">
       <div style="position:absolute; top:2px; right:10px; font-size:10px; font-weight:bold;">F1</div>
 
       <!-- Título (planilla oficial ANEXO I — Documento N° 3) -->
@@ -2562,29 +2585,29 @@ Documentación para realizar la renovación:
         <div style="flex:2; display:flex; gap:8px;">
           <div style="width:46px; height:46px; border-radius:50%; background:#1a1a1a; color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:bold; flex-shrink:0;">e</div>
           <div style="font-size:9px; line-height:1.35;">
-            <div style="font-weight:bold; font-size:11px;">${escapeHtml(pec.razonSocial || 'Razón social del PEC')}</div>
-            <div>${escapeHtml(pec.direccion || '')}</div>
-            <div>${escapeHtml(pec.telefono || '')}</div>
+            <div class="pec-valor" style="font-weight:bold; font-size:11px;">${escapeHtml(pec.razonSocial || (soloDatos ? '' : 'Razón social del PEC'))}</div>
+            <div class="pec-valor">${escapeHtml(pec.direccion || '')}</div>
+            <div class="pec-valor">${escapeHtml(pec.telefono || '')}</div>
           </div>
           <div style="font-size:9px; line-height:1.35; border-left:1px solid #000; padding-left:8px;">
             <div style="font-size:7.5px;">REPRESENTANTE TÉCNICO</div>
-            <div style="font-weight:bold;">${escapeHtml(pec.ingeniero || '')}</div>
+            <div class="pec-valor" style="font-weight:bold;">${escapeHtml(pec.ingeniero || '')}</div>
             <div>INGENIERO MECÁNICO</div>
-            <div>Mat. CIPBA ${escapeHtml(pec.matriculaCipba || '')}</div>
+            <div class="pec-valor">Mat. CIPBA ${escapeHtml(pec.matriculaCipba || '')}</div>
           </div>
         </div>
         <div style="flex:1; border-left:1px solid #000; padding-left:8px;">
           <div style="font-size:8px; text-align:center; font-weight:bold;">Habilitación</div>
           <div style="font-size:7px; text-align:center;">FECHA</div>
-          <div style="display:flex; gap:3px; justify-content:center;">${[fHab.d, fHab.m, fHab.a].map(v => `<span style="border:1px solid #000; width:22px; height:16px; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:600;">${escapeHtml(v)}</span>`).join('')}</div>
+          <div style="display:flex; gap:3px; justify-content:center;">${[fHab.d, fHab.m, fHab.a].map(v => `<span class="pec-valor" style="border:1px solid #000; width:22px; height:16px; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:600;">${escapeHtml(v)}</span>`).join('')}</div>
           <div style="font-size:7px; text-align:center; margin-top:3px;">Vencimiento</div>
-          <div style="display:flex; gap:3px; justify-content:center;">${[fVenc.d, fVenc.m, fVenc.a].map(v => `<span style="border:1px solid #000; width:22px; height:16px; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:600;">${escapeHtml(v)}</span>`).join('')}</div>
+          <div style="display:flex; gap:3px; justify-content:center;">${[fVenc.d, fVenc.m, fVenc.a].map(v => `<span class="pec-valor" style="border:1px solid #000; width:22px; height:16px; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:600;">${escapeHtml(v)}</span>`).join('')}</div>
         </div>
         <div style="flex:1; border-left:1px solid #000; padding-left:8px;">
           <div style="font-size:8px; text-align:center; font-weight:bold;">N° OBLEA</div>
-          <div style="border-bottom:1px solid #000; min-height:15px; font-size:10px; font-weight:600; text-align:center;">${escapeHtml(tramite.obleaAnterior || '')}</div>
+          <div class="pec-valor" style="border-bottom:1px solid #000; min-height:15px; font-size:10px; font-weight:600; text-align:center;">${escapeHtml(tramite.obleaAnterior || '')}</div>
           <div style="font-size:7px; text-align:center;">Anterior</div>
-          <div style="border-bottom:1px solid #000; min-height:15px; font-size:10px; font-weight:600; text-align:center; margin-top:2px;">${escapeHtml(tramite.obleaNueva || '')}</div>
+          <div class="pec-valor" style="border-bottom:1px solid #000; min-height:15px; font-size:10px; font-weight:600; text-align:center; margin-top:2px;">${escapeHtml(tramite.obleaNueva || '')}</div>
           <div style="font-size:7px; text-align:center;">Nueva</div>
         </div>
       </div>
@@ -2599,11 +2622,11 @@ Documentación para realizar la renovación:
         </div>
         <div style="width:150px; display:flex; flex-direction:column; gap:3px; padding-left:6px;">
           <div style="border:1px solid #000; text-align:center; padding:2px;">
-            <div style="font-size:12px; font-weight:bold;">${escapeHtml(pec.codigoPec || '')}</div>
+            <div class="pec-valor" style="font-size:12px; font-weight:bold;">${escapeHtml(pec.codigoPec || '')}</div>
             <div style="font-size:7px;">CÓDIGO PEC</div>
           </div>
           <div style="border:1px solid #000; text-align:center; padding:2px;">
-            <div style="font-size:12px; font-weight:bold;">${escapeHtml(tc.codigoTaller || '')}</div>
+            <div class="pec-valor" style="font-size:12px; font-weight:bold;">${escapeHtml(tc.codigoTaller || '')}</div>
             <div style="font-size:7px;">CÓDIGO TALLER</div>
           </div>
         </div>
@@ -2699,13 +2722,13 @@ Documentación para realizar la renovación:
                   <td>Código</td><td>N° Serie</td><td>Nvo/Usado</td><td>Fabricado Mes/Año</td><td>Revisado Mes/Año</td><td>CRPC</td><td>M/SC/D/B</td>
                 </tr>
                 ${cilindroFilas.map(c => `<tr style="text-align:center;">
-                  <td style="border-top:1px solid #999; font-weight:600; font-size:9px;">${escapeHtml(c.codigo || '')}</td>
-                  <td style="border-top:1px solid #999; font-weight:600; font-size:9px;">${escapeHtml(c.serie || '')}</td>
-                  <td style="border-top:1px solid #999; font-size:8px;">${c.nuevoUsado === 'nuevo' ? 'Nuevo' : (c.codigo || c.serie) ? 'Usado' : ''}</td>
-                  <td style="border-top:1px solid #999; font-size:8px;">${[c.fabricadoMes, c.fabricadoAnio].filter(Boolean).join('/')}</td>
-                  <td style="border-top:1px solid #999; font-size:8px;">${[c.revisadoMes, c.revisadoAnio].filter(Boolean).join('/')}</td>
-                  <td style="border-top:1px solid #999; font-size:8px;">${escapeHtml(c.crpc || '')}</td>
-                  <td style="border-top:1px solid #999; font-weight:600;">${pecOperacionLetra(c.msdb)}</td>
+                  <td class="pec-valor" style="border-top:1px solid #999; font-weight:600; font-size:9px;">${escapeHtml(c.codigo || '')}</td>
+                  <td class="pec-valor" style="border-top:1px solid #999; font-weight:600; font-size:9px;">${escapeHtml(c.serie || '')}</td>
+                  <td class="pec-valor" style="border-top:1px solid #999; font-size:8px;">${c.nuevoUsado === 'nuevo' ? 'Nuevo' : (c.codigo || c.serie) ? 'Usado' : ''}</td>
+                  <td class="pec-valor" style="border-top:1px solid #999; font-size:8px;">${[c.fabricadoMes, c.fabricadoAnio].filter(Boolean).join('/')}</td>
+                  <td class="pec-valor" style="border-top:1px solid #999; font-size:8px;">${[c.revisadoMes, c.revisadoAnio].filter(Boolean).join('/')}</td>
+                  <td class="pec-valor" style="border-top:1px solid #999; font-size:8px;">${escapeHtml(c.crpc || '')}</td>
+                  <td class="pec-valor" style="border-top:1px solid #999; font-weight:600;">${pecOperacionLetra(c.msdb)}</td>
                 </tr>`).join('')}
               </table>
             </div>
@@ -2714,9 +2737,9 @@ Documentación para realizar la renovación:
               <table style="width:100%; border-collapse:collapse; font-size:7.5px;">
                 <tr style="font-weight:600; text-align:center;"><td>Código</td><td>N° Serie</td><td>M/S/B</td></tr>
                 ${valvulaFilas.map(v => `<tr style="text-align:center;">
-                  <td style="border-top:1px solid #999; font-weight:600; font-size:9px;">${escapeHtml(v.codigo || '')}</td>
-                  <td style="border-top:1px solid #999; font-weight:600; font-size:9px;">${escapeHtml(v.serie || '')}</td>
-                  <td style="border-top:1px solid #999; font-weight:600;">${pecOperacionLetra(v.msb)}</td>
+                  <td class="pec-valor" style="border-top:1px solid #999; font-weight:600; font-size:9px;">${escapeHtml(v.codigo || '')}</td>
+                  <td class="pec-valor" style="border-top:1px solid #999; font-weight:600; font-size:9px;">${escapeHtml(v.serie || '')}</td>
+                  <td class="pec-valor" style="border-top:1px solid #999; font-weight:600;">${pecOperacionLetra(v.msb)}</td>
                 </tr>`).join('')}
               </table>
             </div>
@@ -2740,7 +2763,7 @@ Documentación para realizar la renovación:
 
           <!-- Observaciones -->
           <div style="margin-top:6px;">
-            <div style="border-bottom:1px solid #000; min-height:16px; font-size:10px;">${escapeHtml(tramite.detalle || '')}</div>
+            <div class="pec-valor" style="border-bottom:1px solid #000; min-height:16px; font-size:10px;">${escapeHtml(tramite.detalle || '')}</div>
             <div style="font-size:7px; color:#333;">Observaciones</div>
           </div>
         </div>
@@ -2756,8 +2779,8 @@ Documentación para realizar la renovación:
             </div>
             <div style="flex:1; text-align:center; font-size:8px;">
               <div style="height:28px;"></div>
-              <div style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(tc.tecnicoNombre || '')}</div>
-              <div style="font-size:7px;">Técnico Mecánico — Mat. ${escapeHtml(tc.tecnicoMatricula || '')}</div>
+              <div class="pec-valor" style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(tc.tecnicoNombre || '')}</div>
+              <div class="pec-valor" style="font-size:7px;">Técnico Mecánico — Mat. ${escapeHtml(tc.tecnicoMatricula || '')}</div>
               <div style="font-size:6px; color:#666;">Firma, aclaración y N° Matrícula del Representante Técnico del TdM</div>
             </div>
           </div>
@@ -2767,9 +2790,9 @@ Documentación para realizar la renovación:
               <div style="font-size:8px; font-weight:bold; margin-top:3px;">ESTE DOCUMENTO NO HABILITA LA CARGA DE GNC</div>
             </div>
             <div style="flex:1; text-align:center; font-size:8px;">
-              ${firmaDataUrl ? `<img src="${firmaDataUrl}" style="height:28px; max-width:100%;">` : `<div style="height:28px;"></div>`}
-              <div style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(cliente.nombre || '')}</div>
-              <div style="font-size:7px;">${escapeHtml([cliente.tipo_documento, cliente.dni].filter(Boolean).join(' '))}</div>
+              ${firmaDataUrl ? `<img class="pec-valor" src="${firmaDataUrl}" style="height:28px; max-width:100%;">` : `<div style="height:28px;"></div>`}
+              <div class="pec-valor" style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(cliente.nombre || '')}</div>
+              <div class="pec-valor" style="font-size:7px;">${escapeHtml([cliente.tipo_documento, cliente.dni].filter(Boolean).join(' '))}</div>
               <div style="font-size:6px; color:#666;">Firma, aclaración y N° Documento del Propietario</div>
             </div>
           </div>
@@ -2779,14 +2802,51 @@ Documentación para realizar la renovación:
             </div>
             <div style="flex:1; text-align:center; font-size:8px;">
               <div style="height:28px;"></div>
-              <div style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(pec.ingeniero || '')}</div>
-              <div style="font-size:7px;">Ingeniero Mecánico — Mat. CIPBA ${escapeHtml(pec.matriculaCipba || '')}</div>
+              <div class="pec-valor" style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(pec.ingeniero || '')}</div>
+              <div class="pec-valor" style="font-size:7px;">Ingeniero Mecánico — Mat. CIPBA ${escapeHtml(pec.matriculaCipba || '')}</div>
               <div style="font-size:6px; color:#666;">Firma, aclaración y N° Matrícula del Representante Técnico del PEC</div>
             </div>
           </div>
         </div>
       </div>
     </div>`;
+  }
+
+  // PDF de "solo datos" para imprimir sobre la planilla preimpresa: misma
+  // geometría que la planilla completa, pero solo se ven los datos cargados
+  // (los casilleros ya están en el papel). Sin firma dibujada: en el papel
+  // firma el cliente a mano.
+  async function generarPecPdfSoloDatos(cliente, tramite) {
+    await cargarLibreriasPec();
+    const cont = document.createElement('div');
+    cont.style.position = 'fixed';
+    cont.style.left = '-99999px';
+    cont.style.top = '0';
+    cont.innerHTML = pecFormHtml(cliente, tramite, null, true);
+    document.body.appendChild(cont);
+    let blob;
+    try {
+      const hoja = cont.querySelector('#pec-hoja');
+      const canvas = await window.html2canvas(hoja, { scale: 2, backgroundColor: '#ffffff' });
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const ratio = canvas.height / canvas.width;
+      let w = pageW, h = pageW * ratio;
+      if (h > pageH) { h = pageH; w = pageH / ratio; }
+      // Ajuste fino en milímetros por si la planilla preimpresa no salió de
+      // Estelita y los datos caen corridos (se configura en el taller).
+      const ajX = Number(tallerConfig.impresionAjusteX) || 0;
+      const ajY = Number(tallerConfig.impresionAjusteY) || 0;
+      const x = (pageW - w) / 2 + ajX, y = (pageH - h) / 2 + ajY;
+      // JPEG y no PNG: jsPDF infla los PNG (una hoja salía 22 MB).
+      doc.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', x, y, w, h);
+      blob = doc.output('blob');
+    } finally {
+      document.body.removeChild(cont);
+    }
+    return blob;
   }
 
   function pecCargarImagen(src) {
@@ -4089,6 +4149,8 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         tecnicoNombre: (tallerConfig.tecnicoNombre || '').trim(),
         tecnicoMatricula: (tallerConfig.tecnicoMatricula || '').trim(),
         codigoTaller: (tallerConfig.codigoTaller || '').trim(),
+        impresionAjusteX: Number(tallerConfig.impresionAjusteX) || 0,
+        impresionAjusteY: Number(tallerConfig.impresionAjusteY) || 0,
         // Campos planos = espejo del primer PEC, por compatibilidad con
         // datos y funciones anteriores a la lista de PECs.
         codigoPec: p0.codigoPec, pecRazonSocial: p0.razonSocial, pecDireccion: p0.direccion,
@@ -5456,6 +5518,39 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       syncTramiteCamposFromDOM();
       tramiteDraftCampos.revisionOverride = true;
       render();
+    });
+
+    // Imprimir "solo los datos" sobre la planilla preimpresa — usa los
+    // borradores actuales, no hace falta guardar antes.
+    const btnImprimirDatos = root.querySelector('#btn-imprimir-datos');
+    if (btnImprimirDatos) btnImprimirDatos.addEventListener('click', async () => {
+      syncClienteDraftFromDOM();
+      syncEquipoFromDOM();
+      syncTramiteCamposFromDOM();
+      const t = tramiteDraftCampos || {};
+      const clienteTmp = { ...blankClienteBase(), ...(clienteDraft || {}) };
+      const tramiteTmp = {
+        tipo: t.tipo, fecha: t.fecha, detalle: t.detalle || '',
+        obleaAnterior: t.obleaAnterior || '', obleaNueva: t.obleaNueva || '',
+        pecIndex: Number.isInteger(t.pecIndex) ? t.pecIndex : 0,
+        equipo: tramiteDraftEquipo || blankEquipo(null),
+      };
+      try {
+        if (!localStorage.getItem('gnc_hint_imprimir_v1')) {
+          localStorage.setItem('gnc_hint_imprimir_v1', '1');
+          await customAlert('Se abre un PDF con SOLO los datos, ubicados donde caen los casilleros de la planilla. Poné la planilla ya impresa en la impresora e imprimí al 100% (tamaño real, sin "ajustar a la página"). La firma del cliente va a mano sobre el papel. Si los datos salen corridos, en "Configurar datos del taller" está el ajuste de impresión en milímetros.', 'Imprimir solo los datos');
+        }
+        btnImprimirDatos.disabled = true;
+        const blob = await generarPecPdfSoloDatos(clienteTmp, tramiteTmp);
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch (e) {
+        console.error(e);
+        await customAlert('No se pudo generar el PDF de impresión: ' + (e.message || e));
+      } finally {
+        btnImprimirDatos.disabled = false;
+      }
     });
 
     const btnSendPecTramite = root.querySelector('#btn-send-pec-tramite');
