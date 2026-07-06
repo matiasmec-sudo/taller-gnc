@@ -2831,62 +2831,66 @@ Documentación para realizar la renovación:
   // su número acá — y los ajustes globales de la configuración corren todo
   // junto. Los datos que la planilla ya trae impresos (PEC, ingeniero,
   // técnico) no se escriben.
+  // Coordenadas calibradas con la 2.ª impresión de prueba del usuario
+  // (foto frontal de la PecMar con los datos impresos: se midió el
+  // corrimiento de cada campo contra su casillero).
   const PECMAR_MAPA = {
     // Taller (TdM)
-    tallerRazonSocial: { x: 40, y: 53 },
-    tallerDireccion: { x: 40, y: 61 },
-    tallerCuit: { x: 46, y: 69 },
-    codigoTaller: { x: 168, y: 47, size: 11 },
+    tallerRazonSocial: { x: 36, y: 40.5 },
+    tallerDireccion: { x: 30, y: 52 },
+    tallerCuit: { x: 42, y: 61.5 },
+    codigoTaller: { x: 170, y: 50.5, size: 11 },
     // Fecha (dd mm aa en casilleros separados) y oblea
     fechaHab: { xs: [121, 133, 145], y: 28 },
     fechaVenc: { xs: [121, 133, 145], y: 39 },
-    obleaAnterior: { x: 170, y: 25 },
-    obleaNueva: { x: 170, y: 37 },
+    obleaAnterior: { x: 170, y: 30 },
+    obleaNueva: { x: 170, y: 43 },
     // Vehículo
-    marca: { x: 25, y: 68 },
-    modelo: { x: 85, y: 68 },
-    anio: { x: 140, y: 68 },
-    dominio: { x: 25, y: 79 },
-    inyeccionSi: { x: 63, y: 78 },
-    inyeccionNo: { x: 71, y: 78 },
-    tipoVehiculo: { xs: { moto: 88, taxi: 96, 'pick up': 106, bus: 118, oficial: 125, otros: 133 }, y: 78 },
-    // Tipo de operación (casillas de la derecha)
+    marca: { x: 20, y: 74.5 },
+    modelo: { x: 75, y: 74.5 },
+    anio: { x: 117, y: 74.5 },
+    dominio: { x: 15, y: 85 },
+    inyeccionSi: { x: 64, y: 84.5 },
+    inyeccionNo: { x: 72, y: 84.5 },
+    tipoVehiculo: { xs: { moto: 88, taxi: 98, 'pick up': 106, bus: 119, oficial: 126, otros: 133 }, y: 84.5 },
+    // Tipo de operación (la X de Modificación cayó bien en la prueba)
     tipoOperacion: {
       conversion: { x: 196, y: 63 }, modificacion: { x: 196, y: 67.5 },
       revision_anual: { x: 196, y: 72 }, prueba_hidraulica: { x: 196, y: 76.5 },
       desmontaje: { x: 196, y: 81 }, baja: { x: 163, y: 78 },
     },
     // Propietario
-    propNombre: { x: 25, y: 88 },
-    propCalle: { x: 103, y: 88 },
-    propCpa: { x: 179, y: 88 },
-    propLocalidad: { x: 28, y: 96 },
-    propProvincia: { x: 88, y: 96 },
-    propTelefono: { x: 122, y: 96 },
-    propDocumento: { x: 160, y: 96 },
+    propNombre: { x: 20, y: 98.5 },
+    propCalle: { x: 100, y: 98.5 },
+    propCpa: { x: 188, y: 98.5 },
+    propLocalidad: { x: 25, y: 104.5 },
+    propProvincia: { x: 95, y: 104.5 },
+    propTelefono: { x: 132, y: 104.5 },
+    propDocumento: { x: 170, y: 104.5 },
     // Regulador: el código y la serie van EN LA COLUMNA de la operación
     // (S/Cambio, Montaje, Desmontaje o Baja) — así la PecMar muestra el
     // reemplazo completo: el nuevo en Montaje y el viejo en Baja.
-    reguladorColX: { sigue: 25, montaje: 46, desmontaje: 67, baja: 87 },
-    reguladorCodigoY: 112,
-    reguladorSerieY: 118.5,
-    reguladorNuevo: { x: 104, y: 112 },
-    reguladorUsado: { x: 113, y: 112 },
+    reguladorColX: { sigue: 21, montaje: 43, desmontaje: 65, baja: 87 },
+    reguladorCodigoY: 124,
+    reguladorSerieY: 132,
+    reguladorNuevo: { x: 109, y: 124 },
+    reguladorUsado: { x: 117, y: 124 },
     // Manómetro / Accesorio P/Tubería / Tubería alta presión
-    manometro: { codX: 139, serieX: 133, codY: 111.5, serieY: 118.5 },
-    accesorioTuberia: { codX: 168, serieX: 162, codY: 111.5, serieY: 118.5 },
-    tuberiaAltaPresion: { codX: 196, serieX: 190, codY: 111.5, serieY: 118.5 },
+    manometro: { codX: 146, serieX: 137, codY: 121, serieY: 130 },
+    accesorioTuberia: { codX: 175, serieX: 168, codY: 121, serieY: 130 },
+    tuberiaAltaPresion: { codX: 200, serieX: 195, codY: 121, serieY: 130 },
     // Cilindros (4 filas) y válvulas
-    cilindroYs: [133, 140.5, 148, 155.5],
-    cilindroCols: { codigo: 12, serie: 38, nuevo: 70, usado: 76, fabMes: 82, fabAnio: 88, revMes: 95, revAnio: 101, crpc: 109, op: 122 },
-    valvulaCols: { codigo: 146, serie: 168, op: 196 },
+    cilindroYs: [146, 155.5, 165, 174],
+    cilindroCols: { codigo: 12, serie: 44, nuevo: 85, usado: 93, fabMes: 100, fabAnio: 107, revMes: 114, revAnio: 121, crpc: 129, op: 140 },
+    valvulaCols: { codigo: 153, serie: 172, op: 197 },
     // Otros accesorios (dos filas de bloques)
-    otrosFila1: { keys: ['dispSujecionCilindro', 'electrovalvulaNafta', 'electrovalvulaGnc', 'dosifMezclador', 'sistemaVenteo', 'llaveConmutadora'], codXs: [36, 70, 103, 136, 169, 196], serieXs: [16, 50, 83, 116, 150, 183], codY: 167, serieY: 174.5 },
-    otrosFila2: { keys: ['valCargaInterna', 'valCargaExterna', 'mangueraBajaPresion'], codXs: [36, 70, 103], serieXs: [16, 50, 83], codY: 181.5, serieY: 189 },
-    observaciones: { x: 15, y: 200, maxW: 185 },
-    // Aclaración del propietario (la firma va a mano)
-    aclNombre: { x: 140, y: 238 },
-    aclDocumento: { x: 140, y: 243 },
+    otrosFila1: { keys: ['dispSujecionCilindro', 'electrovalvulaNafta', 'electrovalvulaGnc', 'dosifMezclador', 'sistemaVenteo', 'llaveConmutadora'], codXs: [22, 56, 91, 125, 160, 194], serieXs: [10, 45, 80, 114, 149, 184], codY: 187, serieY: 197 },
+    otrosFila2: { keys: ['valCargaInterna', 'valCargaExterna', 'mangueraBajaPresion'], codXs: [22, 56, 91], serieXs: [10, 45, 80], codY: 211, serieY: 219 },
+    observaciones: { x: 15, y: 226, maxW: 185 },
+    // Aclaración del propietario, sobre la línea "Aclaración y N° de
+    // Documento" del bloque Propietario (la firma va a mano, más arriba).
+    aclNombre: { x: 140, y: 274 },
+    aclDocumento: { x: 140, y: 279 },
   };
 
   async function generarPecPdfSoloDatos(cliente, tramite) {
@@ -2987,8 +2991,10 @@ Documentación para realizar la renovación:
     });
 
     T(tramite.detalle, M.observaciones.x, M.observaciones.y, 8, M.observaciones.maxW);
-    T(cliente.nombre, M.aclNombre.x, M.aclNombre.y, 8);
-    T([cliente.tipo_documento, cliente.dni].filter(Boolean).join(' '), M.aclDocumento.x, M.aclDocumento.y, 8);
+    // Aclaración del propietario en una sola línea (la del formulario):
+    // "NOMBRE — DNI 12345678". La firma la hace el cliente a mano.
+    const acl = [cliente.nombre, [cliente.tipo_documento, cliente.dni].filter(Boolean).join(' ')].filter(Boolean).join(' — ');
+    T(acl, M.aclNombre.x, M.aclNombre.y, 8);
 
     return doc.output('blob');
   }
