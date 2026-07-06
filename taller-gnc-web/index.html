@@ -803,6 +803,9 @@ Documentación para realizar la renovación:
     ready = true;
     render();
     iniciarAvisoPendientesDiario();
+    // En segundo plano: saber si hay técnicos vinculados (muestra u oculta
+    // el botón "Enviar al técnico" del paso 1).
+    consultarTecnicosVinculados().then(() => { if (showForm || editingId) render(); });
     await procesarCompartidoORestaurar();
   }
 
@@ -1962,6 +1965,14 @@ Documentación para realizar la renovación:
       <div class="form-actions" style="margin-top:4px;">
         <button type="button" class="btn btn-ghost btn-sm" id="btn-add-pec">+ Agregar PEC</button>
       </div>
+      <h3>App del técnico ${infoAyuda('ayuda-tecnico')}</h3>
+      ${ayudaBloque('ayuda-tecnico', 'El técnico instala la app "Estelita Técnico" en su celular (taller-gnc.vercel.app/tecnico.html) y la vincula con un código de 6 números que generás acá — de un solo uso y con 15 minutos de validez. El técnico nunca ve tu código de licencia y su app solo sirve para responder revisiones. Cuando le envíes una revisión desde el paso 1 de un trámite, le llega una notificación al celular aunque tenga la app cerrada.')}
+      <div class="agent-hint" id="tecnico-estado">${tecnicosVinculados === null ? 'Consultando...' : tecnicosVinculados ? tecnicosVinculados + ' celular(es) de técnico vinculado(s).' : 'Ningún técnico vinculado todavía.'}</div>
+      <div class="form-actions" style="margin-top:6px;">
+        <button type="button" class="btn btn-agent btn-sm" id="btn-vincular-tecnico">Vincular un técnico</button>
+        ${tecnicosVinculados ? '<button type="button" class="btn btn-danger-outline btn-sm" id="btn-desvincular-tecnicos">Desvincular todos</button>' : ''}
+      </div>
+      <div id="vinculo-codigo"></div>
       <div class="form-actions">
         <button class="btn btn-primary" id="btn-save-taller-config">Guardar configuración</button>
         <button class="btn btn-ghost" id="btn-cancel-taller-config">Cerrar</button>
@@ -2048,6 +2059,7 @@ Documentación para realizar la renovación:
         </div>
         <div id="enargas-copy-hint" class="agent-hint" style="display:none; grid-column: 1/-1;"></div>
         ${enargasPasteOpen ? enargasPasteBox(enargasEntrando) : ''}
+        ${revisionTecnicoBloque()}
         <label>Marca
           <input type="text" id="f-marca" value="${escapeHtml(c.marca)}" placeholder="Ej: Chevrolet">
         </label>
@@ -2904,6 +2916,10 @@ Documentación para realizar la renovación:
       obleaAnterior: (t && t.obleaAnterior) || '',
       obleaNueva: (t && t.obleaNueva) || '',
       pecIndex: (t && Number.isInteger(t.pecIndex)) ? t.pecIndex : 0,
+      revisionId: (t && t.revisionId) || null,
+      revisionEstado: (t && t.revisionEstado) || null,
+      revisionObs: (t && t.revisionObs) || '',
+      revisionOverride: !!(t && t.revisionOverride),
     };
   }
   const TRAMITE_DRAFT_CAMPOS_IDS = {
@@ -3113,6 +3129,106 @@ Documentación para realizar la renovación:
     try { return new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
     catch (e) { return iso || ''; }
   }
+
+  // ---- App del técnico (revisión previa al envío al PEC) ----
+  // Checklist de normativa que ve el técnico (definido acá: se manda dentro
+  // de cada revisión, así la app del técnico no necesita actualizarse si
+  // esta lista cambia).
+  const CHECKLIST_TECNICO = [
+    'Sujeción y soportes del cilindro firmes',
+    'Tubería de alta presión sin daños',
+    'Estado de mangueras en condiciones',
+    'Sistema de venteo conectado y libre',
+    'Sin pérdidas (prueba con espuma)',
+    'Electroválvulas de nafta y GNC funcionando',
+    'Manómetro y llave conmutadora en condiciones',
+    'CRPC del cilindro vigente',
+  ];
+  // null = todavía no se consultó; número = técnicos vinculados.
+  let tecnicosVinculados = null;
+
+  async function apiTecnicoTaller(body) {
+    const r = await fetch('/api/tecnico', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ license: localStorage.getItem(LICENSE_KEY), ...body }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || ('Error ' + r.status));
+    return data;
+  }
+
+  async function consultarTecnicosVinculados() {
+    try {
+      const r = await apiTecnicoTaller({ accion: 'tecnicos-estado' });
+      tecnicosVinculados = r.vinculados || 0;
+    } catch (e) { /* sin conexión: se reintenta la próxima vez */ }
+  }
+
+  // Bloque del paso 1: botón "Enviar al técnico" + estado de la revisión.
+  // Solo aparece si el taller tiene al menos un técnico vinculado.
+  function revisionTecnicoBloque() {
+    if (!tecnicosVinculados) return '';
+    const rc = tramiteDraftCampos || {};
+    let estadoHtml = '';
+    if (rc.revisionId && rc.revisionEstado === 'pendiente') {
+      estadoHtml = `<div class="agent-hint" style="background:#FDF0E1; border:1px solid #F3D9B7; color:#854F0B; border-radius:10px; padding:8px 12px;">Esperando la revisión del técnico... <button type="button" class="license-link" id="btn-revision-override">marcar revisado en el taller</button></div>`;
+    } else if (rc.revisionId && rc.revisionEstado === 'aprobada') {
+      estadoHtml = `<div class="agent-hint" style="background:#E1F5EE; border:1px solid #9FE1CB; color:#085041; border-radius:10px; padding:8px 12px;">Revisado por el técnico: todo en condiciones.</div>`;
+    } else if (rc.revisionId && rc.revisionEstado === 'observada') {
+      estadoHtml = `<div class="agent-hint" style="background:#FDE8E5; border:1px solid #F0999B; color:#C0281A; border-radius:10px; padding:8px 12px;">El técnico encontró un problema: ${escapeHtml(rc.revisionObs || '')} <button type="button" class="license-link" id="btn-reenviar-tecnico">reenviar corregido</button> · <button type="button" class="license-link" id="btn-revision-override">marcar revisado igual</button></div>`;
+    } else if (rc.revisionOverride) {
+      estadoHtml = `<div class="agent-hint" style="background:#E1F5EE; border:1px solid #9FE1CB; color:#085041; border-radius:10px; padding:8px 12px;">Marcado como revisado en el taller.</div>`;
+    }
+    return `<div style="grid-column: 1/-1;">
+      ${!rc.revisionId ? `<button type="button" class="btn btn-primary" id="btn-enviar-tecnico" style="width:100%; font-size:14px;">Enviar al técnico para revisar</button>` : ''}
+      ${estadoHtml}
+    </div>`;
+  }
+
+  // Arma la orden de revisión desde los borradores actuales del asistente.
+  function armarRevision() {
+    const eq = tramiteDraftEquipo || blankEquipo(null);
+    const c = clienteDraft || {};
+    const componentes = [];
+    if (eq.regulador && (eq.regulador.codigo || eq.regulador.serie)) {
+      componentes.push({ nombre: 'Regulador ' + (eq.regulador.codigo || ''), detalle: 'Serie ' + (eq.regulador.serie || 's/d') });
+    }
+    (eq.cilindros || []).forEach((cil, i) => {
+      if (cil.codigo || cil.serie) componentes.push({ nombre: `Cilindro ${i + 1} ${cil.codigo || ''}`, detalle: `Serie ${cil.serie || 's/d'}${cil.crpc ? ' · CRPC ' + cil.crpc : ''}` });
+    });
+    (eq.valvulas || []).forEach((v, i) => {
+      if (v.codigo || v.serie) componentes.push({ nombre: `Válvula ${i + 1} ${v.codigo || ''}`, detalle: 'Serie ' + (v.serie || 's/d') });
+    });
+    const tipoLabel = tramiteDraftCampos ? tramiteTipoLabel(tramiteDraftCampos.tipo) : '';
+    return {
+      id: 'r' + Date.now() + Math.random().toString(36).slice(2, 7),
+      patente: (c.patente || '').toUpperCase(),
+      vehiculo: [c.marca, c.modelo, c.anio].filter(Boolean).join(' '),
+      tipoTramite: tipoLabel,
+      componentes,
+      checklist: CHECKLIST_TECNICO.slice(),
+    };
+  }
+
+  // Mientras el asistente esté abierto con una revisión pendiente, se
+  // consulta el estado cada 20 segundos y se refleja solo en pantalla.
+  setInterval(async () => {
+    const rc = tramiteDraftCampos;
+    if (!ready || !rc || !rc.revisionId || rc.revisionEstado !== 'pendiente') return;
+    if (!showForm && !editingId) return;
+    try {
+      const r = await apiTecnicoTaller({ accion: 'revision-estado', id: rc.revisionId });
+      if (r.revision && r.revision.estado !== 'pendiente') {
+        rc.revisionEstado = r.revision.estado;
+        rc.revisionObs = r.revision.observaciones || '';
+        syncClienteDraftFromDOM();
+        syncEquipoFromDOM();
+        syncTramiteCamposFromDOM();
+        render();
+      }
+    } catch (e) { /* sin conexión: se reintenta */ }
+  }, 20000);
 
   // Fotos de documentación guardadas de un cliente (clave fotos:<id>).
   // Devuelve siempre un objeto { foto1, foto2 } (con null si no hay).
@@ -3495,6 +3611,11 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     if (btnToggleTallerConfig) btnToggleTallerConfig.addEventListener('click', () => {
       showTallerConfig = !showTallerConfig;
       render();
+      if (showTallerConfig) consultarTecnicosVinculados().then(() => {
+        if (!showTallerConfig) return;
+        syncTallerConfigFromDOM();
+        render();
+      });
     });
 
     const btnCancelTallerConfig = root.querySelector('#btn-cancel-taller-config');
@@ -3536,6 +3657,37 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       syncTallerConfigFromDOM();
       tallerConfig.pecs.push(blankPec());
       render();
+    });
+
+    const btnVincularTecnico = root.querySelector('#btn-vincular-tecnico');
+    if (btnVincularTecnico) btnVincularTecnico.addEventListener('click', async () => {
+      const caja = root.querySelector('#vinculo-codigo');
+      try {
+        btnVincularTecnico.disabled = true;
+        const r = await apiTecnicoTaller({ accion: 'vincular-generar' });
+        if (caja) caja.innerHTML = `<div style="border:2px dashed var(--flame); border-radius:12px; text-align:center; padding:14px; margin-top:8px;">
+          <div style="font-size:32px; font-weight:800; letter-spacing:8px; color:var(--flame);">${escapeHtml(r.codigo)}</div>
+          <div class="agent-hint" style="margin-top:4px;">El técnico tiene que abrir <b>taller-gnc.vercel.app/tecnico.html</b> en su celular y escribir este código. Vence en ${r.minutos} minutos y sirve una sola vez.</div>
+        </div>`;
+      } catch (e) {
+        if (caja) caja.innerHTML = `<div class="agent-result err">No se pudo generar el código: ${escapeHtml(e.message || String(e))}</div>`;
+      } finally {
+        btnVincularTecnico.disabled = false;
+      }
+    });
+
+    const btnDesvincularTecnicos = root.querySelector('#btn-desvincular-tecnicos');
+    if (btnDesvincularTecnicos) btnDesvincularTecnicos.addEventListener('click', async () => {
+      const ok = await customConfirm('Se desvinculan TODOS los celulares de técnicos. Después vas a poder vincularlos de nuevo con un código nuevo. ¿Continuar?', { titulo: 'Desvincular técnicos', danger: true, okLabel: 'Desvincular' });
+      if (!ok) return;
+      try {
+        await apiTecnicoTaller({ accion: 'desvincular' });
+        tecnicosVinculados = 0;
+        syncTallerConfigFromDOM();
+        render();
+      } catch (e) {
+        await customAlert('No se pudo desvincular: ' + (e.message || e));
+      }
     });
 
     root.querySelectorAll('[data-remove-pec]').forEach(btn => {
@@ -4639,6 +4791,10 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
             tipo, fecha, equipo: tramiteDraftEquipo, detalle, estadoPec, motivoIncompleto,
             obleaAnterior, obleaNueva,
             pecIndex: (tramiteDraftCampos && Number.isInteger(tramiteDraftCampos.pecIndex)) ? tramiteDraftCampos.pecIndex : (prev.pecIndex || 0),
+            revisionId: (tramiteDraftCampos && tramiteDraftCampos.revisionId) || prev.revisionId || null,
+            revisionEstado: (tramiteDraftCampos && tramiteDraftCampos.revisionEstado) || prev.revisionEstado || null,
+            revisionObs: (tramiteDraftCampos && tramiteDraftCampos.revisionObs) || '',
+            revisionOverride: !!(tramiteDraftCampos && tramiteDraftCampos.revisionOverride),
             firma: currentSignature || prev.firma,
           };
           savedTramiteId = prev.id;
@@ -4650,6 +4806,10 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
           tipo, fecha, equipo: tramiteDraftEquipo, detalle, estadoPec, motivoIncompleto,
           obleaAnterior, obleaNueva,
           pecIndex: (tramiteDraftCampos && Number.isInteger(tramiteDraftCampos.pecIndex)) ? tramiteDraftCampos.pecIndex : 0,
+          revisionId: (tramiteDraftCampos && tramiteDraftCampos.revisionId) || null,
+          revisionEstado: (tramiteDraftCampos && tramiteDraftCampos.revisionEstado) || null,
+          revisionObs: (tramiteDraftCampos && tramiteDraftCampos.revisionObs) || '',
+          revisionOverride: !!(tramiteDraftCampos && tramiteDraftCampos.revisionOverride),
           firma: currentSignature,
           creadoEn: new Date().toISOString(),
         });
@@ -4684,9 +4844,57 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
     const btnSaveTramite = root.querySelector('#btn-save-tramite');
     if (btnSaveTramite) btnSaveTramite.addEventListener('click', () => guardarClienteYTramite(null));
 
+    // --- Revisión del técnico (paso 1) ---
+    async function enviarRevisionAlTecnico() {
+      syncClienteDraftFromDOM();
+      syncEquipoFromDOM();
+      const rev = armarRevision();
+      if (!rev.patente) { await customAlert('Cargá la patente antes de enviar la revisión al técnico.'); return; }
+      if (!rev.componentes.length) { await customAlert('Todavía no hay componentes cargados (regulador, cilindro, válvula). Cargalos con la consulta a ENARGAS o a mano antes de enviar al técnico.'); return; }
+      try {
+        const r = await apiTecnicoTaller({ accion: 'revision-crear', revision: rev });
+        tramiteDraftCampos.revisionId = rev.id;
+        tramiteDraftCampos.revisionEstado = 'pendiente';
+        tramiteDraftCampos.revisionObs = '';
+        tramiteDraftCampos.revisionOverride = false;
+        syncTramiteCamposFromDOM();
+        render();
+        if (!r.notificados) {
+          await customAlert('La revisión se envió, pero ningún celular de técnico tiene las notificaciones activas — avisale que abra la app Estelita Técnico.', 'Revisión enviada');
+        }
+      } catch (e) {
+        await customAlert('No se pudo enviar la revisión: ' + (e.message || e));
+      }
+    }
+    const btnEnviarTecnico = root.querySelector('#btn-enviar-tecnico');
+    if (btnEnviarTecnico) btnEnviarTecnico.addEventListener('click', enviarRevisionAlTecnico);
+    const btnReenviarTecnico = root.querySelector('#btn-reenviar-tecnico');
+    if (btnReenviarTecnico) btnReenviarTecnico.addEventListener('click', enviarRevisionAlTecnico);
+    const btnRevisionOverride = root.querySelector('#btn-revision-override');
+    if (btnRevisionOverride) btnRevisionOverride.addEventListener('click', async () => {
+      const ok = await customConfirm('¿Marcar este trámite como revisado en el taller, sin esperar la respuesta del técnico?', { titulo: 'Revisado en el taller', okLabel: 'Marcar revisado' });
+      if (!ok) return;
+      syncClienteDraftFromDOM();
+      syncEquipoFromDOM();
+      syncTramiteCamposFromDOM();
+      tramiteDraftCampos.revisionOverride = true;
+      render();
+    });
+
     const btnSendPecTramite = root.querySelector('#btn-send-pec-tramite');
     if (btnSendPecTramite) btnSendPecTramite.addEventListener('click', async () => {
       if (!currentSignature) { await customAlert('Falta la firma del propietario antes de enviar al PEC.'); return; }
+      // Si la revisión del técnico está en camino y no fue aprobada, avisar
+      // antes de enviar (se puede destrabar a mano acá mismo).
+      const rc = tramiteDraftCampos || {};
+      if (rc.revisionId && rc.revisionEstado !== 'aprobada' && !rc.revisionOverride) {
+        const motivo = rc.revisionEstado === 'observada'
+          ? `El técnico informó un problema: ${rc.revisionObs || 'sin detalle'}.`
+          : 'El técnico todavía no respondió la revisión.';
+        const ok = await customConfirm(`${motivo} ¿Enviar al PEC igual, marcándolo como revisado en el taller?`, { titulo: 'Revisión del técnico', danger: true, okLabel: 'Enviar igual' });
+        if (!ok) return;
+        rc.revisionOverride = true;
+      }
       const firmaParaPdf = currentSignature;
       const resultado = await guardarClienteYTramite('enviado');
       if (!resultado) return;
