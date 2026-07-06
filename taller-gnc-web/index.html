@@ -394,6 +394,34 @@ window.storage = {
 #gnc-app .client-name { font-family: var(--sans); font-size: 13px; font-weight: 600; color: var(--text); margin-top: 4px; }
 #gnc-app .client-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 #gnc-app .client-detalle { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+/* Tarjeta con el detalle desplegado: se resalta para que se distinga
+   claramente de las tarjetas de abajo y no se mezcle visualmente. */
+#gnc-app .client-card-wrap.expandido { z-index: 2; overflow: visible; }
+#gnc-app .client-card.expandida { box-shadow: 0 14px 36px rgba(20,40,90,0.22); border-color: var(--flame-dim); }
+/* Ícono de información unificado de toda la app: circulito con "i" que
+   despliega/oculta el texto de ayuda que le sigue. */
+#gnc-app .info-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; min-height: 22px; padding: 0; margin-left: 8px;
+  border-radius: 50%; border: 1.5px solid var(--flame); background: var(--surface);
+  color: var(--flame); font-weight: 800; font-size: 13px; font-family: Georgia, serif; font-style: italic;
+  cursor: pointer; vertical-align: middle; flex-shrink: 0;
+}
+#gnc-app .ayuda-desplegable {
+  background: var(--surface-alt); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 14px; font-size: 13px; color: var(--text-muted); line-height: 1.55; margin: 8px 0 12px;
+}
+#gnc-app .btn:disabled, #gnc-app .btn[disabled] { opacity: .45; filter: grayscale(1); cursor: not-allowed; pointer-events: none; }
+/* Tachito de eliminar: lejos de los botones de acción principales. */
+#gnc-app .btn-trash { margin-left: auto; background: #FDE8E5; color: #C0281A; border: none; padding: 8px 10px; }
+#gnc-app .btn-trash svg { display: block; }
+#gnc-app .search-lupa { flex-shrink: 0; border-radius: 14px; padding: 0 16px; }
+#gnc-app .search-lupa svg { display: block; }
+/* Historial: patente protagonista, tipo de trámite segundo, nombre chico. */
+#gnc-app .hist-dia { font-size: 12.5px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin: 16px 0 6px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+#gnc-app .hist-patente { font-family: var(--display); font-weight: 800; font-size: 18px; letter-spacing: 1px; }
+#gnc-app .hist-tipo { font-size: 13.5px; font-weight: 700; margin-top: 1px; }
+#gnc-app .hist-nombre { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
 #gnc-app .client-detalle-grid {
   display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 16px; font-size: 12px; margin-bottom: 10px;
 }
@@ -545,6 +573,9 @@ window.storage = {
   // Ids de clientes cuya tarjeta tiene el detalle (datos + historial de
   // trámites) desplegado — no hace falta entrar a editar solo para mirar.
   const clientesExpandidos = new Set();
+  // Ids de clientes que tienen fotos de documentación guardadas — para
+  // mostrar el botón "Documentación" habilitado solo cuando hay algo que ver.
+  let clientesConFotos = new Set();
   // Snapshot del estado de los paneles en el render anterior — se usa para
   // saber si un panel "recién se abrió" (y animarlo) o si sigue abierto
   // desde antes (y no repetir la animación).
@@ -730,6 +761,10 @@ Documentación para realizar la renovación:
       tallerConfig = res3 ? { ...TALLER_CONFIG_DEFAULT, ...JSON.parse(res3.value) } : { ...TALLER_CONFIG_DEFAULT };
     } catch (e) { tallerConfig = { ...TALLER_CONFIG_DEFAULT }; }
     if (migrateClientes()) await saveClientes();
+    try {
+      const listado = await window.storage.list('fotos:');
+      clientesConFotos = new Set((listado.keys || []).map(k => k.slice('fotos:'.length)));
+    } catch (e) { clientesConFotos = new Set(); }
     ready = true;
     render();
     iniciarAvisoPendientesDiario();
@@ -942,22 +977,48 @@ Documentación para realizar la renovación:
     return items;
   }
 
+  // Mensaje de WhatsApp "llegó tu oblea": usa nombre del cliente + nombre,
+  // dirección y horario del taller cargados en la configuración.
+  function waLinkObleaLista(cliente) {
+    const phone = cleanPhone(cliente.telefono);
+    const horario = tallerConfig.horario || 'lunes a viernes de 9 a 17 hs';
+    const lugar = [tallerNombre, tallerConfig.direccion].filter(Boolean).join(', ');
+    const msg = `Hola ${cliente.nombre}! Queríamos avisarte que llegó tu oblea. Podés pasar a retirarla por ${lugar}, ${horario}. ¡Te esperamos!`;
+    return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  }
+
   function historialPanel(entrando) {
     const items = todosTramites();
+    // Agrupados por día (ya vienen ordenados del más nuevo al más viejo).
+    const grupos = [];
+    items.forEach(it => {
+      const dia = it.tramite.fecha || 'sin fecha';
+      const ultimo = grupos[grupos.length - 1];
+      if (ultimo && ultimo.dia === dia) ultimo.items.push(it);
+      else grupos.push({ dia, items: [it] });
+    });
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="historial-panel">
       <h2 style="margin-top:0;">Historial de trámites</h2>
-      ${items.length ? `<div class="tramites-list">
-        ${items.map(({ cliente, tramite }) => `
+      ${items.length ? grupos.map(g => `
+        <div class="hist-dia">${g.dia === 'sin fecha' ? 'Sin fecha' : fmtDate(g.dia)}</div>
+        <div class="tramites-list">
+        ${g.items.map(({ cliente, tramite }) => `
           <div class="tramite-row">
             <div>
-              <div class="doc-label">${escapeHtml(cliente.nombre)} · ${escapeHtml(cliente.patente || 's/d')}</div>
-              <div class="doc-sub">${tramiteTipoLabel(tramite.tipo)} · ${fmtDate(tramite.fecha)}</div>
+              <div class="hist-patente">${escapeHtml(cliente.patente || 'SIN PATENTE')}</div>
+              <div class="hist-tipo">${tramiteTipoLabel(tramite.tipo)}</div>
+              <div class="hist-nombre">${escapeHtml(cliente.nombre)}</div>
               ${tramite.estadoPec === 'incompleto' && tramite.motivoIncompleto ? `<div class="tramite-motivo">Motivo: ${escapeHtml(tramite.motivoIncompleto)}</div>` : ''}
             </div>
             <span class="badge ${tramite.estadoPec === 'enviado' ? 'badge-ok' : tramite.estadoPec === 'incompleto' ? 'badge-danger' : 'badge-warn'}">${ESTADO_PEC_LABELS[tramite.estadoPec]}</span>
             ${tramite.estadoPec !== 'enviado' ? `<button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${cliente.id}" data-editar-tramite-id="${tramite.id}">Editar</button>` : ''}
+            ${tramite.estadoPec === 'enviado' && cliente.telefono ? (
+              tramite.avisoObleaEnviado
+                ? `<button type="button" class="btn btn-ghost btn-sm" disabled>Aviso enviado</button>`
+                : `<button type="button" class="btn btn-wa btn-sm" data-aviso-oblea-cliente="${cliente.id}" data-aviso-oblea-tramite="${tramite.id}">Avisar: llegó tu oblea</button>`
+            ) : ''}
           </div>`).join('')}
-      </div>` : `<div class="empty">${emptyIconSvg()}Todavía no hay trámites cargados.</div>`}
+        </div>`).join('') : `<div class="empty">${emptyIconSvg()}Todavía no hay trámites cargados.</div>`}
       <div class="form-actions">
         <button type="button" class="btn btn-ghost" id="btn-close-historial">Cerrar</button>
       </div>
@@ -1176,24 +1237,14 @@ Documentación para realizar la renovación:
     const existentes = new Set(clientes.map(c => (c.patente || '').toUpperCase()));
     const previewRows = rows.slice(0, 50);
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="bulk-import-panel">
-      <h2>Importar clientes</h2>
-      <p class="scan-sub">Traé tu base como la tengas: un Excel, o directamente fotos del cuaderno del taller. Con patente y teléfono alcanza — el resto se completa después.</p>
-
-      <h3 style="margin-top:0;">Desde un Excel o planilla</h3>
-      <p class="scan-sub">Elegí el archivo (.xlsx o .csv) — las columnas se reconocen solas, en cualquier orden, con o sin títulos.</p>
-      <input type="file" accept=".csv,.tsv,.xlsx,.xls,text/csv,text/tab-separated-values,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" id="bulk-import-file">
-
-      <h3>Desde el cuaderno del taller</h3>
-      <button type="button" class="btn btn-primary" id="btn-cuaderno-ia" style="width:100%; font-size:15px;">📖 Leer fotos del cuaderno con IA</button>
-      <input type="file" id="cuaderno-fotos-input" accept="image/*" multiple style="display:none;">
-      <div class="agent-hint" style="margin-top:6px;">Sacale fotos a las páginas (hasta 6 por tanda, bien iluminadas) y elegilas acá — la IA lee los renglones, incluso manuscritos. Después revisás la lista antes de confirmar.</div>
-      <div id="cuaderno-ia-status"></div>
-
-      <h3>O pegá el texto acá</h3>
-      <textarea id="bulk-import-text" placeholder="EIJ507	2235776850	1/03/2024"></textarea>
-      <div class="form-actions">
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-bulk-parse">Previsualizar</button>
+      <h2>Importar clientes ${infoAyuda('ayuda-importar')}</h2>
+      ${ayudaBloque('ayuda-importar', 'Importación inicial de la cartera de clientes del taller. Se aceptan planillas de Excel (.xlsx o .csv) o fotografías de las páginas del cuaderno del taller (hasta 6 por tanda, bien iluminadas; se leen incluso los renglones manuscritos). Solo se requieren la patente y el teléfono de cada cliente: los demás datos pueden completarse más adelante. Las columnas de la planilla se reconocen automáticamente, en cualquier orden. Antes de confirmar, se muestra una vista previa para revisar las filas detectadas y destildar las que no correspondan.')}
+      <div class="scan-slot-buttons" style="margin-top:4px;">
+        <label class="btn btn-primary">Subir excel<input type="file" accept=".csv,.tsv,.xlsx,.xls,text/csv,text/tab-separated-values,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" id="bulk-import-file" style="display:none;"></label>
+        <label class="btn btn-primary">Tomar foto<input type="file" id="cuaderno-foto-camara" accept="image/*" capture="environment" style="display:none;"></label>
+        <label class="btn btn-ghost">Galería<input type="file" id="cuaderno-fotos-input" accept="image/*" multiple style="display:none;"></label>
       </div>
+      <div id="cuaderno-ia-status"></div>
       ${rows.length ? `
         <div class="import-summary">${rows.length} fila(s) detectada(s)${rows.length > 50 ? ' (mostrando las primeras 50)' : ''}. Las que ya existen (misma patente) vienen destildadas.</div>
         <div class="import-preview">
@@ -1245,6 +1296,18 @@ Documentación para realizar la renovación:
 
   function escapeHtml(str) {
     return (str || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // Ícono de información unificado de la app: circulito "i" que muestra u
+  // oculta un bloque de ayuda (ayudaBloque con el mismo id). Usar SIEMPRE
+  // estos helpers para las ayudas, así toda la app comparte ícono y
+  // comportamiento. El botón va junto al título; el bloque, donde deba
+  // desplegarse el texto.
+  function infoAyuda(id) {
+    return `<button type="button" class="info-toggle" data-info-toggle="${id}" aria-label="Ver ayuda">i</button>`;
+  }
+  function ayudaBloque(id, texto) {
+    return `<div class="ayuda-desplegable" id="${id}" style="display:none;">${texto}</div>`;
   }
 
   // Modal propio con la estética de la app, para no depender de los
@@ -1453,13 +1516,18 @@ Documentación para realizar la renovación:
   // render()) y lo que contiene la franja roja de "swipe para eliminar" —
   // el swipe en sí desliza solo ".client-card" (adentro), así los dos
   // efectos no se pisan el transform entre ellos.
+  function trashSvg() {
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></svg>`;
+  }
+
   function clientCard(c) {
     const s = worstStatus(c);
     const cls = s.level === 'danger' ? 'st-danger' : s.level === 'warn' ? 'st-warn' : 'st-ok';
     const expandido = clientesExpandidos.has(c.id);
-    return `<div class="client-card-wrap" data-client-id="${c.id}">
+    const tieneFotos = clientesConFotos.has(c.id);
+    return `<div class="client-card-wrap ${expandido ? 'expandido' : ''}" data-client-id="${c.id}">
       <button type="button" class="client-swipe-delete" data-swipe-delete="${c.id}">Eliminar</button>
-      <div class="client-card ${cls}">
+      <div class="client-card ${cls} ${expandido ? 'expandida' : ''}">
         <div class="client-top">
           <div>
             <div class="client-patente">${escapeHtml(c.patente || 'SIN PATENTE')}</div>
@@ -1468,10 +1536,9 @@ Documentación para realizar la renovación:
           </div>
           <div class="client-actions">
             ${c.telefono ? `<a class="btn btn-wa" target="_blank" rel="noopener" href="${waLinkGeneral(c)}">WhatsApp</a>` : ''}
-            <button class="btn btn-ghost" data-fotos="${c.id}">Documentación</button>
+            <button class="btn btn-ghost" data-fotos="${c.id}" ${tieneFotos ? '' : 'disabled title="Este cliente todavía no tiene fotos de documentación guardadas"'}>Documentación</button>
             <button class="btn btn-ghost" data-actualizar="${c.id}">Actualizar datos</button>
             <button class="btn btn-agent" data-tramite="${c.id}">Inicio de trámite</button>
-            <button class="btn btn-danger-outline" data-delete="${c.id}">Eliminar</button>
           </div>
         </div>
         <div class="docs">
@@ -1480,6 +1547,7 @@ Documentación para realizar la renovación:
         </div>
         <div class="form-actions" style="margin-top:10px;">
           <button type="button" class="btn btn-ghost btn-sm" data-toggle-detalle="${c.id}">${expandido ? 'Ocultar detalle' : `Ver datos y trámites${c.tramites.length ? ` (${c.tramites.length})` : ''}`}</button>
+          <button type="button" class="btn btn-trash" data-delete="${c.id}" title="Eliminar cliente" aria-label="Eliminar cliente">${trashSvg()}</button>
         </div>
         ${expandido ? clientDetalleExpandido(c) : ''}
       </div>
@@ -1705,12 +1773,13 @@ Documentación para realizar la renovación:
   const PORTAPAPELES_AYUDA_BLOQUEADO = 'El permiso del portapapeles está bloqueado para Estelita. Para activarlo: mantené apretado el ícono de Estelita en la pantalla de inicio → "Información de la app" → Permisos → Portapapeles → Permitir. (Si usás Estelita dentro de Chrome, tocá el candado junto a la dirección → Permisos.) Mientras tanto, pegar a mano funciona igual.';
 
   function enargasPasteBox(entrando) {
+    // Un solo botón: lee el portapapeles y carga todo. El recuadro de texto
+    // queda oculto y solo se muestra como plan B cuando el navegador no
+    // deja leer el portapapeles (ahí pegar a mano sigue funcionando).
     return `<div class="agent-box ${entrando ? 'panel-entrando' : ''}" style="grid-column: 1/-1;">
-      <button type="button" class="btn btn-primary" id="btn-pegar-enargas" style="width:100%; font-size:15px; margin-bottom:6px;">📋 PEGAR LO COPIADO DE ENARGAS</button>
-      <div id="pegado-rapido-estado" class="agent-hint" style="margin-bottom:10px;"></div>
-      <label>O pegalo a mano acá abajo</label>
-      <textarea id="enargas-paste-text" placeholder="Pegá el resultado de la consulta por dominio... (se carga y se cierra solo al pegar)"></textarea>
-      <div class="agent-hint">Con pegar alcanza — se completa solo y esta caja se cierra sola. Todavía estamos mejorando esta función, puede que no reconozca todos los datos automáticamente; si no completa algo, cargalo a mano.</div>
+      <button type="button" class="btn btn-primary" id="btn-pegar-enargas" style="width:100%; font-size:15px; margin-bottom:6px;">PEGAR RESULTADO DE ENARGAS</button>
+      <div id="pegado-rapido-estado" class="agent-hint" style="margin-bottom:6px;"></div>
+      <textarea id="enargas-paste-text" style="display:none;" placeholder="Mantené apretado acá y elegí Pegar — se carga solo"></textarea>
       <div id="enargas-paste-result"></div>
     </div>`;
   }
@@ -1721,8 +1790,8 @@ Documentación para realizar la renovación:
   function fotosPanel(cliente, entrando) {
     if (!cliente) return '';
     const slots = [
-      { key: 'foto1', label: 'Foto 1 — Documentos (lado A)' },
-      { key: 'foto2', label: 'Foto 2 — Documentos (lado B)' },
+      { key: 'foto1', label: 'Frente' },
+      { key: 'foto2', label: 'Dorso' },
     ];
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="fotos-panel">
       <h2 class="panel-h2-sticky">Documentación — ${escapeHtml(cliente.nombre)}</h2>
@@ -1743,12 +1812,12 @@ Documentación para realizar la renovación:
 
   function scanBox() {
     const slots = [
-      { key: 'foto1', label: 'Foto 1 — Documentos (lado A)' },
-      { key: 'foto2', label: 'Foto 2 — Documentos (lado B)' },
+      { key: 'foto1', label: 'Frente' },
+      { key: 'foto2', label: 'Dorso' },
     ];
     return `<div class="scan-box" id="scan-box">
-      <h3 style="margin-top:0; border-top:none; padding-top:0;">Fotos del cliente</h3>
-      <p class="scan-sub">Poné el DNI, la Cédula Verde y la Tarjeta de GNC juntos sobre una mesa y sacá una sola foto con todo (Foto 1). Después dalos vuelta y sacá otra (Foto 2). Con eso alcanza. Las dos fotos quedan guardadas junto con el cliente, y la IA lee del DNI los datos personales y de la Cédula Verde solo la patente (el resto de los datos del vehículo y del equipo se completan con la consulta a ENARGAS, más abajo). La Tarjeta de GNC no se lee, solo queda de respaldo.</p>
+      <h3 style="margin-top:0; border-top:none; padding-top:0;">Fotos del cliente ${infoAyuda('ayuda-fotos-cliente')}</h3>
+      ${ayudaBloque('ayuda-fotos-cliente', 'Colocá el DNI, la Cédula Verde y la Tarjeta de GNC juntos sobre una mesa y tomá una sola foto con todo (Frente). Luego dalos vuelta y tomá otra (Dorso). Las dos fotos quedan guardadas junto con el cliente. Al tocar "Leer datos", del DNI se leen los datos personales y de la Cédula Verde solo la patente; el resto de los datos del vehículo y del equipo se completan con la consulta a ENARGAS. La Tarjeta de GNC no se lee, solo queda de respaldo.')}
       <div class="scan-grid" style="grid-template-columns: repeat(2, 1fr);">
         ${slots.map(s => `
         <div class="scan-slot">
@@ -1762,7 +1831,7 @@ Documentación para realizar la renovación:
         </div>`).join('')}
       </div>
       <div class="scan-actions">
-        <button class="btn btn-agent btn-sm" id="btn-scan" ${(scanFiles['foto1'] || scanFiles['foto2']) ? '' : 'disabled'}>Leer datos con IA</button>
+        <button class="btn btn-agent btn-sm" id="btn-scan" ${(scanFiles['foto1'] || scanFiles['foto2']) ? '' : 'disabled'}>Leer datos</button>
         <span class="scan-status" id="scan-status"></span>
       </div>
     </div>`;
@@ -2619,6 +2688,17 @@ Documentación para realizar la renovación:
     cargarTextoEnargas(texto);
   });
 
+  // Si se intenta cerrar la ventana/pestaña con un trámite a medias, el
+  // navegador pregunta antes de salir — y pase lo que pase, el borrador ya
+  // quedó persistido para retomarlo al volver.
+  window.addEventListener('beforeunload', (e) => {
+    if (showForm || editingId) {
+      guardarSnapshotWizard();
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  });
+
   // Borrador del asistente en localStorage: se guarda al salir hacia
   // ENARGAS, para que el trámite sobreviva si Android mata la app mientras
   // el usuario está en la otra pestaña, o si vuelve vía "Compartir" (el
@@ -2630,6 +2710,9 @@ Documentación para realizar la renovación:
         ts: Date.now(),
         editingId, showForm, wizardStep, editingTramiteId, modoSoloDatos,
         clienteDraft, tramiteDraftEquipo, tramiteDraftCampos, currentSignature,
+        // Las fotos también viajan en el borrador — eran lo primero que se
+        // perdía si Android mataba la app o se cerraba la pestaña.
+        scanFiles: { ...scanFiles },
       }));
     } catch (e) { /* localStorage lleno: seguimos sin snapshot */ }
   }
@@ -2650,7 +2733,10 @@ Documentación para realizar la renovación:
 
     let snap = null;
     try { snap = JSON.parse(localStorage.getItem(WIZARD_SNAPSHOT_KEY) || 'null'); } catch (e) { /* ok */ }
-    const snapFresco = snap && snap.ts && (Date.now() - snap.ts) < 60 * 60 * 1000;
+    // 12 horas de vida: un trámite empezado a la mañana se retoma a la
+    // tarde con todo lo cargado (el usuario pidió que no se pierda nada
+    // al salir de la app).
+    const snapFresco = snap && snap.ts && (Date.now() - snap.ts) < 12 * 60 * 60 * 1000;
 
     // Restaurar el asistente si no hay uno abierto y el borrador es reciente.
     if (snapFresco && !showForm && !editingId && (snap.showForm || snap.editingId)) {
@@ -2663,6 +2749,7 @@ Documentación para realizar la renovación:
       tramiteDraftEquipo = snap.tramiteDraftEquipo || null;
       tramiteDraftCampos = snap.tramiteDraftCampos || null;
       currentSignature = snap.currentSignature || null;
+      if (snap.scanFiles) Object.assign(scanFiles, snap.scanFiles);
       esperandoEnargas = !compartido; // si ya llegó texto compartido, no hay que esperar el portapapeles
       render();
     }
@@ -3054,6 +3141,10 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
   function render() {
     if (!ready) { root.innerHTML = '<div class="loading"><span class="gnc-spinner"></span> Cargando datos del taller...</div>'; return; }
+    // Mientras el asistente esté abierto, cada redibujado persiste el
+    // borrador completo (drafts + fotos + firma): así salir de la app en
+    // cualquier momento nunca pierde lo cargado.
+    if (showForm || editingId) guardarSnapshotWizard();
     const rectsAntes = medirRectsClientes();
     // Como el render reconstruye todo el DOM, si no restauramos el foco acá
     // cualquier campo con eventos "input" en vivo pierde el cursor en cada
@@ -3123,6 +3214,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
         <div class="controls">
           <input class="search-input" type="text" id="search-input" placeholder="Buscar por nombre o patente..." value="${escapeHtml(currentQuery)}">
+          <button type="button" class="btn btn-primary search-lupa" id="btn-buscar" title="Buscar" aria-label="Buscar"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
           <button class="btn btn-primary" id="btn-new">+ Nuevo cliente</button>
           <button type="button" class="btn btn-ghost" id="btn-enargas-directo" title="Abrir la consulta por dominio de ENARGAS">ENARGAS ↗</button>
         </div>
@@ -3260,7 +3352,30 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         currentQuery = e.target.value;
         render();
       });
+      // Enter también dispara la búsqueda: cierra el teclado para que en el
+      // celular se vean los resultados en vez de quedar tapados.
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); searchInput.blur(); }
+      });
     }
+    const btnBuscar = root.querySelector('#btn-buscar');
+    if (btnBuscar) btnBuscar.addEventListener('click', () => {
+      const inp = root.querySelector('#search-input');
+      if (!inp) return;
+      currentQuery = inp.value;
+      // El blur cierra el teclado del celular; el render muestra la lista.
+      inp.blur();
+      render();
+    });
+
+    // Toggle unificado de los íconos de información: muestra/oculta el
+    // bloque de ayuda asociado (mismo comportamiento en toda la app).
+    root.querySelectorAll('[data-info-toggle]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const bloque = root.querySelector('#' + btn.getAttribute('data-info-toggle'));
+        if (bloque) bloque.style.display = bloque.style.display === 'none' ? 'block' : 'none';
+      });
+    });
     async function iniciarNuevoTramite() {
       const elegido = await mostrarModalTipoFecha({ tipo: TRAMITE_TIPOS[0].value, fecha: new Date().toISOString().slice(0, 10) });
       if (!elegido) return;
@@ -3486,16 +3601,13 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     // documentos. La IA devuelve los renglones como JSON, que se convierte
     // a texto tabulado y entra por el MISMO camino que un Excel pegado
     // (normalización de patente/teléfono/fecha, dedupe y previsualización).
-    const btnCuadernoIa = root.querySelector('#btn-cuaderno-ia');
-    const cuadernoInput = root.querySelector('#cuaderno-fotos-input');
-    if (btnCuadernoIa && cuadernoInput) {
-      btnCuadernoIa.addEventListener('click', () => cuadernoInput.click());
-      cuadernoInput.addEventListener('change', async () => {
-        const files = Array.from(cuadernoInput.files).slice(0, 6);
+    // Las fotos del cuaderno pueden venir de la cámara (una por toma) o de
+    // la galería (varias juntas) — el mismo lector sirve para ambas.
+    async function leerFotosCuaderno(input) {
+        const files = Array.from(input.files).slice(0, 6);
         if (!files.length) return;
         const status = root.querySelector('#cuaderno-ia-status');
-        btnCuadernoIa.disabled = true;
-        if (status) { status.className = 'agent-result'; status.innerHTML = '<span class="gnc-loading-row"><span class="gnc-spinner"></span> Leyendo las fotos con IA...</span>'; }
+        if (status) { status.className = 'agent-result'; status.innerHTML = '<span class="gnc-loading-row"><span class="gnc-spinner"></span> Leyendo las fotos...</span>'; }
         try {
           const content = [];
           for (const f of files) {
@@ -3533,20 +3645,13 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
           const st = root.querySelector('#cuaderno-ia-status');
           if (st) { st.className = 'agent-result err'; st.textContent = 'Error: ' + (e.message || 'no se pudieron leer las fotos'); }
         } finally {
-          const btn = root.querySelector('#btn-cuaderno-ia');
-          if (btn) btn.disabled = false;
-          const inp = root.querySelector('#cuaderno-fotos-input');
-          if (inp) inp.value = '';
+          input.value = '';
         }
-      });
     }
-
-    const btnBulkParse = root.querySelector('#btn-bulk-parse');
-    if (btnBulkParse) btnBulkParse.addEventListener('click', async () => {
-      const text = root.querySelector('#bulk-import-text').value || '';
-      if (!text.trim()) { await customAlert('Pegá algo de texto o elegí un archivo primero.'); return; }
-      applyBulkParsedRows(parseBulkImportText(text));
-    });
+    const cuadernoCamara = root.querySelector('#cuaderno-foto-camara');
+    if (cuadernoCamara) cuadernoCamara.addEventListener('change', () => leerFotosCuaderno(cuadernoCamara));
+    const cuadernoGaleria = root.querySelector('#cuaderno-fotos-input');
+    if (cuadernoGaleria) cuadernoGaleria.addEventListener('change', () => leerFotosCuaderno(cuadernoGaleria));
 
     root.querySelectorAll('[data-bulk-row]').forEach(chk => {
       chk.addEventListener('change', () => {
@@ -3607,7 +3712,11 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
 
     // Misma pantalla (Documentación) sirve para dar de alta un cliente
     // nuevo y para editar uno existente — si no hay editingId, es un alta.
-    function cerrarWizard() {
+    // conservarBorrador=true: cierra la pantalla pero deja el borrador
+    // persistido (drafts + fotos + firma), así el trámite se retoma con
+    // todo lo cargado la próxima vez que se abra la app.
+    function cerrarWizard(conservarBorrador) {
+      if (conservarBorrador) guardarSnapshotWizard();
       showForm = false;
       editingId = null;
       wizardStep = 1;
@@ -3619,13 +3728,18 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       currentSignature = null;
       esperandoEnargas = false;
       modoSoloDatos = false;
-      limpiarSnapshotWizard();
+      if (!conservarBorrador) limpiarSnapshotWizard();
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
     }
 
     const btnWizardCancel = root.querySelector('#btn-wizard-cancel');
-    if (btnWizardCancel) btnWizardCancel.addEventListener('click', () => {
-      cerrarWizard();
+    if (btnWizardCancel) btnWizardCancel.addEventListener('click', async () => {
+      syncClienteDraftFromDOM();
+      syncEquipoFromDOM();
+      syncTramiteCamposFromDOM();
+      const ok = await customConfirm('El trámite queda guardado como borrador (con las fotos y todo lo cargado) y se retoma solo al volver a abrir la app. ¿Querés cerrarlo?', { titulo: 'Cerrar trámite', okLabel: 'Cerrar' });
+      if (!ok) return;
+      cerrarWizard(true);
       render();
     });
 
@@ -3765,12 +3879,34 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       });
     });
 
+    // Aviso "llegó tu oblea" desde el historial: abre WhatsApp con el
+    // mensaje armado y deja marcado el trámite para no avisar dos veces.
+    root.querySelectorAll('[data-aviso-oblea-cliente]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const c = clientes.find(x => x.id === btn.getAttribute('data-aviso-oblea-cliente'));
+        if (!c) return;
+        const t = c.tramites.find(x => x.id === btn.getAttribute('data-aviso-oblea-tramite'));
+        if (!t || t.avisoObleaEnviado) return;
+        window.open(waLinkObleaLista(c), '_blank');
+        t.avisoObleaEnviado = true;
+        await saveClientes();
+        render();
+      });
+    });
+
     root.querySelectorAll('[data-toggle-detalle]').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-toggle-detalle');
-        if (clientesExpandidos.has(id)) clientesExpandidos.delete(id);
-        else clientesExpandidos.add(id);
+        const abriendo = !clientesExpandidos.has(id);
+        if (abriendo) clientesExpandidos.add(id);
+        else clientesExpandidos.delete(id);
         render();
+        if (abriendo) {
+          // Llevar la tarjeta expandida arriba de la vista para que el
+          // detalle no quede perdido entre las tarjetas de abajo.
+          const card = root.querySelector(`.client-card-wrap[data-client-id="${id}"]`);
+          if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
       });
     });
 
@@ -3784,6 +3920,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         if (showFotosFor === id) showFotosFor = null;
         await saveClientes();
         try { await window.storage.delete(`fotos:${id}`, false); } catch (e) { /* no tenía fotos, ok */ }
+        clientesConFotos.delete(id);
       }
       render();
     }
@@ -3905,6 +4042,19 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       // guardó — se persiste recién cuando se toca "Guardar cambios".
       syncClienteDraftFromDOM();
       if (!clienteDraft) clienteDraft = blankClienteBase();
+
+      // Control de coherencia: si ya había datos del vehículo cargados (por
+      // la lectura de los documentos o a mano) y ENARGAS informa otra cosa,
+      // avisar — suele significar que la patente consultada no es la del
+      // vehículo que se está cargando.
+      const difiere = (a, b) => a && b && String(a).trim().toLowerCase() !== String(b).trim().toLowerCase();
+      const diferencias = [];
+      if (difiere(clienteDraft.marca, parsed.marca)) diferencias.push(`la marca cargada es "${clienteDraft.marca}" pero ENARGAS informa "${parsed.marca}"`);
+      if (difiere((clienteDraft.patente || '').replace(/\s|-/g, ''), parsed.patente ? String(parsed.patente).replace(/\s|-/g, '') : null)) diferencias.push(`la patente cargada es "${clienteDraft.patente}" pero el resultado pegado es de la patente "${parsed.patente}"`);
+      if (diferencias.length) {
+        customAlert(`Los datos no coinciden: ${diferencias.join('; y ')}. Revisá que el resultado pegado sea el del vehículo correcto antes de guardar.`, 'Datos que no coinciden');
+      }
+
       const campos = {
         patente: parsed.patente ? String(parsed.patente).toUpperCase() : null,
         marca: parsed.marca, modelo: parsed.modelo, uso: parsed.uso,
@@ -3992,6 +4142,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       }
       const ta = root.querySelector('#enargas-paste-text');
       const box = root.querySelector('#enargas-paste-result');
+      const necesitaPegadoManual = estado !== 'granted';
       if (box) {
         box.className = 'agent-result err';
         box.textContent = estado === 'denied'
@@ -4000,7 +4151,9 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
             ? 'No había nada copiado — copiá el resultado en la página de ENARGAS y volvé a tocar el botón.'
             : 'Chrome no nos dejó leer lo copiado. Hacelo así: tocá el recuadro de acá abajo, mantené apretado y elegí "Pegar" — se carga solo igual.');
       }
-      if (ta) ta.focus();
+      // Recién acá se muestra el recuadro de pegado manual (plan B) —
+      // mientras el botón funciona solo, el recuadro no existe en pantalla.
+      if (ta && necesitaPegadoManual) { ta.style.display = 'block'; ta.focus(); }
     });
 
     // Indicador del estado del pegado rápido dentro de la caja de ENARGAS:
@@ -4125,8 +4278,10 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         const anyPhoto = Object.values(scanFiles).some(v => v);
         if (anyPhoto) {
           await window.storage.set(`fotos:${clientId}`, JSON.stringify(scanFiles), false);
+          clientesConFotos.add(clientId);
         } else {
           try { await window.storage.delete(`fotos:${clientId}`, false); } catch (e) { /* no existía, ok */ }
+          clientesConFotos.delete(clientId);
         }
       } catch (e) {
         console.error('Error guardando fotos', e);
