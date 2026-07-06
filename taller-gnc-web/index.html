@@ -654,15 +654,45 @@ window.storage = {
       </div>
     `;
     const form = root.querySelector('#activation-form');
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const input = root.querySelector('#activation-input');
       const errorEl = root.querySelector('#activation-error');
+      const botonActivar = form.querySelector('button[type=submit]');
       const code = input.value.trim();
       if (!code) return;
       if (!root.querySelector('#activation-terminos-check').checked) {
         errorEl.textContent = 'Para activar, marcá la casilla de aceptación de los Términos y la Política de Privacidad.';
         return;
+      }
+      // El código de vinculación del técnico (6 números) no es una licencia
+      // de Estelita — redirigir a la app correcta antes de molestar al server.
+      if (/^\d{6}$/.test(code)) {
+        errorEl.textContent = 'Ese parece el código de vinculación del técnico. La app del técnico es otra: abrí taller-gnc.vercel.app/tecnico.html y ponelo ahí.';
+        return;
+      }
+      // Validación REAL contra el servidor: sin esto, cualquier texto
+      // "activaba" la app (la licencia solo se controlaba al usar la IA).
+      errorEl.textContent = '';
+      botonActivar.disabled = true;
+      botonActivar.textContent = 'Verificando...';
+      try {
+        const r = await fetch('/api/licencia', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ license: code }),
+        });
+        if (r.status === 403) {
+          errorEl.textContent = 'Ese código de licencia no es válido. Revisalo, o registrá tu taller acá abajo para conseguir el tuyo.';
+          return;
+        }
+        if (!r.ok) throw new Error('Error ' + r.status);
+      } catch (e2) {
+        errorEl.textContent = 'No pudimos verificar el código (¿hay conexión a internet?). Probá de nuevo en un momento.';
+        return;
+      } finally {
+        botonActivar.disabled = false;
+        botonActivar.textContent = 'Activar';
       }
       localStorage.setItem(TERMS_KEY, new Date().toISOString());
       localStorage.setItem(LICENSE_KEY, code);
@@ -688,6 +718,21 @@ window.storage = {
     } else {
       loadData();
     }
+  }
+
+  async function revalidarLicencia() {
+    try {
+      const r = await fetch('/api/licencia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ license: localStorage.getItem(LICENSE_KEY) }),
+      });
+      if (r.status === 403) {
+        localStorage.removeItem(LICENSE_KEY);
+        await customAlert('El código de licencia de este equipo ya no es válido. Ingresá un código vigente para seguir usando Estelita (los datos guardados no se borran).', 'Licencia');
+        boot();
+      }
+    } catch (e) { /* sin conexión: la app sigue funcionando offline */ }
   }
 
   function fmtDate(iso) {
@@ -806,6 +851,10 @@ Documentación para realizar la renovación:
     // En segundo plano: saber si hay técnicos vinculados (muestra u oculta
     // el botón "Enviar al técnico" del paso 1).
     consultarTecnicosVinculados().then(() => { if (showForm || editingId) render(); });
+    // Revalidar la licencia guardada sin bloquear el arranque: solo un 403
+    // explícito del servidor expulsa (código trucho o suscripción dada de
+    // baja) — los errores de red no molestan, la app sigue offline.
+    revalidarLicencia();
     await procesarCompartidoORestaurar();
   }
 
