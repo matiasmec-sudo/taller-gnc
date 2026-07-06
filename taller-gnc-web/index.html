@@ -558,6 +558,19 @@ window.storage = {
     if (typeof render === 'function' && ready) render();
   });
 
+  // Lo mismo para el menú desplegable (☰): tocar en cualquier lado fuera
+  // del menú lo cierra. OJO: hay que mirar los ancestros del elemento
+  // tocado (closest), no el .menu-wrap actual del DOM — el click que abre
+  // el menú re-renderiza la pantalla antes de llegar acá, y el botón
+  // tocado ya quedó fuera del DOM nuevo (compararlo contra el wrap nuevo
+  // cerraba el menú en el mismo toque que lo abría).
+  document.addEventListener('click', (e) => {
+    if (!menuOpen) return;
+    if (e.target && e.target.closest && e.target.closest('.menu-wrap')) return;
+    menuOpen = false;
+    if (typeof render === 'function' && ready) render();
+  });
+
   const TALLER_CONFIG_DEFAULT = {
     razonSocial: '', direccion: '', horario: '', cuit: '',
     tecnicoNombre: '', tecnicoMatricula: '',
