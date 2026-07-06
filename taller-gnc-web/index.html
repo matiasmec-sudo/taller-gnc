@@ -2576,7 +2576,9 @@ Documentación para realizar la renovación:
     // todo lo que no sea un dato cargado se vuelve transparente.
     return `${soloDatos ? `<style>
       #pec-hoja.pec-solo-datos, #pec-hoja.pec-solo-datos * { border-color: transparent !important; color: transparent !important; background: transparent !important; }
-      #pec-hoja.pec-solo-datos .pec-valor, #pec-hoja.pec-solo-datos .pec-valor * { color: #000 !important; }
+      #pec-hoja.pec-solo-datos .pec-valor, #pec-hoja.pec-solo-datos .pec-valor * { color: #000 !important; font-size: 13px !important; line-height: 1.1 !important; font-weight: 700 !important; }
+      /* Los datos que la planilla preimpresa ya trae (PEC, ingeniero,
+         técnico) NO se imprimen: quedan transparentes como las etiquetas. */
     </style>` : ''}<div id="pec-hoja" class="${soloDatos ? 'pec-solo-datos' : ''}" style="width:1000px; min-height:1414px; background:#fff; color:#000; font-family: Arial, Helvetica, sans-serif; box-sizing:border-box; border:2px solid #000; padding:16px; position:relative;">
       <div style="position:absolute; top:2px; right:10px; font-size:10px; font-weight:bold;">F1</div>
 
@@ -2588,15 +2590,15 @@ Documentación para realizar la renovación:
         <div style="flex:2; display:flex; gap:8px;">
           <div style="width:46px; height:46px; border-radius:50%; background:#1a1a1a; color:#fff; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:bold; flex-shrink:0;">e</div>
           <div style="font-size:9px; line-height:1.35;">
-            <div class="pec-valor" style="font-weight:bold; font-size:11px;">${escapeHtml(pec.razonSocial || (soloDatos ? '' : 'Razón social del PEC'))}</div>
-            <div class="pec-valor">${escapeHtml(pec.direccion || '')}</div>
-            <div class="pec-valor">${escapeHtml(pec.telefono || '')}</div>
+            <div class="pec-valor-fijo" style="font-weight:bold; font-size:11px;">${escapeHtml(pec.razonSocial || (soloDatos ? '' : 'Razón social del PEC'))}</div>
+            <div class="pec-valor-fijo">${escapeHtml(pec.direccion || '')}</div>
+            <div class="pec-valor-fijo">${escapeHtml(pec.telefono || '')}</div>
           </div>
           <div style="font-size:9px; line-height:1.35; border-left:1px solid #000; padding-left:8px;">
             <div style="font-size:7.5px;">REPRESENTANTE TÉCNICO</div>
-            <div class="pec-valor" style="font-weight:bold;">${escapeHtml(pec.ingeniero || '')}</div>
+            <div class="pec-valor-fijo" style="font-weight:bold;">${escapeHtml(pec.ingeniero || '')}</div>
             <div>INGENIERO MECÁNICO</div>
-            <div class="pec-valor">Mat. CIPBA ${escapeHtml(pec.matriculaCipba || '')}</div>
+            <div class="pec-valor-fijo">Mat. CIPBA ${escapeHtml(pec.matriculaCipba || '')}</div>
           </div>
         </div>
         <div style="flex:1; border-left:1px solid #000; padding-left:8px;">
@@ -2625,7 +2627,7 @@ Documentación para realizar la renovación:
         </div>
         <div style="width:150px; display:flex; flex-direction:column; gap:3px; padding-left:6px;">
           <div style="border:1px solid #000; text-align:center; padding:2px;">
-            <div class="pec-valor" style="font-size:12px; font-weight:bold;">${escapeHtml(pec.codigoPec || '')}</div>
+            <div class="pec-valor-fijo" style="font-size:12px; font-weight:bold;">${escapeHtml(pec.codigoPec || '')}</div>
             <div style="font-size:7px;">CÓDIGO PEC</div>
           </div>
           <div style="border:1px solid #000; text-align:center; padding:2px;">
@@ -2788,8 +2790,8 @@ Documentación para realizar la renovación:
             </div>
             <div style="flex:1; text-align:center; font-size:8px;">
               <div style="height:28px;"></div>
-              <div class="pec-valor" style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(tc.tecnicoNombre || '')}</div>
-              <div class="pec-valor" style="font-size:7px;">Técnico Mecánico — Mat. ${escapeHtml(tc.tecnicoMatricula || '')}</div>
+              <div class="pec-valor-fijo" style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(tc.tecnicoNombre || '')}</div>
+              <div class="pec-valor-fijo" style="font-size:7px;">Técnico Mecánico — Mat. ${escapeHtml(tc.tecnicoMatricula || '')}</div>
               <div style="font-size:6px; color:#666;">Firma, aclaración y N° Matrícula del Representante Técnico del TdM</div>
             </div>
           </div>
@@ -2811,8 +2813,8 @@ Documentación para realizar la renovación:
             </div>
             <div style="flex:1; text-align:center; font-size:8px;">
               <div style="height:28px;"></div>
-              <div class="pec-valor" style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(pec.ingeniero || '')}</div>
-              <div class="pec-valor" style="font-size:7px;">Ingeniero Mecánico — Mat. CIPBA ${escapeHtml(pec.matriculaCipba || '')}</div>
+              <div class="pec-valor-fijo" style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(pec.ingeniero || '')}</div>
+              <div class="pec-valor-fijo" style="font-size:7px;">Ingeniero Mecánico — Mat. CIPBA ${escapeHtml(pec.matriculaCipba || '')}</div>
               <div style="font-size:6px; color:#666;">Firma, aclaración y N° Matrícula del Representante Técnico del PEC</div>
             </div>
           </div>
