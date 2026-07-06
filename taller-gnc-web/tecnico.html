@@ -145,8 +145,22 @@
       revisiones = r.revisiones || [];
       pintarLista();
     } catch (e) {
-      if (e.status === 403) { localStorage.removeItem(TOKEN_KEY); pantallaVincular(e.message); }
-      else app.innerHTML = `<div class="card"><div class="msj err">${esc(e.message)}</div><button class="btn btn-gris btn-block" onclick="location.reload()">Reintentar</button></div>`;
+      if (e.status === 403) {
+        // Un 403 aislado puede ser el storage demorando en ver la
+        // vinculación recién hecha — se confirma con un segundo intento
+        // antes de desvincular el celular.
+        cargando = false;
+        await new Promise(r => setTimeout(r, 4000));
+        try {
+          const r2 = await api({ accion: 'revision-pendientes' });
+          revisiones = r2.revisiones || [];
+          pintarLista();
+          return;
+        } catch (e2) {
+          if (e2.status === 403) { localStorage.removeItem(TOKEN_KEY); pantallaVincular(e2.message); return; }
+        }
+      }
+      app.innerHTML = `<div class="card"><div class="msj err">${esc(e.message)}</div><button class="btn btn-gris btn-block" onclick="location.reload()">Reintentar</button></div>`;
     } finally { cargando = false; }
   }
 

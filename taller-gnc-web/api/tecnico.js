@@ -16,29 +16,48 @@ function hashLicencia(license) {
   return crypto.createHash('sha256').update('estelita:' + license).digest('hex');
 }
 
+// URL directa de un archivo del store privado (el id del store viene dentro
+// del propio token: vercel_blob_rw_<STOREID>_<secreto>). Leer por URL directa
+// es consistente al instante; list() puede tardar en ver archivos recién
+// escritos (consistencia eventual) y eso rompía la vinculación en producción.
+function urlBlob(pathname) {
+  const partes = (process.env.BLOB_READ_WRITE_TOKEN || '').split('_');
+  return `https://${(partes[3] || '').toLowerCase()}.private.blob.vercel-storage.com/${pathname}`;
+}
+
 async function leerJson(pathname) {
-  const l = await list({ prefix: pathname });
-  const blob = l.blobs.find(b => b.pathname === pathname);
-  if (!blob) return null;
-  const r = await fetch(blob.url, { headers: { authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` } });
-  if (!r.ok) return null;
-  return { datos: await r.json(), url: blob.url, subido: blob.uploadedAt };
+  const url = urlBlob(pathname);
+  // El parámetro anti-caché evita respuestas viejas del CDN, y el reintento
+  // cubre el caché negativo: tras consultar una ruta inexistente, el storage
+  // puede responder 404 durante ~1 segundo aunque el archivo recién se haya
+  // creado (verificado empíricamente).
+  for (let intento = 0; ; intento++) {
+    const r = await fetch(`${url}?nc=${Date.now()}`, { headers: { authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` }, cache: 'no-store' });
+    if (r.ok) return { datos: await r.json(), url };
+    if (r.status !== 404 || intento >= 4) return null;
+    await new Promise(res => setTimeout(res, 1000));
+  }
 }
 
 async function escribirJson(pathname, datos) {
   await put(pathname, JSON.stringify(datos), {
     access: 'private', addRandomSuffix: false, allowOverwrite: true, contentType: 'application/json',
+    // Sin esto, el CDN puede servir versiones viejas del archivo durante un
+    // rato después de una sobrescritura (verificado empíricamente).
+    cacheControlMaxAge: 0,
   });
 }
 
-// Valida el token del técnico ("<hashLicencia>.<secreto>") contra la lista
-// de técnicos vinculados de ese taller. Devuelve el hash de la carpeta o null.
+// Valida el token del técnico ("<hashLicencia>.<secreto>"). Cada técnico
+// vinculado es un archivo propio (taller/<hash>/tecnicos/<secreto>.json):
+// así el canje nunca necesita leer-antes-de-escribir, que era vulnerable al
+// caché negativo del storage (~1s de 404 tras crear un archivo que ya se
+// había consultado). Devuelve el hash de la carpeta del taller o null.
 async function validarTecnico(tecnicoToken) {
   if (typeof tecnicoToken !== 'string' || !/^[a-f0-9]{64}\.[a-f0-9]{48}$/.test(tecnicoToken)) return null;
   const [hash, secreto] = tecnicoToken.split('.');
-  const t = await leerJson(`taller/${hash}/tecnicos.json`);
-  if (!t || !Array.isArray(t.datos.tokens) || !t.datos.tokens.includes(secreto)) return null;
-  return hash;
+  const t = await leerJson(`taller/${hash}/tecnicos/${secreto}.json`);
+  return t ? hash : null;
 }
 
 // El trim() es defensivo: una clave pegada con un salto de línea al final
@@ -73,12 +92,12 @@ export default async function handler(req, res) {
       }
 
       if (accion === 'tecnicos-estado') {
-        const t = await leerJson(`taller/${hash}/tecnicos.json`);
-        return res.status(200).json({ ok: true, vinculados: t ? (t.datos.tokens || []).length : 0 });
+        const l = await list({ prefix: `taller/${hash}/tecnicos/` });
+        return res.status(200).json({ ok: true, vinculados: l.blobs.length });
       }
 
       if (accion === 'desvincular') {
-        const prefijos = [`taller/${hash}/tecnicos.json`, `taller/${hash}/push/`];
+        const prefijos = [`taller/${hash}/tecnicos/`, `taller/${hash}/push/`];
         for (const p of prefijos) {
           const l = await list({ prefix: p });
           if (l.blobs.length) await del(l.blobs.map(b => b.url));
@@ -129,16 +148,18 @@ export default async function handler(req, res) {
       const codigo = String(body.codigo || '').trim();
       if (!/^\d{6}$/.test(codigo)) return res.status(400).json({ error: 'El código debe tener 6 números.' });
       const v = await leerJson(`vinculos/${codigo}.json`);
-      if (!v || v.datos.expira < Date.now()) {
-        return res.status(404).json({ error: 'Ese código no existe o ya venció. Generá uno nuevo desde Estelita.' });
+      if (!v || v.datos.expira < Date.now() || v.datos.usado) {
+        return res.status(404).json({ error: 'Ese código no existe, ya venció o ya se usó. Generá uno nuevo desde Estelita.' });
       }
       const hash = v.datos.hash;
+      // Marcar el código como usado SOBRESCRIBIENDO (no borrando): las
+      // sobrescrituras se propagan más rápido que los borrados en el
+      // storage, y así el "un solo uso" es efectivo casi al instante.
+      await escribirJson(`vinculos/${codigo}.json`, { ...v.datos, usado: true });
       const secreto = crypto.randomBytes(24).toString('hex');
-      const t = await leerJson(`taller/${hash}/tecnicos.json`);
-      const tokens = (t && Array.isArray(t.datos.tokens)) ? t.datos.tokens : [];
-      tokens.push(secreto);
-      await escribirJson(`taller/${hash}/tecnicos.json`, { tokens });
-      try { await del(v.url); } catch (e) { /* ya se usó, ok */ }
+      // Archivo propio por técnico: se crea sin leer nada antes (ver
+      // comentario de validarTecnico).
+      await escribirJson(`taller/${hash}/tecnicos/${secreto}.json`, { creadoEn: new Date().toISOString() });
       return res.status(200).json({ ok: true, tecnicoToken: `${hash}.${secreto}`, vapidPublicKey: vapidPublica() || null });
     }
 
@@ -160,11 +181,15 @@ export default async function handler(req, res) {
 
       if (accion === 'revision-responder') {
         if (!body.id || !/^[a-z0-9]+$/i.test(body.id)) return res.status(400).json({ error: 'Falta el id.' });
+        // La lectura previa es solo para conservar los datos originales de
+        // la revisión: si el storage justo no la devuelve (consistencia
+        // eventual), la respuesta del técnico se guarda igual — es lo único
+        // que Estelita necesita para destrabar el trámite.
         const r = await leerJson(`taller/${hash}/revisiones/${body.id}.json`);
-        if (!r) return res.status(404).json({ error: 'No existe esa revisión.' });
+        const base = r ? r.datos : { id: body.id };
         const resultado = body.resultado || {};
         await escribirJson(`taller/${hash}/revisiones/${body.id}.json`, {
-          ...r.datos,
+          ...base,
           estado: resultado.estado === 'observada' ? 'observada' : 'aprobada',
           items: resultado.items || null,
           observaciones: String(resultado.observaciones || '').slice(0, 1000),
