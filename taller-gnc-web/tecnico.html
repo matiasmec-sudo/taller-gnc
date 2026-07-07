@@ -221,7 +221,7 @@
       ${r.estado === 'pendiente'
         ? `<button class="btn btn-azul btn-block" data-abrir="${esc(r.id)}">Revisar</button>`
         : r.estado === 'observada'
-          ? `${r.observaciones ? `<div class="msj err" style="margin-top:8px;">${esc(r.observaciones)}</div>` : ''}<button class="btn btn-verde btn-block" data-abrir="${esc(r.id)}">Ya se resolvió — revisar de nuevo</button>`
+          ? `${r.observaciones ? `<div class="msj err" style="margin-top:8px;">${esc(r.observaciones)}</div>` : ''}<button class="btn btn-verde btn-block" data-abrir="${esc(r.id)}">Revisar nuevamente</button>`
           : ''}
     </div>`;
   }
@@ -231,6 +231,30 @@
     const r = abierta;
     const comps = r.componentes || [];
     const items = r.checklist || [];
+    // Re-revisión de un trámite observado: no hay que rehacer todo el
+    // checklist, solo confirmar que la observación que se había hecho ya se
+    // resolvió.
+    if (r.estado === 'observada') {
+      app.innerHTML = `
+        <div class="card">
+          <div class="patente">${esc(r.patente || 'SIN PATENTE')}</div>
+          <div class="vehiculo">${esc(r.vehiculo || '')} · ${esc(r.tipoTramite || '')}</div>
+          <div class="titulo-seccion">Lo que habías observado</div>
+          <label class="check-item"><input type="checkbox" id="obs-resuelta"> <span>${esc(r.observaciones || 'sin detalle')}</span></label>
+          <div class="titulo-seccion">Observaciones (opcional)</div>
+          <textarea id="nota" rows="2" placeholder="Si querés agregar algo..."></textarea>
+          <div class="fila-botones">
+            <button class="btn btn-verde" id="btn-aprobar">Resuelto — aprobar</button>
+            <button class="btn btn-rojo-borde" id="btn-observar">Sigue el problema</button>
+          </div>
+          <button class="btn btn-gris btn-block" id="btn-volver">Volver</button>
+          <div id="detalle-msj"></div>
+        </div>`;
+      document.getElementById('btn-volver').addEventListener('click', () => { abierta = null; pintarLista(); });
+      document.getElementById('btn-aprobar').addEventListener('click', () => responderReRevision('aprobada'));
+      document.getElementById('btn-observar').addEventListener('click', () => responderReRevision('observada'));
+      return;
+    }
     app.innerHTML = `
       <div class="card">
         <div class="patente">${esc(r.patente || 'SIN PATENTE')}</div>
@@ -248,8 +272,7 @@
         <div class="titulo-seccion">Control según normativa</div>
         ${items.map((it, i) => `
           <label class="check-item"><input type="checkbox" data-item="${i}"> <span>${esc(it)}</span></label>`).join('')}
-        ${r.observaciones ? `<div class="titulo-seccion">Problema que informaste antes</div>
-          <label class="check-item"><input type="checkbox" id="obs-resuelta"> <span>Resuelto: ${esc(r.observaciones)}</span></label>` : ''}
+        <p class="ayuda" style="margin:6px 0 0;">Si algún punto no está bien, dejalo sin tildar: se informa como el problema.</p>
         <div class="titulo-seccion">Observaciones</div>
         <textarea id="nota" rows="2" placeholder="Anotá acá cualquier problema que encuentres"></textarea>
         <div class="fila-botones">
@@ -279,41 +302,65 @@
     const items = r.checklist || [];
     const nota = document.getElementById('nota').value.trim();
     const msj = document.getElementById('detalle-msj');
+    // Un punto del control SIN tildar se entiende como el problema.
+    const itemsSinTildar = items.filter((it, i) => !respuesta.items[i]);
     if (estado === 'aprobada') {
       const compsSinMarcar = comps.filter((c, i) => respuesta.comps[i] !== 'si');
-      const itemsSinTildar = items.filter((it, i) => !respuesta.items[i]);
       if (compsSinMarcar.length || itemsSinTildar.length) {
         msj.innerHTML = '<div class="msj err">Para aprobar, marcá "Coincide" en todos los componentes y tildá todos los puntos del control. Si algo está mal, usá "Informar problema".</div>';
         return;
       }
-      const obsChk = document.getElementById('obs-resuelta');
-      if (obsChk && !obsChk.checked) {
-        msj.innerHTML = '<div class="msj err">Marcá "Resuelto" en el problema que habías informado para poder aprobar.</div>';
-        return;
-      }
     } else {
-      const hayProblema = comps.some((c, i) => respuesta.comps[i] === 'no');
+      const hayProblema = comps.some((c, i) => respuesta.comps[i] === 'no') || itemsSinTildar.length > 0;
       if (!hayProblema && !nota) {
-        msj.innerHTML = '<div class="msj err">Contanos qué encontraste: marcá "No" en el componente que no coincide o escribí una observación.</div>';
+        msj.innerHTML = '<div class="msj err">Contanos qué encontraste: marcá "No" en un componente, dejá sin tildar el punto con problema, o escribí una observación.</div>';
         return;
       }
     }
     try {
       msj.innerHTML = '<div class="msj ok"><span class="spinner"></span> Enviando...</div>';
       const detalleComps = comps.map((c, i) => `${c.nombre}: ${respuesta.comps[i] === 'si' ? 'coincide' : respuesta.comps[i] === 'no' ? 'NO COINCIDE' : 'sin revisar'}`);
+      const problemasItems = itemsSinTildar.map(it => 'Problema en: ' + it);
       await api({
         accion: 'revision-responder', id: r.id,
         resultado: {
           estado,
           items: { componentes: respuesta.comps, control: respuesta.items },
-          observaciones: estado === 'observada' ? [nota, ...detalleComps.filter(d => d.includes('NO COINCIDE'))].filter(Boolean).join(' · ') : nota,
+          observaciones: estado === 'observada' ? [nota, ...detalleComps.filter(d => d.includes('NO COINCIDE')), ...problemasItems].filter(Boolean).join(' · ') : nota,
         },
       });
       // Optimista: reflejamos el nuevo estado al instante para que la tarjeta
       // salga de "pendientes" sin esperar al storage (que tarda 1-2s en
       // devolver el cambio); igual se refresca en segundo plano.
       const local = revisiones.find(x => x.id === r.id);
-      if (local) { local.estado = estado === 'observada' ? 'observada' : 'aprobada'; if (estado === 'observada' && nota) local.observaciones = nota; }
+      if (local) { local.estado = estado === 'observada' ? 'observada' : 'aprobada'; if (estado === 'observada') local.observaciones = [nota, ...problemasItems].filter(Boolean).join(' · ') || local.observaciones; }
+      abierta = null;
+      pintarLista();
+      setTimeout(cargarPendientes, 3000);
+    } catch (e) {
+      msj.innerHTML = `<div class="msj err">${esc(e.message)}</div>`;
+    }
+  }
+
+  // Re-revisión de un trámite observado: solo confirma si el problema quedó
+  // resuelto (aprobar) o si sigue (queda observado).
+  async function responderReRevision(estado) {
+    const r = abierta;
+    const nota = document.getElementById('nota').value.trim();
+    const msj = document.getElementById('detalle-msj');
+    const chk = document.getElementById('obs-resuelta');
+    if (estado === 'aprobada' && chk && !chk.checked) {
+      msj.innerHTML = '<div class="msj err">Marcá el casillero para confirmar que la observación quedó resuelta.</div>';
+      return;
+    }
+    try {
+      msj.innerHTML = '<div class="msj ok"><span class="spinner"></span> Enviando...</div>';
+      await api({
+        accion: 'revision-responder', id: r.id,
+        resultado: { estado, observaciones: estado === 'observada' ? (nota || r.observaciones || '') : nota },
+      });
+      const local = revisiones.find(x => x.id === r.id);
+      if (local) { local.estado = estado; if (estado === 'observada' && nota) local.observaciones = nota; }
       abierta = null;
       pintarLista();
       setTimeout(cargarPendientes, 3000);
