@@ -9,6 +9,7 @@
 import { put, list, del } from '@vercel/blob';
 import crypto from 'crypto';
 import webpush from 'web-push';
+import { licenciaValida } from './_licencias.js';
 
 const VINCULO_VIDA_MS = 15 * 60 * 1000;
 
@@ -75,14 +76,13 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
   if (!process.env.BLOB_READ_WRITE_TOKEN) return res.status(500).json({ error: 'Falta configurar BLOB_READ_WRITE_TOKEN en Vercel.' });
 
-  const validCodes = (process.env.LICENSE_CODES || '').split(',').map(c => c.trim()).filter(Boolean);
   const body = req.body || {};
   const { accion } = body;
 
   try {
     // ---- Acciones del TALLER (requieren licencia) ----
     if (['vincular-generar', 'tecnicos-estado', 'desvincular', 'revision-crear', 'revision-estado'].includes(accion)) {
-      if (!validCodes.includes(body.license)) return res.status(403).json({ error: 'Código de licencia no válido.' });
+      if (!(await licenciaValida(body.license))) return res.status(403).json({ error: 'Código de licencia no válido.' });
       const hash = hashLicencia(body.license);
 
       if (accion === 'vincular-generar') {

@@ -7,6 +7,7 @@
 // accesibles por URL sin el token del servidor.
 import { put, list, del } from '@vercel/blob';
 import crypto from 'crypto';
+import { licenciaValida } from './_licencias.js';
 
 const NOMBRE_VALIDO = /^[a-z0-9][a-z0-9-]{0,80}\.json$/i;
 
@@ -19,9 +20,8 @@ export default async function handler(req, res) {
   }
 
   // Solo talleres con licencia válida pueden usar el respaldo.
-  const validCodes = (process.env.LICENSE_CODES || '').split(',').map(c => c.trim()).filter(Boolean);
   const { license, accion, nombre, contenido, vigentes } = req.body || {};
-  if (!validCodes.includes(license)) {
+  if (!(await licenciaValida(license))) {
     return res.status(403).json({ error: 'Código de licencia no válido.' });
   }
 

@@ -1,6 +1,8 @@
 // Esta función corre en el servidor de Vercel, NO en el celular del usuario.
 // Por eso la clave de API (ANTHROPIC_API_KEY) queda oculta y segura:
 // nunca viaja al navegador ni queda visible en el código de la página.
+import { licenciaValida, chequearTope } from './_licencias.js';
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Método no permitido' });
@@ -14,11 +16,18 @@ export default async function handler(req, res) {
   }
 
   // Cada llamada acá gasta crédito de la API de Anthropic, así que solo se
-  // procesan pedidos que traigan un código de licencia válido.
-  const validCodes = (process.env.LICENSE_CODES || '').split(',').map(c => c.trim()).filter(Boolean);
+  // procesan pedidos con un código de licencia válido (activo en el panel o,
+  // como respaldo, en LICENSE_CODES).
   const { license, ...anthropicBody } = req.body || {};
-  if (!validCodes.includes(license)) {
+  if (!(await licenciaValida(license))) {
     return res.status(403).json({ error: 'Código de licencia no válido.' });
+  }
+
+  // Tope diario por código: acota el gasto si un código se filtra (best-effort,
+  // no bloquea a un taller legítimo si el storage falla).
+  const tope = await chequearTope(license);
+  if (!tope.ok) {
+    return res.status(429).json({ error: `Se alcanzó el límite diario de lecturas (${tope.tope}) para este código. Volvé a intentar mañana o pedí que te lo amplíen.` });
   }
 
   try {
