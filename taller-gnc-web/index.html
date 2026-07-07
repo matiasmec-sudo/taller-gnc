@@ -155,6 +155,17 @@ window.storage = {
   border: 1px solid var(--line); border-radius: 10px; font-size: 14px;
   background: var(--surface); color: var(--text);
 }
+/* Estadísticas */
+#gnc-app .stat-cards { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+#gnc-app .stat-card { flex: 1 1 70px; background: var(--surface-alt); border-radius: 12px; padding: 10px 6px; text-align: center; }
+#gnc-app .stat-num { font-family: var(--display); font-weight: 700; font-size: 22px; color: var(--flame); }
+#gnc-app .stat-cap { font-size: 11px; color: var(--text-muted); }
+#gnc-app .stat-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+#gnc-app .stat-label { flex: 0 0 42%; font-size: 13px; }
+#gnc-app .stat-track { flex: 1; height: 10px; background: var(--surface-alt); border-radius: 999px; overflow: hidden; }
+#gnc-app .stat-fill { height: 100%; background: var(--flame); border-radius: 999px; }
+#gnc-app .stat-val { flex: 0 0 auto; font-size: 13px; font-weight: 700; min-width: 28px; text-align: right; }
+#gnc-app .stat-total { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 15px; }
 #gnc-app .chip {
   flex: 1; background: var(--surface); border-radius: 16px; padding: 12px 8px;
   text-align: center; box-shadow: 0 4px 14px rgba(20,40,90,0.10);
@@ -612,6 +623,9 @@ window.storage = {
     // Corrimiento en milímetros para "Imprimir solo los datos" sobre una
     // planilla preimpresa que no salió de Estelita.
     impresionAjusteX: 0, impresionAjusteY: 0,
+    // Precio por tipo de trámite (solo para la estimación de ingresos en
+    // Estadísticas). { conversion: 50000, ... }
+    precios: {},
     // Lista de PECs del taller (algunos talleres trabajan con más de uno).
     // Los campos pec* planos de arriba quedan como espejo del primer PEC
     // por compatibilidad con datos ya guardados.
@@ -1385,6 +1399,66 @@ Documentación para realizar la renovación:
       ${pend.length
         ? `<p class="scan-sub">Tenés ${pend.length} trámite(s) sin enviar.</p><div class="form-actions"><button type="button" class="btn btn-ghost btn-sm" data-nav="pendientes">Ver pendientes</button></div>`
         : '<p class="scan-sub">No hay trámites pendientes.</p>'}
+    </div>`;
+  }
+
+  // --- Estadísticas ---
+  function computeEstadisticas() {
+    const porTipo = {}; TRAMITE_TIPOS.forEach(t => porTipo[t.value] = 0);
+    const porMes = {};
+    let total = 0, enviados = 0, pendientes = 0;
+    clientes.forEach(c => (c.tramites || []).forEach(t => {
+      total++;
+      if (t.estadoPec === 'enviado') enviados++; else pendientes++;
+      porTipo[t.tipo] = (porTipo[t.tipo] || 0) + 1;
+      const ym = (t.fecha || '').slice(0, 7);
+      if (ym) porMes[ym] = (porMes[ym] || 0) + 1;
+    }));
+    return { porTipo, porMes, total, enviados, pendientes, clientes: clientes.length };
+  }
+
+  function estadisticasPanel(entrando) {
+    const e = computeEstadisticas();
+    const precios = tallerConfig.precios || {};
+    const money = n => '$' + Number(n || 0).toLocaleString('es-AR');
+    const bar = (label, val, max, extra) => `<div class="stat-row">
+      <div class="stat-label">${label}</div>
+      <div class="stat-track"><div class="stat-fill" style="width:${Math.max(2, Math.round(val / max * 100))}%"></div></div>
+      <div class="stat-val">${val}${extra || ''}</div>
+    </div>`;
+    const tiposConDatos = TRAMITE_TIPOS.filter(t => e.porTipo[t.value] > 0);
+    const maxTipo = Math.max(1, ...tiposConDatos.map(t => e.porTipo[t.value]));
+    // Últimos 12 meses.
+    const meses = [];
+    const base = new Date(); base.setDate(1);
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+      meses.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    const maxMes = Math.max(1, ...meses.map(m => e.porMes[m] || 0));
+    const ingresoPorTipo = TRAMITE_TIPOS
+      .map(t => ({ t, cant: e.porTipo[t.value] || 0, precio: Number(precios[t.value]) || 0 }))
+      .filter(x => x.cant > 0 && x.precio > 0);
+    const ingresoTotal = ingresoPorTipo.reduce((s, x) => s + x.cant * x.precio, 0);
+    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="estadisticas-panel">
+      ${panelVolver()}
+      <h2 style="margin-top:0;">Estadísticas</h2>
+      <div class="stat-cards">
+        <div class="stat-card"><div class="stat-num">${e.total}</div><div class="stat-cap">Trámites</div></div>
+        <div class="stat-card"><div class="stat-num">${e.enviados}</div><div class="stat-cap">Enviados</div></div>
+        <div class="stat-card"><div class="stat-num">${e.pendientes}</div><div class="stat-cap">Pendientes</div></div>
+        <div class="stat-card"><div class="stat-num">${e.clientes}</div><div class="stat-cap">Clientes</div></div>
+      </div>
+      <h3>Trámites por tipo</h3>
+      ${tiposConDatos.length ? tiposConDatos.map(t => bar(t.label, e.porTipo[t.value], maxTipo)).join('') : '<p class="scan-sub">Todavía no hay trámites cargados.</p>'}
+      <h3>Trámites por mes (últimos 12)</h3>
+      ${meses.some(m => e.porMes[m]) ? meses.map(m => bar(fmtMonthYear(m), e.porMes[m] || 0, maxMes)).join('') : '<p class="scan-sub">Todavía no hay trámites cargados.</p>'}
+      <h3>Ingresos estimados</h3>
+      ${ingresoPorTipo.length
+        ? `${ingresoPorTipo.map(x => `<div class="stat-row"><div class="stat-label">${x.t.label} <span class="scan-sub">(${x.cant} × ${money(x.precio)})</span></div><div class="stat-val">${money(x.cant * x.precio)}</div></div>`).join('')}
+           <div class="stat-total">Total estimado: <b>${money(ingresoTotal)}</b></div>
+           <p class="scan-sub">Estimado según los precios cargados en Mi taller. <button type="button" class="license-link" data-ir-precios>editar precios</button></p>`
+        : `<p class="scan-sub">Cargá el precio de cada tipo de trámite en Mi taller y acá vas a ver una estimación de ingresos. <button type="button" class="license-link" data-ir-precios>cargar precios</button></p>`}
     </div>`;
   }
 
@@ -2560,6 +2634,13 @@ Documentación para realizar la renovación:
         <button type="button" class="btn btn-ghost btn-sm" id="btn-grilla-calibracion">Imprimir grilla de calibración</button>
       </div>
       <div class="agent-hint" style="margin-top:4px;">La grilla imprime una regla en milímetros: poné una planilla EN BLANCO en la impresora e imprimila encima (al 100%). Sacale una foto y mandánosla para ubicar cada dato en el lugar exacto.</div>`;
+    const secPrecios = `
+      <div class="agent-hint" style="margin-top:0;">Precio de cada tipo de trámite. Se usa solo para la estimación de ingresos en Estadísticas — no aparece en las fichas ni en los mensajes. Dejá en blanco los que no quieras contar.</div>
+      <div class="form-grid">
+        ${TRAMITE_TIPOS.map(t => `<label>${t.label}
+          <input type="number" min="0" step="100" id="tc-precio-${t.value}" value="${escapeHtml(String((tallerConfig.precios && tallerConfig.precios[t.value]) || ''))}" placeholder="$">
+        </label>`).join('')}
+      </div>`;
     const secLicencia = `
       <div class="agent-hint" style="margin-top:0;">Código de licencia de este equipo: <b>${escapeHtml(localStorage.getItem(LICENSE_KEY) || '(sin activar)')}</b> — es el que tenés que usar para activar Estelita en otro dispositivo y recuperar ahí tu copia de seguridad.</div>
       <div class="form-actions" style="margin-top:8px;">
@@ -2573,6 +2654,7 @@ Documentación para realizar la renovación:
       ${configSeccionCard('pec', 'Productores de Equipos Completos (PEC)', secPec)}
       ${configSeccionCard('tecnico', 'App del técnico', secTecnico)}
       ${configSeccionCard('mensajes', 'Mensajes de WhatsApp', secMensajes)}
+      ${configSeccionCard('precios', 'Precios de trámites', secPrecios)}
       ${configSeccionCard('impresion', 'Impresión sobre la planilla', secImpresion)}
       ${configSeccionCard('licencia', 'Licencia del equipo', secLicencia)}
       <div class="form-actions" style="margin-top:12px;">
@@ -2601,6 +2683,15 @@ Documentación para realizar la renovación:
     setStr('tc-codigo-taller', 'codigoTaller');
     setNum('tc-ajuste-x', 'impresionAjusteX');
     setNum('tc-ajuste-y', 'impresionAjusteY');
+    if (el('tc-precio-' + TRAMITE_TIPOS[0].value)) {
+      tallerConfig.precios = tallerConfig.precios || {};
+      TRAMITE_TIPOS.forEach(t => {
+        const e = el('tc-precio-' + t.value);
+        if (!e) return;
+        const v = Number(e.value);
+        if (v > 0) tallerConfig.precios[t.value] = v; else delete tallerConfig.precios[t.value];
+      });
+    }
     (tallerConfig.pecs || []).forEach((p, i) => {
       if (!el(`tc-pec-codigo-${i}`)) return;
       p.codigoPec = el(`tc-pec-codigo-${i}`).value;
@@ -3656,6 +3747,8 @@ Documentación para realizar la renovación:
   // Panel "Hoy": resumen del día (turnos de hoy, vencimientos para avisar y
   // pendientes) para arrancar la jornada de un vistazo.
   let showHoy = false;
+  // Panel de estadísticas (trámites por mes/tipo, totales, ingresos estimados).
+  let showEstadisticas = false;
   // Id del trámite cuyo detalle de cliente está desplegado en el historial.
   let historialAbierto = null;
   // Filtros del historial (buscador + tipo + estado).
@@ -4662,7 +4755,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     // (quedaban abajo del formulario y recargaban la pantalla).
     const wizardAbiertoRender = !!(showForm || editing);
     const pendCount = pendientesItems().length;
-    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo || showTurnos || showHoy || !!verUltimoTramiteId;
+    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo || showTurnos || showHoy || showEstadisticas || !!verUltimoTramiteId;
     const turnosAvisoCount = turnosParaAvisar().length;
 
     // Para que la animación de entrada de un panel se dispare solo cuando
@@ -4683,13 +4776,14 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       respaldo: showRespaldo && !prevPanelState.respaldo,
       turnos: showTurnos && !prevPanelState.turnos,
       hoy: showHoy && !prevPanelState.hoy,
+      estadisticas: showEstadisticas && !prevPanelState.estadisticas,
       ultimoTramite: !!verUltimoTramiteId && !prevPanelState.ultimoTramite,
     };
     prevPanelState = {
       wizard: wizardAbierto, wizardStep, fotos: !!showFotosFor, historial: showHistorial,
       pendientes: showPendientes, bulkImport: showBulkImport, tallerConfig: showTallerConfig,
       enargasPaste: enargasPasteOpen, quickAdd: showQuickAdd, respaldo: showRespaldo,
-      turnos: showTurnos, hoy: showHoy, ultimoTramite: !!verUltimoTramiteId,
+      turnos: showTurnos, hoy: showHoy, estadisticas: showEstadisticas, ultimoTramite: !!verUltimoTramiteId,
     };
 
     root.innerHTML = `
@@ -4702,6 +4796,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-pendientes">Trámites pendientes${pendCount ? ` <span class="menu-badge-inline">${pendCount}</span>` : ''}</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-turnos">Turnos${turnosAvisoCount ? ` <span class="menu-badge-inline">${turnosAvisoCount}</span>` : ''}</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-historial">Historial de trámites</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-estadisticas">📊 Estadísticas</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-import">+ Importar clientes (Excel / cuaderno)</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-export-csv">Exportar CSV</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-respaldo">Copia de seguridad en la nube</button>
@@ -4721,6 +4816,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         </div>`}
 
         ${showHoy ? hoyPanel(entrando.hoy) : ''}
+        ${showEstadisticas ? estadisticasPanel(entrando.estadisticas) : ''}
         ${showTallerConfig ? tallerConfigPanel(entrando.tallerConfig) : ''}
         ${reminderBanner()}
         ${showPendientes ? pendientesPanel(entrando.pendientes) : ''}
@@ -4800,6 +4896,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     showRespaldo = false;
     showTurnos = false;
     showHoy = false;
+    showEstadisticas = false;
     showBulkImport = false;
     showQuickAdd = false;
   }
@@ -4920,6 +5017,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       const nombreEl = root.querySelector('#tc-nombre');
       if (nombreEl) { tallerNombre = nombreEl.value.trim() || 'Mi Taller GNC'; await saveTaller(); }
       const mensajes = tallerConfig.mensajes || {};
+      const precios = tallerConfig.precios || {};
       const pecs = (tallerConfig.pecs || []).map(p => ({
         codigoPec: (p.codigoPec || '').trim(), razonSocial: (p.razonSocial || '').trim(),
         direccion: (p.direccion || '').trim(), telefono: (p.telefono || '').trim(),
@@ -4937,6 +5035,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         impresionAjusteX: Number(tallerConfig.impresionAjusteX) || 0,
         impresionAjusteY: Number(tallerConfig.impresionAjusteY) || 0,
         mensajes,
+        precios,
         // Campos planos = espejo del primer PEC, por compatibilidad con
         // datos y funciones anteriores a la lista de PECs.
         codigoPec: p0.codigoPec, pecRazonSocial: p0.razonSocial, pecDireccion: p0.direccion,
@@ -5185,6 +5284,26 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       cerrarPanelesConsulta();
       menuOpen = false;
       showHistorial = !abierto;
+      render();
+    });
+
+    const btnEstadisticas = root.querySelector('#btn-estadisticas');
+    if (btnEstadisticas) btnEstadisticas.addEventListener('click', () => {
+      const abierto = showEstadisticas;
+      showForm = false; editingId = null;
+      cerrarPanelesConsulta();
+      menuOpen = false;
+      showEstadisticas = !abierto;
+      render();
+    });
+
+    // "Cargar/editar precios" desde Estadísticas: abre Mi taller en la
+    // sección de precios.
+    const btnIrPrecios = root.querySelector('[data-ir-precios]');
+    if (btnIrPrecios) btnIrPrecios.addEventListener('click', () => {
+      cerrarPanelesConsulta();
+      showTallerConfig = true;
+      tallerConfigSeccion = 'precios';
       render();
     });
 
