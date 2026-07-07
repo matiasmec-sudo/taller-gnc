@@ -81,7 +81,7 @@ export default async function handler(req, res) {
 
   try {
     // ---- Acciones del TALLER (requieren licencia) ----
-    if (['vincular-generar', 'tecnicos-estado', 'desvincular', 'revision-crear', 'revision-estado'].includes(accion)) {
+    if (['vincular-generar', 'tecnicos-estado', 'desvincular', 'revision-crear', 'revision-estado', 'agenda-enviar'].includes(accion)) {
       if (!(await licenciaValida(body.license))) return res.status(403).json({ error: 'Código de licencia no válido.' });
       const hash = hashLicencia(body.license);
 
@@ -141,6 +141,42 @@ export default async function handler(req, res) {
         if (!r) return res.status(404).json({ error: 'No existe esa revisión.' });
         return res.status(200).json({ ok: true, revision: r.datos });
       }
+
+      if (accion === 'agenda-enviar') {
+        // El taller manda a los técnicos la agenda del día: turnos de hoy y
+        // autos por vencer (revisión anual / prueba hidráulica). NUNCA incluye
+        // el teléfono del cliente. Se guarda y se notifica por push.
+        const a = body.agenda || {};
+        const turnos = Array.isArray(a.turnos) ? a.turnos.slice(0, 50) : [];
+        const revisiones = Array.isArray(a.revisiones) ? a.revisiones.slice(0, 100) : [];
+        await escribirJson(`taller/${hash}/agenda.json`, {
+          fecha: typeof a.fecha === 'string' ? a.fecha.slice(0, 10) : null,
+          tallerNombre: String(a.tallerNombre || '').slice(0, 80),
+          turnos, revisiones,
+          enviadoEn: new Date().toISOString(),
+        });
+        let notificados = 0;
+        if (configurarPush()) {
+          const partes = [];
+          if (turnos.length) partes.push(`${turnos.length} turno${turnos.length > 1 ? 's' : ''}`);
+          if (revisiones.length) partes.push(`${revisiones.length} auto${revisiones.length > 1 ? 's' : ''} para revisar`);
+          const cuerpo = partes.length ? partes.join(' y ') : 'Sin novedades para hoy';
+          const subs = await list({ prefix: `taller/${hash}/push/` });
+          for (const s of subs.blobs) {
+            try {
+              const r = await fetch(s.url, { headers: { authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` } });
+              const sub = await r.json();
+              await webpush.sendNotification(sub, JSON.stringify({ title: 'Agenda del día', body: cuerpo }));
+              notificados++;
+            } catch (e) {
+              if (e && (e.statusCode === 404 || e.statusCode === 410)) {
+                try { await del(s.url); } catch (e2) { /* ok */ }
+              }
+            }
+          }
+        }
+        return res.status(200).json({ ok: true, notificados });
+      }
     }
 
     // ---- Canje del código de vinculación (no requiere licencia) ----
@@ -164,9 +200,14 @@ export default async function handler(req, res) {
     }
 
     // ---- Acciones del TÉCNICO (requieren su token) ----
-    if (['revision-pendientes', 'revision-responder', 'push-suscribir'].includes(accion)) {
+    if (['revision-pendientes', 'revision-responder', 'push-suscribir', 'agenda-ver'].includes(accion)) {
       const hash = await validarTecnico(body.tecnicoToken);
       if (!hash) return res.status(403).json({ error: 'Este celular no está vinculado al taller. Pedí un código nuevo desde Estelita.' });
+
+      if (accion === 'agenda-ver') {
+        const a = await leerJson(`taller/${hash}/agenda.json`);
+        return res.status(200).json({ ok: true, agenda: a ? a.datos : null });
+      }
 
       if (accion === 'revision-pendientes') {
         const l = await list({ prefix: `taller/${hash}/revisiones/` });

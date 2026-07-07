@@ -1450,6 +1450,28 @@ Documentación para realizar la renovación:
     return [...b.vencidos, ...b.esteMes].filter(i => !i.avisado).length;
   }
 
+  // Arma la agenda del día para enviar a los técnicos: turnos de hoy y autos
+  // por vencer (revisión anual / prueba hidráulica). NUNCA incluye el teléfono
+  // del cliente — es solo coordinación interna del equipo.
+  function construirAgendaTecnico() {
+    const turnos = turnosHoy().map(({ cliente, turno }) => ({
+      hora: turno.hora || '',
+      patente: cliente.patente || '',
+      vehiculo: [cliente.marca, cliente.modelo].filter(Boolean).join(' '),
+      cliente: cliente.nombre || '',
+      motivo: turno.motivo || '',
+    }));
+    const v = vencimientosAgenda();
+    const revisiones = [...v.vencidos, ...v.esteMes, ...v.proximoMes].map(it => ({
+      patente: it.cliente.patente || '',
+      vehiculo: [it.cliente.marca, it.cliente.modelo].filter(Boolean).join(' '),
+      cliente: it.cliente.nombre || '',
+      tipo: it.tipo === 'oblea' ? 'Oblea (revisión anual)' : 'Prueba hidráulica',
+      cuando: it.status.label,
+    }));
+    return { fecha: fechaLocalISO(), tallerNombre: tallerNombre || '', turnos, revisiones };
+  }
+
   function hoyPanel(entrando) {
     const turnos = turnosHoy();
     const v = vencimientosAgenda();
@@ -1493,6 +1515,11 @@ Documentación para realizar la renovación:
       ${pend.length
         ? `<p class="scan-sub">Tenés ${pend.length} trámite(s) sin enviar.</p><div class="form-actions"><button type="button" class="btn btn-ghost btn-sm" data-nav="pendientes">Ver pendientes</button></div>`
         : '<p class="scan-sub">No hay trámites pendientes.</p>'}
+
+      <h3>Coordinación con el técnico</h3>
+      <p class="scan-sub">Enviales a los técnicos vinculados la agenda de hoy: los turnos y los autos para revisión anual. Les llega una notificación al celular.</p>
+      <div class="form-actions"><button type="button" class="btn btn-primary btn-sm" id="btn-agenda-tecnico">Avisar al técnico</button></div>
+      <div id="agenda-tecnico-msj" class="scan-sub" style="margin-top:8px;"></div>
     </div>`;
   }
 
@@ -6504,6 +6531,35 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         await saveClientes();
         render();
       });
+    });
+
+    // "Avisar al técnico": manda la agenda del día (turnos + autos para
+    // revisión) a los técnicos vinculados, con notificación push.
+    const btnAgendaTecnico = root.querySelector('#btn-agenda-tecnico');
+    if (btnAgendaTecnico) btnAgendaTecnico.addEventListener('click', async () => {
+      const msj = root.querySelector('#agenda-tecnico-msj');
+      const agenda = construirAgendaTecnico();
+      if (!agenda.turnos.length && !agenda.revisiones.length) {
+        if (msj) msj.textContent = 'Hoy no hay turnos ni autos para revisar, así que no hay nada para avisar.';
+        return;
+      }
+      btnAgendaTecnico.disabled = true;
+      const textoOriginal = btnAgendaTecnico.textContent;
+      btnAgendaTecnico.textContent = 'Enviando...';
+      if (msj) msj.textContent = '';
+      try {
+        const r = await apiTecnicoTaller({ accion: 'agenda-enviar', agenda });
+        if (msj) {
+          msj.textContent = r.notificados
+            ? `Agenda enviada. Se notificó a ${r.notificados} celular(es) de técnico.`
+            : 'Agenda guardada, pero todavía no hay técnicos vinculados (o no activaron las notificaciones). Vinculá un técnico desde Mi taller → App del técnico.';
+        }
+      } catch (e) {
+        if (msj) msj.textContent = 'No se pudo enviar: ' + (e.message || e);
+      } finally {
+        btnAgendaTecnico.disabled = false;
+        btnAgendaTecnico.textContent = textoOriginal;
+      }
     });
 
     root.querySelectorAll('[data-borrar-turno-cliente]').forEach(btn => {

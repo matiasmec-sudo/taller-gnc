@@ -73,6 +73,7 @@
   const TOKEN_KEY = 'gnc_tecnico_token_v1';
   const app = document.getElementById('app');
   let revisiones = [];
+  let agenda = null; // agenda del día enviada por el taller
   let abierta = null; // revisión abierta en detalle
   let respuesta = null; // estado del checklist en curso { comps: {}, items: {}, nota }
   let cargando = false;
@@ -143,6 +144,8 @@
     try {
       const r = await api({ accion: 'revision-pendientes' });
       revisiones = r.revisiones || [];
+      // La agenda del día es opcional: si falla, no rompe la lista.
+      try { const ra = await api({ accion: 'agenda-ver' }); agenda = ra.agenda || null; } catch (e2) { /* ok */ }
       pintarLista();
     } catch (e) {
       if (e.status === 403) {
@@ -164,10 +167,32 @@
     } finally { cargando = false; }
   }
 
+  function fmtFechaCorta(iso) {
+    if (!iso || iso.length < 10) return '';
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}`;
+  }
+  function tarjetaAgenda() {
+    const a = agenda;
+    if (!a || ((a.turnos || []).length === 0 && (a.revisiones || []).length === 0)) return '';
+    const turnos = (a.turnos || []).map(t => `
+      <div class="comp"><div class="datos">${esc(t.hora ? t.hora + ' hs' : 'Sin hora')} · ${esc(t.patente || 's/patente')}
+        <div class="serie">${esc([t.vehiculo, t.cliente].filter(Boolean).join(' · '))}${t.motivo ? ' — ' + esc(t.motivo) : ''}</div></div></div>`).join('');
+    const revs = (a.revisiones || []).map(rv => `
+      <div class="comp"><div class="datos">${esc(rv.patente || 's/patente')}
+        <div class="serie">${esc(rv.vehiculo || '')} · ${esc(rv.tipo || '')} — ${esc(rv.cuando || '')}</div></div></div>`).join('');
+    return `<div class="card">
+      <h2>Agenda del día${a.fecha ? ' · ' + fmtFechaCorta(a.fecha) : ''}</h2>
+      ${a.tallerNombre ? `<p class="ayuda" style="margin-bottom:6px;">${esc(a.tallerNombre)}</p>` : ''}
+      ${turnos ? `<div class="titulo-seccion">Turnos</div>${turnos}` : ''}
+      ${revs ? `<div class="titulo-seccion">Autos para revisión anual</div>${revs}` : ''}
+    </div>`;
+  }
   function pintarLista() {
     const pendientes = revisiones.filter(r => r.estado === 'pendiente');
     const resueltas = revisiones.filter(r => r.estado !== 'pendiente').slice(0, 5);
     app.innerHTML = `
+      ${tarjetaAgenda()}
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
         <div style="font-size:13px; color:var(--suave);">${pendientes.length ? pendientes.length + ' revisión(es) pendiente(s)' : 'Sin revisiones pendientes'}</div>
         <button class="refrescar" id="btn-refrescar">Actualizar</button>
