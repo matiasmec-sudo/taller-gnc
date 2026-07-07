@@ -2591,10 +2591,13 @@ Documentación para realizar la renovación:
       if (!l) continue;
       // Fin de la zona de equipos.
       if (/informaci[oó]n\s*desplegada|declaraci[oó]n\s*jurada|^la\s*informaci[oó]n/i.test(l)) break;
-      // ¿Encabezado de sección? ("Datos Regulador", "Datos Cilindros",
-      // "Datos Válvulas del Cilindro"). Ojo: "Válvulas del Cilindro" tiene las
-      // dos palabras, por eso se prueba válvula PRIMERO.
-      const mh = l.match(/^datos\s+(.*)$/i);
+      // ¿Encabezado de sección? El SIC es inconsistente con el singular/plural:
+      // con dos cilindros dice "Datos Cilindros" / "Datos Válvulas del
+      // Cilindro", pero con UNO dice "Datos Cilindro" / "Dato Válvula del
+      // Cilindro" (¡"Dato" sin s!). Por eso la s de "datos" es opcional. Ojo:
+      // "Válvula del Cilindro" tiene las dos palabras, por eso se prueba
+      // válvula PRIMERO.
+      const mh = l.match(/^datos?\s+(.*)$/i);
       if (mh) {
         const resto = mh[1].toLowerCase();
         mapa = null;
