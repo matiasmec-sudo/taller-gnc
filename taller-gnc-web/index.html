@@ -68,6 +68,20 @@ window.storage = {
   box-sizing: border-box;
   line-height: 1.5;
 }
+#gnc-app[data-theme="dark"] {
+  --bg: #12151C;
+  --surface: #1B2029;
+  --surface-alt: #232B39;
+  --line: #313A4B;
+  --flame: #5A8DF2;
+  --flame-dim: #3A567F;
+  --warn: #E5A93B;
+  --danger: #E5584A;
+  --ok: #40C07E;
+  --text: #E7ECF3;
+  --text-muted: #9AA6B8;
+  --sombra: 0 2px 10px rgba(0,0,0,0.45);
+}
 #gnc-app *, #gnc-app *::before, #gnc-app *::after { box-sizing: border-box; }
 
 #gnc-app .wrap { max-width: 980px; margin: 0 auto; padding: 24px 20px 60px; }
@@ -149,6 +163,7 @@ window.storage = {
   cursor: pointer;
 }
 #gnc-app .hoy-sub { margin: 10px 0 4px; font-family: var(--sans); font-size: 13px; font-weight: 700; color: var(--text-muted); }
+#gnc-app .formato-hint { display: block; margin-top: 3px; font-size: 11px; color: var(--warn); }
 #gnc-app .hist-filtros { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
 #gnc-app .hist-filtros input, #gnc-app .hist-filtros select {
   flex: 1 1 140px; min-width: 120px; padding: 8px 10px;
@@ -368,6 +383,11 @@ window.storage = {
 .gnc-modal-box select:focus, .gnc-modal-box input:focus {
   border-color: #1D5BD8; box-shadow: 0 0 0 3px rgba(29,91,216,0.15);
 }
+/* Modales en modo oscuro (viven fuera de #gnc-app) */
+body.gnc-dark .gnc-modal-box { background: #1B2029; border-color: #313A4B; color: #E7ECF3; }
+body.gnc-dark .gnc-modal-msg { color: #9AA6B8; }
+body.gnc-dark .gnc-modal-box .btn-ghost { border-color: #313A4B; color: #9AA6B8; }
+body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { background: #232B39; border-color: #313A4B; color: #E7ECF3; }
 .gnc-modal-box .form-grid { display: grid; gap: 12px; }
 .gnc-modal-box .form-grid label {
   display: flex; flex-direction: column; gap: 5px;
@@ -777,7 +797,21 @@ window.storage = {
     });
   }
 
+  const THEME_KEY = 'gnc_theme';
+  function temaOscuroActivo() { return localStorage.getItem(THEME_KEY) === 'dark'; }
+  function aplicarTema() {
+    const dark = temaOscuroActivo();
+    root.setAttribute('data-theme', dark ? 'dark' : 'light');
+    // Los modales viven fuera de #gnc-app: se tematizan con una clase en body.
+    document.body.classList.toggle('gnc-dark', dark);
+  }
+  function toggleTema() {
+    localStorage.setItem(THEME_KEY, temaOscuroActivo() ? 'light' : 'dark');
+    aplicarTema();
+  }
+
   function boot() {
+    aplicarTema();
     if (!localStorage.getItem(LICENSE_KEY)) {
       showActivationScreen();
     } else {
@@ -848,6 +882,16 @@ window.storage = {
   }
 
   function cleanPhone(p) { return (p || '').replace(/\D/g, ''); }
+
+  // Validaciones de formato (no bloquean: solo muestran un aviso suave).
+  function patenteValida(p) {
+    const s = (p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return /^[A-Z]{3}\d{3}$/.test(s)        // auto viejo: ABC123
+      || /^[A-Z]{2}\d{3}[A-Z]{2}$/.test(s)  // auto Mercosur: AB123CD
+      || /^\d{3}[A-Z]{3}$/.test(s)          // moto vieja: 123ABC
+      || /^[A-Z]\d{3}[A-Z]{3}$/.test(s);    // moto Mercosur: A123BCD
+  }
+  function cuitValido(c) { return (c || '').replace(/\D/g, '').length === 11; }
 
   // --- Mensajes de WhatsApp editables por el taller ---
   // Cada taller puede reescribir estos textos en la configuración para
@@ -1860,6 +1904,7 @@ Documentación para realizar la renovación:
       <div class="form-grid">
         <label class="campo-obligatorio">Patente *
           <input type="text" id="qa-patente" placeholder="Ej: AB123CD">
+          <span class="formato-hint" id="qa-patente-hint" style="display:none;">Formato de patente poco habitual — revisá que esté bien.</span>
         </label>
         <label class="campo-obligatorio">Teléfono (con código de país, sin +) *
           <input type="tel" id="qa-telefono" placeholder="Ej: 5492235551234">
@@ -2558,6 +2603,7 @@ Documentación para realizar la renovación:
         </label>
         <label>CUIT del TdM
           <input type="text" id="tc-cuit" value="${escapeHtml(t.cuit)}" placeholder="Ej: 20326686132">
+          <span class="formato-hint" id="tc-cuit-hint" style="display:none;">El CUIT debería tener 11 dígitos.</span>
         </label>
         <label>Dirección
           <input type="text" id="tc-direccion" value="${escapeHtml(t.direccion)}" placeholder="Ej: Edison 2945">
@@ -2777,6 +2823,7 @@ Documentación para realizar la renovación:
       <div class="form-grid">
         <label class="campo-obligatorio">Patente *
           <input type="text" id="f-patente" value="${escapeHtml(c.patente)}" placeholder="Ej: AB123CD">
+          <span class="formato-hint" id="f-patente-hint" style="display:none;">Formato de patente poco habitual — revisá que esté bien.</span>
         </label>
         <div style="grid-column: 1/-1; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
           <button type="button" class="btn btn-agent" id="btn-buscar-enargas" data-patente="${escapeHtml(c.patente)}" style="flex:2; min-width:180px; font-size:14px;">🔎 Buscar en ENARGAS ↗</button>
@@ -4861,6 +4908,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-export-csv">Exportar CSV</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-respaldo">Copia de seguridad en la nube</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-taller-config">⚙️ Configuración del taller</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-tema">${temaOscuroActivo() ? '☀️ Modo claro' : '🌙 Modo oscuro'}</button>
                 ${showInstallButton ? `<button type="button" class="btn btn-ghost btn-sm" id="btn-install-app">📲 Instalar app</button>` : ''}
               </div>` : ''}
             </div>
@@ -4979,6 +5027,28 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       render();
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
+
+    // Avisos suaves de formato (patente en mayúscula + aviso si el formato no
+    // es habitual; CUIT de 11 dígitos). No bloquean el guardado.
+    function bindFormatoHint(inputId, hintId, validador, upper) {
+      const inp = root.querySelector('#' + inputId);
+      const hint = root.querySelector('#' + hintId);
+      if (!inp || !hint) return;
+      const check = () => {
+        if (upper) {
+          const pos = inp.selectionStart;
+          const nuevo = inp.value.toUpperCase();
+          if (nuevo !== inp.value) { inp.value = nuevo; try { inp.setSelectionRange(pos, pos); } catch (e) { /* ok */ } }
+        }
+        const v = inp.value.trim();
+        hint.style.display = (v && !validador(v)) ? 'block' : 'none';
+      };
+      inp.addEventListener('input', check);
+      check();
+    }
+    bindFormatoHint('qa-patente', 'qa-patente-hint', patenteValida, true);
+    bindFormatoHint('f-patente', 'f-patente-hint', patenteValida, true);
+    bindFormatoHint('tc-cuit', 'tc-cuit-hint', cuitValido, false);
 
     // Barra de navegación inferior (mobile). Solo abre/cierra los paneles de
     // consulta — a propósito no toca el wizard ni las fotos, para no perder
@@ -5304,6 +5374,13 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     const btnToggleMenu = root.querySelector('#btn-toggle-menu');
     if (btnToggleMenu) btnToggleMenu.addEventListener('click', () => {
       menuOpen = !menuOpen;
+      render();
+    });
+
+    const btnTema = root.querySelector('#btn-tema');
+    if (btnTema) btnTema.addEventListener('click', () => {
+      toggleTema();
+      menuOpen = false;
       render();
     });
 
