@@ -1,0 +1,13 @@
+{
+  "name": "estelita-build",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Paso de compilacion: minifica y ofusca index.src.html -> index.html para produccion.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "html-minifier-terser": "^7.2.0"
+  }
+}
