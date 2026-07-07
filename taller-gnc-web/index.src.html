@@ -91,7 +91,7 @@ window.storage = {
   display: flex; align-items: center; justify-content: space-between;
   gap: 16px; flex-wrap: wrap;
   background: var(--flame); color: #fff;
-  margin: -24px -20px 0; padding: 22px 20px 52px;
+  margin: -24px -20px 0; padding: 14px 20px 44px;
   border-radius: 0 0 28px 28px;
 }
 #gnc-app .brand { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; min-width: 0; }
@@ -205,7 +205,9 @@ window.storage = {
 #gnc-app input:focus, #gnc-app select:focus, #gnc-app textarea:focus {
   border-color: var(--flame); box-shadow: 0 0 0 3px rgba(29,91,216,0.15);
 }
-#gnc-app .search-input { flex: 1; min-width: 180px; border-radius: 14px; box-shadow: 0 2px 8px rgba(20,40,90,0.06); }
+#gnc-app .search-wrap { position: relative; flex: 1; min-width: 180px; display: flex; }
+#gnc-app .search-wrap .search-ico { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
+#gnc-app .search-wrap .search-input { width: 100%; padding-left: 40px; border-radius: 14px; box-shadow: 0 2px 8px rgba(20,40,90,0.06); }
 #gnc-app .btn {
   font-family: var(--sans); font-weight: 700; font-size: 13px; letter-spacing: 0.2px;
   border-radius: 12px; padding: 10px 16px; border: 1px solid transparent; cursor: pointer;
@@ -216,6 +218,10 @@ window.storage = {
 #gnc-app .btn-primary { background: var(--flame); color: #fff; box-shadow: 0 4px 12px rgba(29,91,216,0.30); }
 #gnc-app .btn-primary:hover { filter: brightness(1.08); }
 #gnc-app .btn-primary:active { filter: brightness(0.9); }
+/* Botón secundario de contorno: fondo blanco, borde e ícono/texto en cobalto */
+#gnc-app .btn-outline { background: var(--surface); border-color: var(--flame); color: var(--flame); }
+#gnc-app .btn-outline:hover { background: rgba(29,91,216,0.06); }
+#gnc-app .btn-outline:active { background: rgba(29,91,216,0.12); }
 #gnc-app .btn-ghost { background: transparent; border-color: var(--line); color: var(--text-muted); }
 #gnc-app .btn-ghost:hover { color: var(--flame); border-color: var(--flame-dim); background: rgba(29,91,216,0.06); }
 #gnc-app .btn-ghost:active { background: rgba(29,91,216,0.12); }
@@ -5150,10 +5156,12 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         ${showPendientes ? pendientesPanel(entrando.pendientes) : ''}
 
         ${wizardAbiertoRender ? '' : `<div class="controls">
-          <input class="search-input" type="text" id="search-input" placeholder="Buscar por nombre o patente..." value="${escapeHtml(currentQuery)}">
-          <button type="button" class="btn btn-primary search-lupa" id="btn-buscar" title="Buscar" aria-label="Buscar"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
-          <button class="btn btn-primary" id="btn-new">+ Nuevo cliente</button>
-          <button type="button" class="btn btn-ghost" id="btn-enargas-directo" title="Abrir la consulta por dominio de ENARGAS">ENARGAS ↗</button>
+          <div class="search-wrap">
+            <svg class="search-ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <input class="search-input" type="text" id="search-input" placeholder="Buscar por nombre o patente..." value="${escapeHtml(currentQuery)}">
+          </div>
+          <button class="btn btn-outline" id="btn-new">+ Nuevo cliente</button>
+          <button type="button" class="btn btn-outline" id="btn-enargas-directo" title="Abrir la consulta por dominio de ENARGAS">ENARGAS ↗</button>
         </div>`}
 
         ${showQuickAdd ? quickAddPanel(entrando.quickAdd) : ''}
