@@ -3620,25 +3620,30 @@ Documentación para realizar la renovación:
   // Conformidad). Coordenadas en mm sobre A4 — PRIMERA VERSIÓN estimada,
   // se calibra imprimiéndola sobre el formulario en blanco. El teléfono del
   // cliente NO se imprime (queda solo en Estelita).
+  // Calibrado con la impresión del usuario (07/07/2026). arriba=-y, izq=-x.
   const SEGURGAS_MAPA = {
-    lugarFecha: { x: 78, y: 52 },
-    tallerEncab: { x: 92, y: 62 },
-    cil: { ys: [131, 143, 155, 167], marca: 50, codigo: 74, serie: 100, fechaFab: 128, capacidad: 150, obs: 170, valvula: 192 },
-    nombre: { x: 55, y: 217 },
-    documento: { x: 150, y: 205 },
-    direccion: { x: 125, y: 217 },
-    provincia: { x: 58, y: 229 },
-    localidad: { x: 108, y: 229 },
-    patente: { x: 58, y: 241 },
-    oblea: { x: 148, y: 241 },
-    tallerMontaje: { x: 72, y: 252 },
-    nombrePec: { x: 158, y: 252 },
-    codigoTdm: { x: 62, y: 263 },
-    codigoPec: { x: 158, y: 263 },
-    direccionTdm: { x: 48, y: 274 },
-    direccionPec: { x: 150, y: 274 },
-    telPec: { x: 198, y: 274 },
-    aclNombre: { x: 130, y: 292 },
+    lugarFecha: { x: 78, y: 52 },   // sin calibrar todavía
+    tallerEncab: { x: 92, y: 62 },  // sin calibrar todavía
+    cil: {
+      ys: [131, 143, 155, 167],
+      dyCodSerie: -31, dyFechaValv: -15,
+      codigo: 74, serie: 100, fechaFab: 105, valvula: 177,
+    },
+    nombre: { x: 50, y: 171 },
+    documento: { x: 155, y: 170 },
+    direccion: { x: 145, y: 199 },
+    provincia: { x: 28, y: 199 },
+    localidad: { x: 85, y: 199 },
+    patente: { x: 58, y: 213 },
+    oblea: { x: 148, y: 214 },
+    tallerMontaje: { x: 72, y: 228 }, // sin calibrar (estimado en la fila del PEC)
+    nombrePec: { x: 153, y: 228 },
+    codigoTdm: { x: 62, y: 244 },
+    codigoPec: { x: 158, y: 243 },
+    direccionTdm: { x: 23, y: 259 },
+    direccionPec: { x: 125, y: 259 },
+    telPec: { x: 183, y: 259 },
+    aclNombre: { x: 135, y: 285 },
   };
 
   async function generarCrpcPdfSoloDatos(cliente, tramite) {
@@ -3665,11 +3670,13 @@ Documentación para realizar la renovación:
     // Observación no se cargan en la app: van a mano.
     (eq.cilindros || []).slice(0, M.cil.ys.length).forEach((c, i) => {
       const y = M.cil.ys[i];
-      T(c.codigo, M.cil.codigo, y, 8);
-      T(c.serie, M.cil.serie, y, 8);
-      T([c.fabricadoMes, c.fabricadoAnio].filter(Boolean).join('/'), M.cil.fechaFab, y, 8);
+      const yCS = y + M.cil.dyCodSerie;   // código y n° de serie
+      const yFV = y + M.cil.dyFechaValv;  // fecha fab. y válvula
+      T(c.codigo, M.cil.codigo, yCS, 8);
+      T(c.serie, M.cil.serie, yCS, 8);
+      T([c.fabricadoMes, c.fabricadoAnio].filter(Boolean).join('/'), M.cil.fechaFab, yFV, 8);
       const v = (eq.valvulas || [])[i];
-      if (v) T([v.codigo, v.serie].filter(Boolean).join(' '), M.cil.valvula, y, 8);
+      if (v) T([v.codigo, v.serie].filter(Boolean).join(' '), M.cil.valvula, yFV, 8);
     });
 
     // Propietario / vehículo (SIN teléfono del cliente).
