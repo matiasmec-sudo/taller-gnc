@@ -3719,12 +3719,18 @@ Documentación para realizar la renovación:
 
     // Cilindros (todos los que entren en la tabla). Marca, Capacidad y
     // Observación no se cargan en la app: van a mano.
+    // Válvula de cada cilindro: la que está montada HOY (la que va a reprueba),
+    // no las nuevas de "Montaje". En prueba hidráulica la lista queda
+    // intercalada (baja, montaje, baja, montaje), así que nos quedamos solo
+    // con las reales que no son montaje para emparejar 1 por cilindro.
+    const valvParaCil = (eq.valvulas || []).filter(v => (v.codigo || v.serie) && v.msb !== 'montaje');
+    const fuenteValv = valvParaCil.length ? valvParaCil : (eq.valvulas || []);
     (eq.cilindros || []).slice(0, M.cil.ys.length).forEach((c, i) => {
       const yy = M.cil.ys[i] + M.cil.dy;
       T(c.codigo, M.cil.codigo, yy, 8);
       T(c.serie, M.cil.serie, yy, 8);
       T([c.fabricadoMes, c.fabricadoAnio].filter(Boolean).join('/'), M.cil.fechaFab, yy, 8);
-      const v = (eq.valvulas || [])[i];
+      const v = fuenteValv[i];
       if (v) T([v.codigo, v.serie].filter(Boolean).join(' '), M.cil.valvula, yy, 8);
     });
 
