@@ -16,6 +16,17 @@ function tokenOk(req) {
   return crypto.timingSafeEqual(a, b);
 }
 
+const PLANES = ['basico', 'profesional', 'full'];
+const MEDIOS = ['mp', 'transferencia'];
+function fechaValida(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
+function sumarMesISO(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  const dia = d.getDate();
+  d.setMonth(d.getMonth() + 1);
+  if (d.getDate() < dia) d.setDate(0); // ajuste fin de mes (ej. 31 -> último día)
+  return d.toISOString().slice(0, 10);
+}
+
 const ALFA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin O/0/I/1/L, para dictar por teléfono
 function nuevoCodigo(existentes) {
   const set = new Set(existentes);
@@ -68,7 +79,15 @@ export default async function handler(req, res) {
       const taller = String(req.body.taller || '').trim();
       const topeDia = Number(req.body.topeDia) > 0 ? Number(req.body.topeDia) : 50;
       const codigo = nuevoCodigo(lics.map(l => l.codigo).concat(codigosEnv()));
-      lics.push({ codigo, taller, estado: 'activo', alta: new Date().toISOString().slice(0, 10), topeDia, notas: '' });
+      lics.push({
+        codigo, taller, estado: 'activo', alta: new Date().toISOString().slice(0, 10),
+        topeDia, notas: '',
+        plan: PLANES.includes(req.body.plan) ? req.body.plan : '',
+        medioPago: MEDIOS.includes(req.body.medioPago) ? req.body.medioPago : '',
+        pagoHasta: fechaValida(req.body.pagoHasta) ? req.body.pagoHasta : null,
+        email: String(req.body.email || '').trim(),
+        origen: 'manual',
+      });
       await guardarLicencias(lics);
       return res.status(200).json({ ok: true, codigo });
     }
@@ -79,8 +98,27 @@ export default async function handler(req, res) {
       if (typeof req.body.taller === 'string') l.taller = req.body.taller.trim();
       if (typeof req.body.notas === 'string') l.notas = req.body.notas.trim();
       if (req.body.topeDia !== undefined && Number(req.body.topeDia) >= 0) l.topeDia = Number(req.body.topeDia);
+      if (req.body.plan !== undefined) l.plan = PLANES.includes(req.body.plan) ? req.body.plan : '';
+      if (req.body.medioPago !== undefined) l.medioPago = MEDIOS.includes(req.body.medioPago) ? req.body.medioPago : '';
+      if (req.body.pagoHasta !== undefined) l.pagoHasta = fechaValida(req.body.pagoHasta) ? req.body.pagoHasta : null;
+      if (typeof req.body.email === 'string') l.email = req.body.email.trim();
       await guardarLicencias(lics);
       return res.status(200).json({ ok: true });
+    }
+
+    // Registrar un pago: extiende "pago al día hasta" un mes (desde hoy o desde
+    // la fecha actual si es futura) y deja la licencia activa. Es lo que usás
+    // cuando te pagan por transferencia (y lo que el webhook de MP hará solo).
+    if (accion === 'registrar-pago') {
+      const l = lics.find(x => x.codigo === req.body.codigo);
+      if (!l) return res.status(404).json({ error: 'No existe esa licencia.' });
+      const hoy = new Date().toISOString().slice(0, 10);
+      const base = (l.pagoHasta && l.pagoHasta > hoy) ? l.pagoHasta : hoy;
+      l.pagoHasta = sumarMesISO(base);
+      l.estado = 'activo';
+      l.prueba = false;
+      await guardarLicencias(lics);
+      return res.status(200).json({ ok: true, pagoHasta: l.pagoHasta });
     }
 
     if (accion === 'estado') {
