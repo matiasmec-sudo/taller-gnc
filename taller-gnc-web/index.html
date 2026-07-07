@@ -5851,7 +5851,11 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         // Marcar como enviado y persistir.
         t.estadoPec = 'enviado';
         await saveClientes();
-        const { blob, filename, fotosIncluidas } = await generarPecPdf(c, t, t.firma);
+        // Al PEC se manda el "solo datos" (para su planilla preimpresa) con
+        // las fotos de documentación adjuntas; la firma va aparte, en papel.
+        const blob = await generarPecPdfSoloDatos(c, t, { conFotos: true });
+        const filename = `PEC_${(c.patente || c.nombre || 'tramite').replace(/\s+/g, '_')}_${t.fecha || ''}.pdf`;
+        const fotosIncluidas = clientesConFotos.has(c.id) ? 1 : 0;
         await compartirPecPdf(blob, filename, c, fotosIncluidas, pecDeTramite(t));
         if (st) st.textContent = '';
         render();
@@ -6983,14 +6987,17 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         if (!ok) return;
         rc.revisionOverride = true;
       }
-      const firmaParaPdf = currentSignature;
       const resultado = await guardarClienteYTramite('enviado');
       if (!resultado) return;
       const cliente = clientes.find(c => c.id === resultado.clienteId);
       const tramite = cliente && cliente.tramites.find(t => t.id === resultado.tramiteId);
       if (!cliente || !tramite) return;
       try {
-        const { blob, filename, fotosIncluidas } = await generarPecPdf(cliente, tramite, firmaParaPdf);
+        // Al PEC va el "solo datos" (para su planilla preimpresa) + las fotos
+        // de documentación adjuntas; la firma va en papel, no en el PDF.
+        const blob = await generarPecPdfSoloDatos(cliente, tramite, { conFotos: true });
+        const filename = `PEC_${(cliente.patente || cliente.nombre || 'tramite').replace(/\s+/g, '_')}_${tramite.fecha || ''}.pdf`;
+        const fotosIncluidas = clientesConFotos.has(cliente.id) ? 1 : 0;
         await compartirPecPdf(blob, filename, cliente, fotosIncluidas, pecDeTramite(tramite));
       } catch (e) {
         console.error(e);
