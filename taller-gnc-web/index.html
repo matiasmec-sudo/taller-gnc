@@ -6708,6 +6708,19 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
           // por defecto, también para el segundo cilindro traído del SIC.
           if (!c.msdb) c.msdb = 'sigue';
         });
+        // Válvulas en prueba hidráulica: CADA válvula del vehículo se
+        // reemplaza — la actual va de "Baja" y se agrega una nueva de
+        // "Montaje". La regla vale para todas: si el SIC trajo dos válvulas,
+        // quedan cuatro filas (baja + montaje por cada una).
+        const valvReales = (tramiteDraftEquipo.valvulas || []).filter(v => v.codigo || v.serie);
+        if (valvReales.length) {
+          const nuevas = [];
+          valvReales.forEach(v => {
+            nuevas.push({ codigo: v.codigo, serie: v.serie, msb: 'baja' });
+            nuevas.push({ codigo: '', serie: '', msb: 'montaje' });
+          });
+          tramiteDraftEquipo.valvulas = nuevas;
+        }
       }
 
       // Aviso: entre la renovación de la oblea (hoy) y el vencimiento de la
