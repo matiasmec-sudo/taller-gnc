@@ -4771,6 +4771,10 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       if (response.status === 403) {
         throw new Error('El código de licencia no es válido. Tocá "Cambiar código de licencia" arriba para corregirlo.');
       }
+      if (response.status === 429) {
+        const d429 = await response.json().catch(() => ({}));
+        throw new Error(d429.error || 'Se alcanzó el límite diario de lecturas para este código.');
+      }
 
       const data = await response.json();
 
@@ -5870,6 +5874,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
             body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 4000, messages: [{ role: 'user', content }], license: localStorage.getItem(LICENSE_KEY) })
           });
           if (response.status === 403) throw new Error('El código de licencia no es válido. Tocá "Cambiar código de licencia" arriba para corregirlo.');
+          if (response.status === 429) { const d = await response.json().catch(() => ({})); throw new Error(d.error || 'Se alcanzó el límite diario de lecturas para este código.'); }
           const data = await response.json();
           if (!response.ok || data.type === 'error') {
             const msg = (data.error && data.error.message) ? data.error.message : JSON.stringify(data).slice(0, 300);

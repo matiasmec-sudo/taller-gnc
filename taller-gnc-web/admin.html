@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Estelita — Administración de licencias</title>
+<style>
+  :root { --azul:#1D5BD8; --azul-osc:#123C8F; --fondo:#F4F6FA; --surface:#fff; --linea:#E3E8F0; --tinta:#16233B; --suave:#5A6B85; --verde:#1E9E5A; --rojo:#D93B2B; --naranja:#DF8B00; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif; background:var(--fondo); color:var(--tinta); }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: 1px; color: var(--azul-osc); }
+  .top { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:18px; flex-wrap:wrap; }
+  .btn { font-family:inherit; font-weight:700; font-size:14px; border-radius:10px; padding:9px 15px; border:1px solid transparent; cursor:pointer; background:transparent; }
+  .btn-primary { background:var(--azul); color:#fff; }
+  .btn-primary:hover { background:var(--azul-osc); }
+  .btn-ghost { border-color:var(--linea); color:var(--suave); }
+  .btn-ghost:hover { color:var(--azul); border-color:var(--azul); }
+  .btn-danger { color:var(--rojo); border-color:#F0B4AB; }
+  .btn-sm { font-size:12.5px; padding:6px 10px; border-radius:8px; }
+  input { font-family:inherit; font-size:15px; padding:10px 12px; border:1px solid var(--linea); border-radius:10px; width:100%; }
+  /* Login */
+  #login { max-width: 380px; margin: 12vh auto 0; background:var(--surface); border:1px solid var(--linea); border-radius:16px; padding:26px; box-shadow:0 10px 30px rgba(18,60,143,.10); text-align:center; }
+  #login h1 { margin-bottom: 6px; }
+  #login p { color:var(--suave); font-size:14px; margin:0 0 18px; }
+  #login .btn { width:100%; margin-top:12px; padding:12px; }
+  #login-msg { color:var(--rojo); font-size:13px; min-height:18px; margin-top:10px; }
+  /* Tabla */
+  #panel { display:none; }
+  .resumen { display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+  .card { flex:1; min-width:110px; background:var(--surface); border:1px solid var(--linea); border-radius:12px; padding:12px; text-align:center; }
+  .card b { display:block; font-size:24px; color:var(--azul); }
+  .card span { font-size:12px; color:var(--suave); }
+  table { width:100%; border-collapse:collapse; background:var(--surface); border:1px solid var(--linea); border-radius:12px; overflow:hidden; }
+  th, td { text-align:left; padding:10px 12px; font-size:14px; border-bottom:1px solid var(--linea); vertical-align:middle; }
+  th { background:#F0F4FB; font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--suave); }
+  tr:last-child td { border-bottom:none; }
+  .cod { font-family:"Consolas",monospace; font-weight:700; letter-spacing:1px; }
+  .estado { font-size:12px; font-weight:700; padding:3px 9px; border-radius:999px; }
+  .estado.activo { background:#E3F6EC; color:var(--verde); }
+  .estado.suspendido { background:#FDE8E5; color:var(--rojo); }
+  .acciones { display:flex; gap:6px; flex-wrap:wrap; }
+  .muted { color:var(--suave); font-size:12px; }
+  #tabla-msg { color:var(--rojo); font-size:13px; margin:10px 0; }
+  @media (max-width:640px){ .col-alta,.col-notas{ display:none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- Login -->
+  <div id="login">
+    <h1>ESTELITA · Admin</h1>
+    <p>Panel de administración de licencias</p>
+    <input type="password" id="pass" placeholder="Contraseña de administrador" autocomplete="off">
+    <button class="btn btn-primary" id="btn-login">Entrar</button>
+    <div id="login-msg"></div>
+  </div>
+
+  <!-- Panel -->
+  <div id="panel">
+    <div class="top">
+      <h1>Licencias de Estelita</h1>
+      <div>
+        <button class="btn btn-primary btn-sm" id="btn-nueva">+ Nueva licencia</button>
+        <button class="btn btn-ghost btn-sm" id="btn-refrescar">Refrescar</button>
+        <button class="btn btn-ghost btn-sm" id="btn-salir">Salir</button>
+      </div>
+    </div>
+    <div class="resumen" id="resumen"></div>
+    <div id="tabla-msg"></div>
+    <table>
+      <thead><tr>
+        <th>Código</th><th>Taller</th><th>Estado</th><th class="col-alta">Alta</th><th>Tope/día</th><th class="col-notas">Notas</th><th>Acciones</th>
+      </tr></thead>
+      <tbody id="filas"></tbody>
+    </table>
+    <p class="muted" style="margin-top:14px;">Para <b>revocar</b> un taller usá <b>Suspender</b> (corta el acceso al instante). <b>Eliminar</b> borra el registro. El tope diario acota el gasto si un código se filtra.</p>
+  </div>
+</div>
+
+<script>
+  const $ = s => document.querySelector(s);
+  let TOKEN = sessionStorage.getItem('estelita_admin_token') || '';
+
+  async function api(accion, extra) {
+    const r = await fetch('/api/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-token': TOKEN },
+      body: JSON.stringify(Object.assign({ accion }, extra || {})),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (r.status === 401) { throw new Error('401'); }
+    if (!r.ok) throw new Error(data.error || 'Error del servidor');
+    return data;
+  }
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
+
+  function render(licencias) {
+    const activos = licencias.filter(l => l.estado === 'activo').length;
+    $('#resumen').innerHTML =
+      `<div class="card"><b>${licencias.length}</b><span>Licencias</span></div>
+       <div class="card"><b>${activos}</b><span>Activas</span></div>
+       <div class="card"><b>${licencias.length - activos}</b><span>Suspendidas</span></div>`;
+    $('#filas').innerHTML = licencias.map(l => `
+      <tr data-cod="${esc(l.codigo)}">
+        <td><span class="cod">${esc(l.codigo)}</span></td>
+        <td>${esc(l.taller) || '<span class="muted">— sin nombre —</span>'}</td>
+        <td><span class="estado ${l.estado === 'activo' ? 'activo' : 'suspendido'}">${l.estado === 'activo' ? 'Activa' : 'Suspendida'}</span></td>
+        <td class="col-alta muted">${esc(l.alta || '')}</td>
+        <td>${Number(l.topeDia) > 0 ? esc(l.topeDia) : '<span class="muted">sin tope</span>'}</td>
+        <td class="col-notas muted">${esc(l.notas) || ''}</td>
+        <td><div class="acciones">
+          <button class="btn btn-ghost btn-sm" data-a="copiar">Copiar</button>
+          <button class="btn btn-ghost btn-sm" data-a="editar">Editar</button>
+          ${l.estado === 'activo'
+            ? '<button class="btn btn-ghost btn-sm" data-a="suspender">Suspender</button>'
+            : '<button class="btn btn-ghost btn-sm" data-a="reactivar">Reactivar</button>'}
+          <button class="btn btn-danger btn-sm" data-a="eliminar">Eliminar</button>
+        </div></td>
+      </tr>`).join('') || '<tr><td colspan="7" class="muted" style="text-align:center;padding:24px;">No hay licencias todavía. Creá la primera con "+ Nueva licencia".</td></tr>';
+  }
+
+  async function cargar() {
+    $('#tabla-msg').textContent = '';
+    try {
+      const data = await api('listar');
+      render(data.licencias || []);
+    } catch (e) {
+      if (e.message === '401') return mostrarLogin('La sesión expiró o la contraseña cambió.');
+      $('#tabla-msg').textContent = 'No se pudo cargar: ' + e.message;
+    }
+  }
+
+  function mostrarPanel() { $('#login').style.display = 'none'; $('#panel').style.display = 'block'; cargar(); }
+  function mostrarLogin(msg) {
+    TOKEN = ''; sessionStorage.removeItem('estelita_admin_token');
+    $('#panel').style.display = 'none'; $('#login').style.display = 'block';
+    $('#login-msg').textContent = msg || '';
+  }
+
+  $('#btn-login').addEventListener('click', async () => {
+    const v = $('#pass').value.trim();
+    if (!v) return;
+    TOKEN = v;
+    $('#login-msg').textContent = 'Entrando...';
+    try {
+      await api('listar');
+      sessionStorage.setItem('estelita_admin_token', TOKEN);
+      $('#pass').value = '';
+      mostrarPanel();
+    } catch (e) {
+      mostrarLogin(e.message === '401' ? 'Contraseña incorrecta.' : ('Error: ' + e.message));
+    }
+  });
+  $('#pass').addEventListener('keydown', e => { if (e.key === 'Enter') $('#btn-login').click(); });
+  $('#btn-salir').addEventListener('click', () => mostrarLogin(''));
+  $('#btn-refrescar').addEventListener('click', cargar);
+
+  $('#btn-nueva').addEventListener('click', async () => {
+    const taller = prompt('Nombre del taller (opcional, para tu referencia):', '');
+    if (taller === null) return;
+    const topeStr = prompt('Tope de lecturas por día para este código:', '50');
+    if (topeStr === null) return;
+    try {
+      const data = await api('agregar', { taller: taller.trim(), topeDia: Number(topeStr) || 50 });
+      await cargar();
+      prompt('Licencia creada. Copiá este código y entregáselo al taller:', data.codigo);
+    } catch (e) { alert('No se pudo crear: ' + e.message); }
+  });
+
+  $('#filas').addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('button[data-a]');
+    if (!btn) return;
+    const cod = btn.closest('tr').getAttribute('data-cod');
+    const a = btn.getAttribute('data-a');
+    try {
+      if (a === 'copiar') {
+        try { await navigator.clipboard.writeText(cod); btn.textContent = '¡Copiado!'; setTimeout(() => btn.textContent = 'Copiar', 1200); }
+        catch (e) { prompt('Copiá el código:', cod); }
+        return;
+      }
+      if (a === 'suspender') {
+        if (!confirm('Suspender ' + cod + '? El taller deja de poder usar la app hasta que lo reactives.')) return;
+        await api('estado', { codigo: cod, estado: 'suspendido' });
+      } else if (a === 'reactivar') {
+        await api('estado', { codigo: cod, estado: 'activo' });
+      } else if (a === 'eliminar') {
+        if (!confirm('Eliminar ' + cod + ' definitivamente? Para solo cortarle el acceso, mejor usá Suspender.')) return;
+        await api('eliminar', { codigo: cod });
+      } else if (a === 'editar') {
+        const fila = btn.closest('tr');
+        const tallerActual = fila.children[1].textContent.includes('sin nombre') ? '' : fila.children[1].textContent.trim();
+        const taller = prompt('Nombre del taller:', tallerActual);
+        if (taller === null) return;
+        const tope = prompt('Tope de lecturas por día (0 = sin tope):', fila.children[4].textContent.trim() === 'sin tope' ? '0' : fila.children[4].textContent.trim());
+        if (tope === null) return;
+        const notas = prompt('Notas (ej. pago al día hasta 10/08):', fila.children[5].textContent.trim());
+        if (notas === null) return;
+        await api('editar', { codigo: cod, taller: taller.trim(), topeDia: Number(tope) || 0, notas: notas.trim() });
+      }
+      await cargar();
+    } catch (e) {
+      if (e.message === '401') return mostrarLogin('La sesión expiró.');
+      alert('No se pudo: ' + e.message);
+    }
+  });
+
+  // Auto-entrar si ya había sesión.
+  if (TOKEN) mostrarPanel();
+</script>
+</body>
+</html>
