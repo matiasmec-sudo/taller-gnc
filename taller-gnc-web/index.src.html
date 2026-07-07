@@ -4895,6 +4895,12 @@ Documentación para realizar la renovación:
     } catch (e) { /* sin conexión: se reintenta la próxima vez */ }
   }
 
+  // Al enviar el trámite al PEC se cierra la revisión: desaparece de la app
+  // del técnico. Fire-and-forget (no bloquea el envío si falla).
+  function cerrarRevisionTecnico(t) {
+    if (t && t.revisionId) apiTecnicoTaller({ accion: 'revision-cerrar', id: t.revisionId }).catch(() => {});
+  }
+
   // Bloque del paso 1: botón "Enviar al técnico" + estado de la revisión.
   // Solo aparece si el taller tiene al menos un técnico vinculado.
   function revisionTecnicoBloque() {
@@ -4962,7 +4968,7 @@ Documentación para realizar la renovación:
         render();
       }
     } catch (e) { /* sin conexión: se reintenta */ }
-  }, 20000);
+  }, 10000);
 
   // Los trámites que quedaron en Pendientes esperando al técnico también
   // "escuchan": cuando el panel está abierto, se consulta el estado de cada
@@ -4989,7 +4995,7 @@ Documentación para realizar la renovación:
     chequeandoRevPend = false;
     if (cambio) { await saveClientes(); render(); }
   }
-  setInterval(() => { if (showPendientes) revisarEstadoTecnicoPendientes(); }, 20000);
+  setInterval(() => { if (showPendientes) revisarEstadoTecnicoPendientes(); }, 10000);
 
   // Fotos de documentación guardadas de un cliente (clave fotos:<id>).
   // Devuelve siempre un objeto { foto1, foto2 } (con null si no hay).
@@ -6111,10 +6117,15 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         const t = c && (c.tramites || []).find(x => x.id === btn.getAttribute('data-pec-id'));
         if (!c || !t) return;
         if (!t.firma) { await customAlert('Este trámite no tiene la firma del propietario. Tocá "Editar" para agregarla antes de enviarlo al PEC.'); return; }
-        // Si el técnico observó un problema y no se resolvió, pedir confirmación.
-        if (t.revisionId && t.revisionEstado === 'observada') {
-          const ok = await customConfirm(`El técnico informó un problema: ${t.revisionObs || 'sin detalle'}. ¿Enviar al PEC igual?`, { titulo: 'Revisión del técnico', danger: true, okLabel: 'Enviar igual' });
+        // Si la revisión del técnico no está aprobada (todavía pendiente, o con
+        // un problema informado), pedir confirmación antes de enviar.
+        if (t.revisionId && t.revisionEstado !== 'aprobada' && !t.revisionOverride) {
+          const motivo = t.revisionEstado === 'observada'
+            ? `El técnico informó un problema: ${t.revisionObs || 'sin detalle'}.`
+            : 'El técnico todavía no revisó este trámite.';
+          const ok = await customConfirm(`${motivo} ¿Enviar al PEC igual, marcándolo como revisado en el taller?`, { titulo: 'Revisión del técnico', danger: true, okLabel: 'Enviar igual' });
           if (!ok) return;
+          t.revisionOverride = true;
         }
         try {
           btn.disabled = true;
@@ -6124,6 +6135,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
           const filename = `PEC_${(c.patente || c.nombre || 'tramite').replace(/\s+/g, '_')}_${t.fecha || ''}.pdf`;
           const fotosIncluidas = clientesConFotos.has(c.id) ? 1 : 0;
           await compartirPecPdf(blob, filename, c, fotosIncluidas, pecDeTramite(t));
+          cerrarRevisionTecnico(t);
           render();
         } catch (e) {
           console.error(e);
@@ -6212,6 +6224,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         const filename = `PEC_${(c.patente || c.nombre || 'tramite').replace(/\s+/g, '_')}_${t.fecha || ''}.pdf`;
         const fotosIncluidas = clientesConFotos.has(c.id) ? 1 : 0;
         await compartirPecPdf(blob, filename, c, fotosIncluidas, pecDeTramite(t));
+        cerrarRevisionTecnico(t);
         if (st) st.textContent = '';
         render();
       } catch (e) {
@@ -7480,6 +7493,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         const filename = `PEC_${(cliente.patente || cliente.nombre || 'tramite').replace(/\s+/g, '_')}_${tramite.fecha || ''}.pdf`;
         const fotosIncluidas = clientesConFotos.has(cliente.id) ? 1 : 0;
         await compartirPecPdf(blob, filename, cliente, fotosIncluidas, pecDeTramite(tramite));
+        cerrarRevisionTecnico(tramite);
       } catch (e) {
         console.error(e);
         await customAlert('El trámite se guardó y se marcó como enviado, pero no se pudo generar el PDF: ' + (e && e.message ? e.message : e));

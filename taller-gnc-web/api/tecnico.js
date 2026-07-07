@@ -81,7 +81,7 @@ export default async function handler(req, res) {
 
   try {
     // ---- Acciones del TALLER (requieren licencia) ----
-    if (['vincular-generar', 'tecnicos-estado', 'desvincular', 'revision-crear', 'revision-estado', 'agenda-enviar'].includes(accion)) {
+    if (['vincular-generar', 'tecnicos-estado', 'desvincular', 'revision-crear', 'revision-estado', 'revision-cerrar', 'agenda-enviar'].includes(accion)) {
       if (!(await licenciaValida(body.license))) return res.status(403).json({ error: 'Código de licencia no válido.' });
       const hash = hashLicencia(body.license);
 
@@ -140,6 +140,17 @@ export default async function handler(req, res) {
         const r = await leerJson(`taller/${hash}/revisiones/${body.id}.json`);
         if (!r) return res.status(404).json({ error: 'No existe esa revisión.' });
         return res.status(200).json({ ok: true, revision: r.datos });
+      }
+
+      if (accion === 'revision-cerrar') {
+        // Al enviar el trámite al PEC, el taller cierra la revisión: se borra
+        // del store para que desaparezca de la app del técnico.
+        if (!body.id || !/^[a-z0-9]+$/i.test(body.id)) return res.status(400).json({ error: 'Falta el id.' });
+        try {
+          const l = await list({ prefix: `taller/${hash}/revisiones/${body.id}.json` });
+          if (l.blobs.length) await del(l.blobs.map(b => b.url));
+        } catch (e) { /* ya no estaba */ }
+        return res.status(200).json({ ok: true });
       }
 
       if (accion === 'agenda-enviar') {
