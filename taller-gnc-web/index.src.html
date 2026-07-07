@@ -562,6 +562,10 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 #gnc-app .rev-estado.pend { color: var(--warn); }
 #gnc-app .rev-estado.obs { color: var(--danger); }
 #gnc-app .rev-estado.ok { color: var(--ok); }
+#gnc-app .rev-bitacora { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 8px; }
+#gnc-app .rev-bitacora-tit { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
+#gnc-app .rev-bitacora-item { font-size: 12.5px; margin-bottom: 3px; }
+#gnc-app .rev-bitacora-fecha { color: var(--text-muted); font-family: var(--mono); font-size: 11px; }
 #gnc-app .tramite-motivo { font-family: var(--mono); font-size: 11px; color: var(--danger); margin-top: 2px; width: 100%; }
 
 /* FIRMA ELECTRONICA */
@@ -1703,6 +1707,7 @@ Documentación para realizar la renovación:
             ) : ''}
           </div>
           ${abierto ? `<div class="hist-detalle">${clienteDatosBlock(cliente)}
+            ${revisionBitacoraHtml(tramite)}
             <div class="form-actions" style="margin-top:8px;">
               <button type="button" class="btn btn-ghost btn-sm" data-reimprimir-cliente="${cliente.id}" data-reimprimir-id="${tramite.id}">Imprimir ficha</button>
               <button type="button" class="btn btn-ghost btn-sm" data-comprobante-cliente="${cliente.id}" data-comprobante-id="${tramite.id}">Comprobante</button>
@@ -1981,6 +1986,7 @@ Documentación para realizar la renovación:
       ${t.obleaAnterior || t.obleaNueva ? `<div style="font-size:13px; margin-bottom:6px;">N° Oblea: ${escapeHtml(t.obleaAnterior || '—')} → ${escapeHtml(t.obleaNueva || '—')}</div>` : ''}
       ${t.detalle ? `<div style="font-size:13px; margin-bottom:6px;">Observaciones: ${escapeHtml(t.detalle)}</div>` : ''}
       ${t.firma ? `<div style="font-size:12px; color:var(--text-muted);">Firma del propietario:</div><img src="${t.firma}" style="height:40px; background:#fff; border:1px solid var(--line); border-radius:6px; padding:2px;">` : '<div style="font-size:12px; color:var(--text-muted);">Sin firma cargada.</div>'}
+      ${revisionBitacoraHtml(t)}
       <div class="agent-hint" style="margin-top:10px;">Este trámite no se modifica desde acá. Podés enviarlo al PEC, imprimirlo, o tocar "Editar" para corregir algo.</div>
       <div class="form-actions">
         <button type="button" class="btn btn-agent" id="btn-ut-pec">Enviar al PEC</button>
@@ -4435,7 +4441,40 @@ Documentación para realizar la renovación:
       revisionEstado: (t && t.revisionEstado) || null,
       revisionObs: (t && t.revisionObs) || '',
       revisionOverride: !!(t && t.revisionOverride),
+      revisionLog: (t && Array.isArray(t.revisionLog)) ? t.revisionLog.map(e => ({ ...e })) : [],
     };
+  }
+  // Bitácora de la revisión del técnico, guardada en el propio trámite:
+  // "enviada" al mandarla, y "observada"/"aprobada" cuando el técnico responde.
+  // No repite el último evento si es igual (evita duplicados del sondeo).
+  function pushRevisionLog(obj, estado, obs) {
+    if (!obj) return;
+    if (!Array.isArray(obj.revisionLog)) obj.revisionLog = [];
+    const ult = obj.revisionLog[obj.revisionLog.length - 1];
+    if (ult && ult.estado === estado && (ult.obs || '') === (obs || '')) return;
+    obj.revisionLog.push({ estado, obs: obs || '', ts: new Date().toISOString() });
+  }
+  // Fecha+hora corta para la bitácora ("07/07 15:40"). Con nombre propio para
+  // no pisar la fmtFechaHora existente (que incluye el año).
+  function fmtFechaHoraCorta(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return '';
+    const p = (n) => String(n).padStart(2, '0');
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  // Bloque HTML de la bitácora, reutilizado en "Último trámite" y en el Historial.
+  function revisionBitacoraHtml(t) {
+    if (!t || !Array.isArray(t.revisionLog) || !t.revisionLog.length) return '';
+    const linea = (e) => {
+      const cuando = fmtFechaHoraCorta(e.ts);
+      const txt = e.estado === 'enviada' ? 'Enviada al técnico'
+        : e.estado === 'observada' ? '🔴 Observó: ' + escapeHtml(e.obs || 'sin detalle')
+        : e.estado === 'aprobada' ? '🟢 Resuelto y aprobado'
+        : escapeHtml(e.estado || '');
+      return `<div class="rev-bitacora-item">${cuando ? `<span class="rev-bitacora-fecha">${cuando}</span> — ` : ''}${txt}</div>`;
+    };
+    return `<div class="rev-bitacora"><div class="rev-bitacora-tit">Revisión del técnico</div>${t.revisionLog.map(linea).join('')}</div>`;
   }
   const TRAMITE_DRAFT_CAMPOS_IDS = {
     tipo: 't-tipo', fecha: 't-fecha', detalle: 't-detalle',
@@ -4916,6 +4955,7 @@ Documentación para realizar la renovación:
       if (r.revision && r.revision.estado !== 'pendiente') {
         rc.revisionEstado = r.revision.estado;
         rc.revisionObs = r.revision.observaciones || '';
+        pushRevisionLog(rc, r.revision.estado, r.revision.observaciones || '');
         syncClienteDraftFromDOM();
         syncEquipoFromDOM();
         syncTramiteCamposFromDOM();
@@ -4941,6 +4981,7 @@ Documentación para realizar la renovación:
         if (r.revision && r.revision.estado && r.revision.estado !== tramite.revisionEstado) {
           tramite.revisionEstado = r.revision.estado;
           tramite.revisionObs = r.revision.observaciones || '';
+          pushRevisionLog(tramite, r.revision.estado, r.revision.observaciones || '');
           cambio = true;
         }
       } catch (e) { /* sin conexión: se reintenta */ }
@@ -7259,6 +7300,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
             revisionEstado: (tramiteDraftCampos && tramiteDraftCampos.revisionEstado) || prev.revisionEstado || null,
             revisionObs: (tramiteDraftCampos && tramiteDraftCampos.revisionObs) || '',
             revisionOverride: !!(tramiteDraftCampos && tramiteDraftCampos.revisionOverride),
+            revisionLog: (tramiteDraftCampos && tramiteDraftCampos.revisionLog && tramiteDraftCampos.revisionLog.length) ? tramiteDraftCampos.revisionLog : (prev.revisionLog || []),
             firma: currentSignature || prev.firma,
           };
           savedTramiteId = prev.id;
@@ -7274,6 +7316,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
           revisionEstado: (tramiteDraftCampos && tramiteDraftCampos.revisionEstado) || null,
           revisionObs: (tramiteDraftCampos && tramiteDraftCampos.revisionObs) || '',
           revisionOverride: !!(tramiteDraftCampos && tramiteDraftCampos.revisionOverride),
+          revisionLog: (tramiteDraftCampos && tramiteDraftCampos.revisionLog) || [],
           firma: currentSignature,
           creadoEn: new Date().toISOString(),
         });
@@ -7321,6 +7364,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         tramiteDraftCampos.revisionEstado = 'pendiente';
         tramiteDraftCampos.revisionObs = '';
         tramiteDraftCampos.revisionOverride = false;
+        pushRevisionLog(tramiteDraftCampos, 'enviada', '');
         syncTramiteCamposFromDOM();
         render();
         if (!r.notificados) {
