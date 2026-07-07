@@ -2140,6 +2140,10 @@ Documentación para realizar la renovación:
       eq.cilindros.forEach(c => { c.msdb = 'sigue'; });
       eq.valvulas.forEach(v => { v.msb = 'sigue'; });
     } else if (tipo === 'prueba_hidraulica') {
+      // El cilindro y el regulador no se cambian en una prueba hidráulica:
+      // operación "Sin Cambios" (SC) por defecto. La válvula sí se reemplaza.
+      eq.regulador.operacion = 'sigue';
+      eq.cilindros.forEach(c => { c.msdb = 'sigue'; });
       if (eq.valvulas.length > 0) eq.valvulas[0].msb = 'baja';
       eq.valvulas.push({ codigo: '', serie: '', msb: 'montaje' });
     }
@@ -6778,7 +6782,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         revisadoMes: esPH ? String(hoy.getMonth() + 1).padStart(2, '0') : '',
         revisadoAnio: esPH ? String(hoy.getFullYear()) : '',
         crpc: esPH ? (centrosReprueba()[0] || '') : '',
-        msdb: '',
+        msdb: esPH ? 'sigue' : '',
       });
       render();
     });
