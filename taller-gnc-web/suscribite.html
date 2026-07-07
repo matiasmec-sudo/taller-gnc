@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estelita — Empezá gratis</title>
+<link rel="icon" href="icon-192.png">
+<style>
+  :root { --azul:#1D5BD8; --azul-osc:#123C8F; --fondo:#F4F6FA; --surface:#fff; --linea:#E3E8F0; --tinta:#16233B; --suave:#5A6B85; --celeste:#EAF1FE; --verde:#1E9E5A; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif; background:var(--fondo); color:var(--tinta); }
+  .wrap { max-width:820px; margin:0 auto; padding:28px 18px 60px; }
+  .marca { display:flex; align-items:center; gap:10px; justify-content:center; margin-bottom:6px; }
+  .marca img { width:38px; height:38px; border-radius:9px; }
+  .marca b { font-size:20px; letter-spacing:2.5px; color:var(--azul-osc); }
+  h1 { text-align:center; font-size:26px; margin:10px 0 4px; }
+  .sub { text-align:center; color:var(--suave); margin:0 0 22px; }
+  .planes { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:22px; }
+  @media (max-width:640px){ .planes { grid-template-columns:1fr; } }
+  .plan { background:var(--surface); border:2px solid var(--linea); border-radius:16px; padding:18px 16px; cursor:pointer; text-align:center; transition:border-color .15s, box-shadow .15s; }
+  .plan:hover { border-color:#B9CCF3; }
+  .plan.sel { border-color:var(--azul); box-shadow:0 8px 22px rgba(29,91,216,.15); }
+  .plan h3 { margin:0 0 6px; font-size:18px; }
+  .plan .precio { font-size:24px; font-weight:800; color:var(--azul-osc); }
+  .plan .precio small { font-size:13px; font-weight:600; color:var(--suave); }
+  .plan .desc { font-size:13px; color:var(--suave); margin-top:8px; }
+  .plan .badge { display:inline-block; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase; color:var(--azul); background:var(--celeste); border-radius:999px; padding:2px 10px; margin-bottom:8px; }
+  .card { background:var(--surface); border:1px solid var(--linea); border-radius:16px; padding:22px; box-shadow:0 8px 22px rgba(18,60,143,.08); }
+  label { display:block; font-weight:600; font-size:14px; margin:12px 0 5px; }
+  input { width:100%; padding:12px 13px; border:1px solid var(--linea); border-radius:11px; font-size:15px; font-family:inherit; }
+  .btn { width:100%; margin-top:18px; padding:14px; border:none; border-radius:12px; background:var(--azul); color:#fff; font-size:16px; font-weight:700; cursor:pointer; }
+  .btn:hover { background:var(--azul-osc); }
+  .btn:disabled { opacity:.6; cursor:default; }
+  .nota { text-align:center; color:var(--suave); font-size:13px; margin-top:14px; }
+  .msg { color:#C0281A; font-size:14px; margin-top:12px; min-height:18px; text-align:center; }
+  .seguro { text-align:center; color:var(--suave); font-size:12px; margin-top:8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="marca"><img src="icon-192.png" alt=""><b>ESTELITA</b></div>
+  <h1>Empezá gratis 14 días</h1>
+  <p class="sub">Elegí tu plan. No se te cobra hasta el día 15 y cancelás cuando quieras.</p>
+
+  <div class="planes" id="planes"></div>
+
+  <div class="card">
+    <label>Nombre del taller</label>
+    <input type="text" id="taller" placeholder="Ej: Taller GNC Centro" autocomplete="organization">
+    <label>Tu email</label>
+    <input type="email" id="email" placeholder="taller@email.com" autocomplete="email">
+    <button class="btn" id="btn">Empezar los 14 días gratis</button>
+    <div class="msg" id="msg"></div>
+    <div class="seguro">🔒 El pago lo procesa Mercado Pago. Estelita no ve ni guarda tu tarjeta.</div>
+  </div>
+  <p class="nota">Después del pago vas a ver tu código para activar la app.</p>
+</div>
+
+<script>
+  const PLANES = [
+    { id:'basico', nombre:'Básico', precio:'$18.000', desc:'Fichas al PEC, WhatsApp, vencimientos e historial.' },
+    { id:'profesional', nombre:'Profesional', precio:'$32.000', desc:'Todo + app del técnico, turnos, estadísticas y nube.', reco:true },
+    { id:'full', nombre:'Full', precio:'$58.000', desc:'Todo + varios PEC, multiusuario y soporte prioritario.' },
+  ];
+  const params = new URLSearchParams(location.search);
+  let sel = PLANES.find(p => p.id === (params.get('plan')||'').toLowerCase()) ? params.get('plan').toLowerCase() : 'profesional';
+  const $ = s => document.querySelector(s);
+
+  function pintarPlanes() {
+    $('#planes').innerHTML = PLANES.map(p => `
+      <div class="plan ${p.id===sel?'sel':''}" data-plan="${p.id}">
+        ${p.reco ? '<div class="badge">Recomendado</div>' : ''}
+        <h3>${p.nombre}</h3>
+        <div class="precio">${p.precio}<small>/mes</small></div>
+        <div class="desc">${p.desc}</div>
+      </div>`).join('');
+    document.querySelectorAll('.plan').forEach(el => el.addEventListener('click', () => { sel = el.getAttribute('data-plan'); pintarPlanes(); }));
+  }
+  pintarPlanes();
+
+  $('#btn').addEventListener('click', async () => {
+    const taller = $('#taller').value.trim();
+    const email = $('#email').value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { $('#msg').textContent = 'Poné un email válido.'; return; }
+    $('#msg').textContent = '';
+    $('#btn').disabled = true; $('#btn').textContent = 'Redirigiendo a Mercado Pago...';
+    try {
+      const r = await fetch('/api/mp', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ accion:'crear-suscripcion', plan: sel, email, taller }) });
+      const data = await r.json();
+      if (!r.ok || !data.init_point) throw new Error(data.error || 'No se pudo iniciar la suscripción.');
+      location.href = data.init_point;
+    } catch (e) {
+      $('#msg').textContent = e.message;
+      $('#btn').disabled = false; $('#btn').textContent = 'Empezar los 14 días gratis';
+    }
+  });
+</script>
+</body>
+</html>

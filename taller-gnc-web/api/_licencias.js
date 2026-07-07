@@ -9,10 +9,39 @@
 // Este archivo empieza con "_" a propósito: Vercel no lo trata como una
 // función/ruta, solo lo importan los demás endpoints.
 import { put } from '@vercel/blob';
+import crypto from 'crypto';
 
 const STORE_PATH = 'sistema/licencias.json';
+const SIGNUPS_PATH = 'sistema/signups.json';
 const USO_PREFIX = 'sistema/uso-';
 const CONSUMO_PREFIX = 'sistema/consumo-';
+
+// Planes y precios (ARS/mes). Fuente única, usada por el checkout de MP y el panel.
+export const PLAN_PRECIOS = { basico: 18000, profesional: 32000, full: 58000 };
+export const PLAN_NOMBRES = { basico: 'Básico', profesional: 'Profesional', full: 'Full' };
+
+// Genera un código de licencia único (sin O/0/I/1/L, fácil de dictar).
+const ALFA_COD = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+export function nuevoCodigo(existentes) {
+  const set = new Set(existentes || []);
+  let c;
+  do { c = 'GNC-' + Array.from({ length: 4 }, () => ALFA_COD[crypto.randomInt(ALFA_COD.length)]).join(''); } while (set.has(c));
+  return c;
+}
+
+// Suma un mes a una fecha ISO (AAAA-MM-DD), ajustando fin de mes.
+export function sumarMesISO(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  const dia = d.getDate();
+  d.setMonth(d.getMonth() + 1);
+  if (d.getDate() < dia) d.setDate(0);
+  return d.toISOString().slice(0, 10);
+}
+export function sumarDiasISO(iso, dias) {
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
 
 // Precios de la IA en US$ por millón de tokens (entrada/salida). Aproximados
 // — actualizá acá si Anthropic cambia las tarifas. Sirven para estimar el
@@ -62,6 +91,65 @@ export async function leerLicencias() {
 
 export async function guardarLicencias(licencias) {
   await escribirJsonBlob(STORE_PATH, { licencias, actualizado: new Date().toISOString() });
+}
+
+// --- Suscripciones de Mercado Pago ---
+// Registro de "signups" web: mapea el token de un registro al código de
+// licencia que se le creó, para que la página de "gracias" lo muestre.
+export async function leerSignups() { try { return (await leerJsonBlob(SIGNUPS_PATH)) || {}; } catch (e) { return {}; } }
+export async function guardarSignups(s) { await escribirJsonBlob(SIGNUPS_PATH, s); }
+
+export async function crearSignup(token, datos) {
+  const s = await leerSignups();
+  s[token] = { ...datos, estado: 'pendiente', codigo: null, creado: new Date().toISOString() };
+  await guardarSignups(s);
+}
+
+// Cuando MP autoriza la suscripción: crea la licencia (una sola vez por
+// preapproval) y la vincula al signup. Devuelve el código.
+export async function activarLicenciaMP({ token, preapprovalId, email, plan, pagoHasta, prueba }) {
+  const lics = await leerLicencias();
+  let l = lics.find(x => x.mpPreapprovalId === preapprovalId);
+  if (!l) {
+    const codigo = nuevoCodigo(lics.map(x => x.codigo).concat(codigosEnv()));
+    l = {
+      codigo, taller: '', estado: 'activo', alta: new Date().toISOString().slice(0, 10),
+      topeDia: 50, notas: '', plan: plan || '', medioPago: 'mp', email: email || '',
+      origen: 'web', mpPreapprovalId: preapprovalId, prueba: !!prueba, pagoHasta: pagoHasta || null,
+    };
+    lics.push(l);
+    await guardarLicencias(lics);
+  }
+  if (token) {
+    const s = await leerSignups();
+    if (s[token]) { s[token].codigo = l.codigo; s[token].estado = 'activa'; await guardarSignups(s); }
+    else { s[token] = { estado: 'activa', codigo: l.codigo, creado: new Date().toISOString() }; await guardarSignups(s); }
+  }
+  return l.codigo;
+}
+
+// Cobro mensual aprobado: renueva un mes y saca de prueba.
+export async function renovarPorPreapproval(preapprovalId) {
+  const lics = await leerLicencias();
+  const l = lics.find(x => x.mpPreapprovalId === preapprovalId);
+  if (!l) return false;
+  const hoy = new Date().toISOString().slice(0, 10);
+  const base = (l.pagoHasta && l.pagoHasta > hoy) ? l.pagoHasta : hoy;
+  l.pagoHasta = sumarMesISO(base);
+  l.prueba = false;
+  l.estado = 'activo';
+  await guardarLicencias(lics);
+  return true;
+}
+
+// Suscripción cancelada/pausada: suspende la licencia.
+export async function suspenderPorPreapproval(preapprovalId) {
+  const lics = await leerLicencias();
+  const l = lics.find(x => x.mpPreapprovalId === preapprovalId);
+  if (!l) return false;
+  l.estado = 'suspendido';
+  await guardarLicencias(lics);
+  return true;
 }
 
 // ¿La licencia puede usar los servicios pagos?

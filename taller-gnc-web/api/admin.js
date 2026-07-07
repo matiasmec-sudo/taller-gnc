@@ -4,7 +4,7 @@
 // eliminar. La primera vez importa (seed) los códigos de LICENSE_CODES para
 // que el panel muestre también los que ya estaban en uso.
 import crypto from 'crypto';
-import { leerLicencias, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes } from './_licencias.js';
+import { leerLicencias, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, sumarMesISO } from './_licencias.js';
 
 function tokenOk(req) {
   const provided = String((req.headers['x-admin-token'] || (req.body && req.body.token) || ''));
@@ -19,23 +19,6 @@ function tokenOk(req) {
 const PLANES = ['basico', 'profesional', 'full'];
 const MEDIOS = ['mp', 'transferencia'];
 function fechaValida(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
-function sumarMesISO(iso) {
-  const d = new Date(iso + 'T00:00:00');
-  const dia = d.getDate();
-  d.setMonth(d.getMonth() + 1);
-  if (d.getDate() < dia) d.setDate(0); // ajuste fin de mes (ej. 31 -> último día)
-  return d.toISOString().slice(0, 10);
-}
-
-const ALFA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin O/0/I/1/L, para dictar por teléfono
-function nuevoCodigo(existentes) {
-  const set = new Set(existentes);
-  let c;
-  do {
-    c = 'GNC-' + Array.from({ length: 4 }, () => ALFA[crypto.randomInt(ALFA.length)]).join('');
-  } while (set.has(c));
-  return c;
-}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
