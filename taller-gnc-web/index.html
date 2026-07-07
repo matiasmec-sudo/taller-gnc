@@ -2912,6 +2912,7 @@ Documentación para realizar la renovación:
       <div class="form-actions">
         <button class="btn btn-ghost" id="btn-wizard-back-3">← Atrás</button>
         <button class="btn btn-ghost" id="btn-imprimir-datos">Imprimir</button>
+        ${d.tipo === 'prueba_hidraulica' ? '<button class="btn btn-ghost" id="btn-imprimir-crpc">CRPC</button>' : ''}
         <button class="btn btn-primary" id="btn-save-tramite">Guardar trámite</button>
         <button class="btn btn-agent" id="btn-send-pec-tramite">Enviar al PEC</button>
         <button class="btn btn-ghost" id="btn-wizard-cancel">Cancelar</button>
@@ -3528,7 +3529,7 @@ Documentación para realizar la renovación:
     T(cliente.cpa, M.propCpa.x, M.propCpa.y);
     T(cliente.ciudad, M.propLocalidad.x, M.propLocalidad.y);
     T(cliente.provincia, M.propProvincia.x, M.propProvincia.y);
-    T(cliente.telefono, M.propTelefono.x, M.propTelefono.y);
+    // El teléfono del cliente NO se imprime ni se envía (queda solo en Estelita).
     T([cliente.tipo_documento, cliente.dni].filter(Boolean).join(' '), M.propDocumento.x, M.propDocumento.y);
 
     // Regulador principal en la columna de su operación (+ Nuevo/Usado)
@@ -3611,6 +3612,86 @@ Documentación para realizar la renovación:
         doc.addImage(f.dataUrl, formato, (pageW - fw) / 2, margen + 4, fw, fh);
       }
     }
+
+    return doc.output('blob');
+  }
+
+  // Planilla del centro de reprueba GNC SEGURGAS (Carta Compromiso de
+  // Conformidad). Coordenadas en mm sobre A4 — PRIMERA VERSIÓN estimada,
+  // se calibra imprimiéndola sobre el formulario en blanco. El teléfono del
+  // cliente NO se imprime (queda solo en Estelita).
+  const SEGURGAS_MAPA = {
+    lugarFecha: { x: 78, y: 52 },
+    tallerEncab: { x: 92, y: 62 },
+    cil: { ys: [131, 143, 155, 167], marca: 50, codigo: 74, serie: 100, fechaFab: 128, capacidad: 150, obs: 170, valvula: 192 },
+    nombre: { x: 55, y: 217 },
+    documento: { x: 150, y: 205 },
+    direccion: { x: 125, y: 217 },
+    provincia: { x: 58, y: 229 },
+    localidad: { x: 108, y: 229 },
+    patente: { x: 58, y: 241 },
+    oblea: { x: 148, y: 241 },
+    tallerMontaje: { x: 72, y: 252 },
+    nombrePec: { x: 158, y: 252 },
+    codigoTdm: { x: 62, y: 263 },
+    codigoPec: { x: 158, y: 263 },
+    direccionTdm: { x: 48, y: 274 },
+    direccionPec: { x: 150, y: 274 },
+    telPec: { x: 198, y: 274 },
+    aclNombre: { x: 130, y: 292 },
+  };
+
+  async function generarCrpcPdfSoloDatos(cliente, tramite) {
+    await cargarLibreriasPec();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const ajX = Number(tallerConfig.crpcAjusteX) || 0;
+    const ajY = Number(tallerConfig.crpcAjusteY) || 0;
+    doc.setFont('helvetica', 'bold');
+    const M = SEGURGAS_MAPA;
+    const T = (texto, x, y, size) => {
+      if (texto === null || texto === undefined || texto === '') return;
+      doc.setFontSize(size || 9);
+      doc.text(String(texto), x + ajX, y + ajY);
+    };
+    const tc = tallerConfig;
+    const pec = pecDeTramite(tramite);
+    const eq = tramite.equipo || blankEquipo(null);
+
+    T(`Mar del Plata, ${fmtDate(tramite.fecha)}`, M.lugarFecha.x, M.lugarFecha.y, 9);
+    T(tc.razonSocial || tallerNombre, M.tallerEncab.x, M.tallerEncab.y, 9);
+
+    // Cilindros (todos los que entren en la tabla). Marca, Capacidad y
+    // Observación no se cargan en la app: van a mano.
+    (eq.cilindros || []).slice(0, M.cil.ys.length).forEach((c, i) => {
+      const y = M.cil.ys[i];
+      T(c.codigo, M.cil.codigo, y, 8);
+      T(c.serie, M.cil.serie, y, 8);
+      T([c.fabricadoMes, c.fabricadoAnio].filter(Boolean).join('/'), M.cil.fechaFab, y, 8);
+      const v = (eq.valvulas || [])[i];
+      if (v) T([v.codigo, v.serie].filter(Boolean).join(' '), M.cil.valvula, y, 8);
+    });
+
+    // Propietario / vehículo (SIN teléfono del cliente).
+    T(cliente.nombre, M.nombre.x, M.nombre.y);
+    T([cliente.tipo_documento, cliente.dni].filter(Boolean).join(' '), M.documento.x, M.documento.y);
+    T([cliente.domicilio, cliente.cpa].filter(Boolean).join(' '), M.direccion.x, M.direccion.y);
+    T(cliente.provincia, M.provincia.x, M.provincia.y);
+    T(cliente.ciudad, M.localidad.x, M.localidad.y);
+    T(cliente.patente, M.patente.x, M.patente.y);
+    T(tramite.obleaNueva || tramite.obleaAnterior, M.oblea.x, M.oblea.y);
+
+    // Taller de montaje y PEC.
+    T(tc.razonSocial || tallerNombre, M.tallerMontaje.x, M.tallerMontaje.y, 8);
+    T(pec.razonSocial, M.nombrePec.x, M.nombrePec.y, 8);
+    T(tc.codigoTaller, M.codigoTdm.x, M.codigoTdm.y, 8);
+    T(pec.codigoPec, M.codigoPec.x, M.codigoPec.y, 8);
+    T(tc.direccion, M.direccionTdm.x, M.direccionTdm.y, 8);
+    T(pec.direccion, M.direccionPec.x, M.direccionPec.y, 8);
+    T(pec.telefono, M.telPec.x, M.telPec.y, 8);
+
+    // Aclaración del propietario (la firma la hace a mano).
+    T([cliente.nombre, [cliente.tipo_documento, cliente.dni].filter(Boolean).join(' ')].filter(Boolean).join(' — '), M.aclNombre.x, M.aclNombre.y, 8);
 
     return doc.output('blob');
   }
@@ -6970,6 +7051,38 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         await customAlert('No se pudo generar el PDF de impresión: ' + (e.message || e));
       } finally {
         btnImprimirDatos.disabled = false;
+      }
+    });
+
+    // Imprimir la planilla del centro de reprueba (GNC Segurgas), solo en
+    // prueba hidráulica, con todos los cilindros.
+    const btnImprimirCrpc = root.querySelector('#btn-imprimir-crpc');
+    if (btnImprimirCrpc) btnImprimirCrpc.addEventListener('click', async () => {
+      syncClienteDraftFromDOM();
+      syncEquipoFromDOM();
+      syncTramiteCamposFromDOM();
+      const t = tramiteDraftCampos || {};
+      const clienteTmp = { ...blankClienteBase(), ...(clienteDraft || {}) };
+      const tramiteTmp = {
+        tipo: t.tipo, fecha: t.fecha, obleaAnterior: t.obleaAnterior || '', obleaNueva: t.obleaNueva || '',
+        pecIndex: Number.isInteger(t.pecIndex) ? t.pecIndex : 0,
+        equipo: tramiteDraftEquipo || blankEquipo(null),
+      };
+      try {
+        if (!localStorage.getItem('gnc_hint_crpc_v1')) {
+          localStorage.setItem('gnc_hint_crpc_v1', '1');
+          await customAlert('Se abre la planilla del centro de reprueba con SOLO los datos, para imprimir sobre el formulario preimpreso (al 100%, tamaño real). Marca, Capacidad y Observación del cilindro van a mano. Esta primera versión hay que calibrarla: imprimila, sacale una foto y me la pasás para ajustar dónde cae cada dato.', 'Planilla del centro de reprueba');
+        }
+        btnImprimirCrpc.disabled = true;
+        const blob = await generarCrpcPdfSoloDatos(clienteTmp, tramiteTmp);
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch (e) {
+        console.error(e);
+        await customAlert('No se pudo generar la planilla de reprueba: ' + (e.message || e));
+      } finally {
+        btnImprimirCrpc.disabled = false;
       }
     });
 
