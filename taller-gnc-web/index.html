@@ -6665,6 +6665,21 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         };
       }
 
+      // Operación por defecto según el tipo de trámite para las filas recién
+      // cargadas del SIC (sobre todo el 2° cilindro/válvula, que si no
+      // quedaba con la operación en blanco). En una REVISIÓN el cilindro y la
+      // válvula no se cambian → "Sin Cambios" (SC). En una PRUEBA HIDRÁULICA
+      // el cilindro también queda SC (las válvulas de la PH se resuelven con
+      // sus reglas propias, abajo). Sólo se completan las que estén vacías,
+      // nunca se pisa una operación ya elegida a mano.
+      const tipoTr = tramiteDraftCampos && tramiteDraftCampos.tipo;
+      if (tipoTr === 'revision_anual' || tipoTr === 'prueba_hidraulica') {
+        (tramiteDraftEquipo.cilindros || []).forEach(c => { if (!c.msdb) c.msdb = 'sigue'; });
+      }
+      if (tipoTr === 'revision_anual') {
+        (tramiteDraftEquipo.valvulas || []).forEach(v => { if (!v.msb) v.msb = 'sigue'; });
+      }
+
       // En una PRUEBA HIDRÁULICA la revisión del cilindro se hace AHORA: el
       // "revisado" queda con el mes/año en curso (pisa lo que traía el SIC) y
       // el CRPC con el primer centro de reprueba del taller.
