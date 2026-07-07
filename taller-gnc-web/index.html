@@ -3626,8 +3626,8 @@ Documentación para realizar la renovación:
     tallerEncab: { x: 92, y: 62 },  // sin calibrar todavía
     cil: {
       ys: [131, 143, 155, 167],
-      dyCodSerie: -31, dyFechaValv: -15,
-      codigo: 74, serie: 100, fechaFab: 105, valvula: 177,
+      dy: -15, // toda la fila sube 15 mm
+      codigo: 43, serie: 69, fechaFab: 105, valvula: 177, // código/serie: 31 mm a la izq.
     },
     nombre: { x: 50, y: 171 },
     documento: { x: 155, y: 170 },
@@ -3669,14 +3669,12 @@ Documentación para realizar la renovación:
     // Cilindros (todos los que entren en la tabla). Marca, Capacidad y
     // Observación no se cargan en la app: van a mano.
     (eq.cilindros || []).slice(0, M.cil.ys.length).forEach((c, i) => {
-      const y = M.cil.ys[i];
-      const yCS = y + M.cil.dyCodSerie;   // código y n° de serie
-      const yFV = y + M.cil.dyFechaValv;  // fecha fab. y válvula
-      T(c.codigo, M.cil.codigo, yCS, 8);
-      T(c.serie, M.cil.serie, yCS, 8);
-      T([c.fabricadoMes, c.fabricadoAnio].filter(Boolean).join('/'), M.cil.fechaFab, yFV, 8);
+      const yy = M.cil.ys[i] + M.cil.dy;
+      T(c.codigo, M.cil.codigo, yy, 8);
+      T(c.serie, M.cil.serie, yy, 8);
+      T([c.fabricadoMes, c.fabricadoAnio].filter(Boolean).join('/'), M.cil.fechaFab, yy, 8);
       const v = (eq.valvulas || [])[i];
-      if (v) T([v.codigo, v.serie].filter(Boolean).join(' '), M.cil.valvula, yFV, 8);
+      if (v) T([v.codigo, v.serie].filter(Boolean).join(' '), M.cil.valvula, yy, 8);
     });
 
     // Propietario / vehículo (SIN teléfono del cliente).
