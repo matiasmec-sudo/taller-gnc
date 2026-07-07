@@ -71,6 +71,32 @@ export async function licenciaValida(codigo) {
   return codigosEnv().includes(cod);
 }
 
+// Actividad por código: agrega los contadores diarios de lecturas de IA
+// (los archivos uso-YYYY-MM-DD.json que escribe chequearTope) de los últimos
+// `dias` días. Devuelve { codigo: { total, hoy, ultimo } }. Solo lectura: no
+// toca el camino caliente, así que no afecta el rendimiento de la app.
+export async function leerActividad(dias = 30) {
+  const out = {};
+  const hoy = new Date();
+  const fechas = [];
+  for (let i = 0; i < dias; i++) {
+    fechas.push(new Date(hoy.getTime() - i * 86400000).toISOString().slice(0, 10));
+  }
+  const hoyStr = fechas[0];
+  await Promise.all(fechas.map(async (fecha) => {
+    let uso = null;
+    try { uso = await leerJsonBlob(`${USO_PREFIX}${fecha}.json`); } catch (e) { uso = null; }
+    if (!uso || typeof uso !== 'object') return;
+    for (const [cod, n] of Object.entries(uso)) {
+      const c = out[cod] || (out[cod] = { total: 0, hoy: 0, ultimo: null });
+      c.total += Number(n) || 0;
+      if (fecha === hoyStr) c.hoy = Number(n) || 0;
+      if (!c.ultimo || fecha > c.ultimo) c.ultimo = fecha;
+    }
+  }));
+  return out;
+}
+
 // Tope diario de lecturas por código (anti-abuso de un código filtrado).
 // Best-effort sobre Blob y FALLA ABIERTO (permite) ante cualquier error, para
 // no bloquear a un taller legítimo por un problema de storage. Los códigos sin

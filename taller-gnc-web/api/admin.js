@@ -4,7 +4,7 @@
 // eliminar. La primera vez importa (seed) los códigos de LICENSE_CODES para
 // que el panel muestre también los que ya estaban en uso.
 import crypto from 'crypto';
-import { leerLicencias, guardarLicencias, codigosEnv } from './_licencias.js';
+import { leerLicencias, guardarLicencias, codigosEnv, leerActividad } from './_licencias.js';
 
 function tokenOk(req) {
   const provided = String((req.headers['x-admin-token'] || (req.body && req.body.token) || ''));
@@ -49,7 +49,12 @@ export default async function handler(req, res) {
     const { accion } = req.body || {};
 
     if (accion === 'listar') {
-      return res.status(200).json({ ok: true, licencias: lics });
+      const act = await leerActividad(30);
+      const conAct = lics.map(l => {
+        const a = act[l.codigo] || {};
+        return { ...l, usoTotal: a.total || 0, usoHoy: a.hoy || 0, ultimoUso: a.ultimo || null };
+      });
+      return res.status(200).json({ ok: true, licencias: conAct });
     }
 
     if (accion === 'agregar') {
