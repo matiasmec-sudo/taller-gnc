@@ -2458,108 +2458,104 @@ Documentación para realizar la renovación:
     return out;
   }
 
-  // Recorta el texto a partir de cada encabezado de sección conocido y
-  // busca dentro un código de homologación (2 letras + 2/3 números, ej.
-  // "TT01", "CC35") y un número de serie (una tira larga de dígitos).
+  // Lee los equipos del "Detalle de la operación" del SIC. El SIC muestra
+  // cada sección (Regulador / Cilindros / Válvulas) como una TABLA: una fila
+  // de títulos ("Código Homologación", "Número de Serie", "Operación",
+  // "Fecha Fab.", "CRPC", "Fecha CRPC", ...) y DEBAJO una fila por cada
+  // equipo, con las columnas separadas por tabulaciones. Por eso, cuando hay
+  // dos cilindros, aparecen dos filas bajo un mismo "Datos Cilindros" (el
+  // título "Código Homologación" figura una sola vez). Leemos fila por fila.
   function parseEnargasEquipo(text) {
-    function seccion(patronInicio, patronFin) {
-      const iniMatch = text.match(patronInicio);
-      if (!iniMatch) return '';
-      const desde = iniMatch.index + iniMatch[0].length;
-      const resto = text.slice(desde);
-      const finMatch = patronFin ? resto.match(patronFin) : null;
-      return finMatch ? resto.slice(0, finMatch.index) : resto.slice(0, 300);
+    const lineas = text.split(/\r?\n/);
+
+    // Separa una fila de la tabla en columnas: primero por tabulaciones (el
+    // caso normal al copiar del SIC); si no hay tabs, por 2+ espacios.
+    function columnas(linea) {
+      let partes = linea.split(/\t+/).map(s => s.trim()).filter(s => s !== '');
+      if (partes.length <= 1) partes = linea.split(/\s{2,}/).map(s => s.trim()).filter(s => s !== '');
+      return partes;
     }
-    // El SIC pega la etiqueta y el valor de cada celda de la tabla sin
-    // ningún separador (ej: "Código HomologaciónTT01Número de
-    // Serie156824OperaciónSin Cambios", todo seguido) — así que en vez de
-    // buscar un valor "suelto" con límites de palabra, recortamos el texto
-    // entre una etiqueta y la siguiente.
-    function entre(bloque, etiquetaInicio, etiquetaFin) {
-      const mIni = bloque.match(etiquetaInicio);
-      if (!mIni) return '';
-      const desde = mIni.index + mIni[0].length;
-      const resto = bloque.slice(desde);
-      const mFin = etiquetaFin ? resto.match(etiquetaFin) : null;
-      return (mFin ? resto.slice(0, mFin.index) : resto).trim();
+    const esCodigoHom = (v) => /^[A-Za-z]{1,3}\d{1,4}[A-Za-z]?$/.test((v || '').trim());
+    function mesAnioDe(v) {
+      const m = (v || '').match(/(\d{1,2})\s*\/\s*(\d{2,4})/);
+      if (!m) return null;
+      return { mes: m[1].padStart(2, '0'), anio: m[2].length <= 2 ? '20' + m[2].padStart(2, '0') : m[2] };
     }
-    function codigoYSerie(bloque) {
-      let codigo = entre(bloque, /c[oó]digo\s*homologaci[oó]n/i, /n[uú]mero\s*de\s*serie/i);
-      let serie = entre(bloque, /n[uú]mero\s*de\s*serie/i, /operaci[oó]n/i);
-      // Si no hay etiquetas (formato distinto, con espacios normales),
-      // probamos el modo anterior como respaldo.
-      if (!codigo) { const m = bloque.match(/\b([A-Z]{2}\d{2,3})\b/); if (m) codigo = m[1]; }
-      if (!serie) { const m = bloque.match(/\b(\d{4,10})\b/); if (m) serie = m[1]; }
-      return { codigo, serie };
+    // A partir de la fila de títulos, ubica en qué columna está cada dato.
+    function mapaColumnas(titulos) {
+      const idx = { codigo: -1, serie: -1, operacion: -1, fechaFab: -1, crpc: -1, fechaCrpc: -1 };
+      titulos.forEach((t, i) => {
+        const s = t.toLowerCase();
+        if (/fecha\s*fab/.test(s)) idx.fechaFab = i;
+        else if (/fecha\s*crpc/.test(s)) idx.fechaCrpc = i;
+        else if (/crpc/.test(s)) idx.crpc = i;
+        else if (/c[oó]digo/.test(s)) idx.codigo = i;
+        else if (/n[uú]mero\s*de\s*serie|serie/.test(s)) idx.serie = i;
+        else if (/operaci/.test(s)) idx.operacion = i;
+      });
+      return idx;
     }
 
-    // Parsea UN bloque de cilindro (código, serie, CRPC y fechas Fab./CRPC).
-    function parseCilindro(bloque) {
-      const cil = codigoYSerie(bloque);
-      const crpcMaterial = entre(bloque, /(?<!fecha\s)crpc/i, /fecha\s*crpc/i);
-      if (crpcMaterial) cil.crpc = crpcMaterial;
-      // En la tabla del SIC los encabezados ("Fecha Fab.", "Fecha CRPC") van
-      // en una fila y los valores en la siguiente, lejos uno del otro — así
-      // que tomamos las fechas tipo mes/año en el orden en que aparecen: la
-      // primera es Fecha Fab. y la segunda, si existe, es Fecha CRPC.
-      const fechasNN = [...bloque.matchAll(/(\d{1,2})\s*\/\s*(\d{1,2})(?!\d)/g)];
-      const mesAnio = (m) => ({ mes: m[1], anio: m[2].length <= 2 ? '20' + m[2].padStart(2, '0') : m[2] });
-      if (fechasNN[0]) { const f = mesAnio(fechasNN[0]); cil.fabricadoMes = f.mes; cil.fabricadoAnio = f.anio; }
-      if (fechasNN[1]) { const f = mesAnio(fechasNN[1]); cil.revisadoMes = f.mes; cil.revisadoAnio = f.anio; }
-      return cil;
-    }
-
-    // Fin de la zona de equipos: donde arranca la DDJJ / info desplegada.
-    const finM = text.match(/informaci[oó]n\s*desplegada|declaraci[oó]n\s*jurada/i);
-    const finEquipo = finM ? finM.index : text.length;
-    const zona = text.slice(0, finEquipo);
-
-    // Enfoque robusto (sirva el SIC como sirva el copiado):
-    //  1) Marcamos la posición de cada encabezado de sección
-    //     (Regulador / Cilindro / Válvula).
-    //  2) Marcamos la posición de cada componente real, que en el SIC empieza
-    //     siempre con "Código Homologación" pegado a su valor
-    //     ("Código HomologaciónCC35Número de Serie...").
-    //  3) A cada "Código Homologación" le asignamos el tipo del encabezado
-    //     más cercano que tenga ANTES. Así, si el SIC lista los DOS cilindros
-    //     bajo un solo "Datos Cilindro" (dos filas seguidas), igual salen los
-    //     dos; y si repite el encabezado por cada uno, también.
-    const marcas = [];
-    let hm;
-    const reHead = /datos\s*(?:del\s*|de\s*la\s*)?(regulador|cilindro|v[aá]lvula)/ig;
-    while ((hm = reHead.exec(zona))) {
-      const t = hm[1].toLowerCase();
-      const tipo = t.startsWith('reg') ? 'regulador' : t.startsWith('cil') ? 'cilindro' : 'valvula';
-      marcas.push({ pos: hm.index, kind: 'head', tipo });
-    }
-    let cm2;
-    const reCod = /c[oó]digo\s*homologaci[oó]n/ig;
-    while ((cm2 = reCod.exec(zona))) {
-      marcas.push({ pos: cm2.index, kind: 'comp' });
-    }
-    marcas.sort((a, b) => a.pos - b.pos);
-
+    const regulador = { codigo: '', serie: '' };
     const cilindros = [];
     const valvulas = [];
-    let regulador = { codigo: '', serie: '' };
-    let seccionActual = 'regulador';
-    marcas.forEach((mk, i) => {
-      if (mk.kind === 'head') { seccionActual = mk.tipo; return; }
-      // Bloque del componente: desde su "Código Homologación" hasta la próxima
-      // marca (otro componente u otro encabezado) o el fin de la zona.
-      const fin = (i + 1 < marcas.length) ? marcas[i + 1].pos : finEquipo;
-      const bloque = zona.slice(mk.pos, fin);
-      if (seccionActual === 'cilindro') {
-        const cil = parseCilindro(bloque);
-        if (cil.codigo || cil.serie) cilindros.push(cil);
-      } else if (seccionActual === 'valvula') {
-        const val = codigoYSerie(bloque);
-        if (val.codigo || val.serie) valvulas.push(val);
-      } else {
-        const reg = codigoYSerie(bloque);
-        if ((reg.codigo || reg.serie) && !(regulador.codigo || regulador.serie)) regulador = reg;
+    let seccion = null;   // 'regulador' | 'cilindro' | 'valvula' | null
+    let mapa = null;      // índice de columnas de la sección actual
+
+    for (const linea of lineas) {
+      const l = linea.trim();
+      if (!l) continue;
+      // Fin de la zona de equipos.
+      if (/informaci[oó]n\s*desplegada|declaraci[oó]n\s*jurada|^la\s*informaci[oó]n/i.test(l)) break;
+      // ¿Encabezado de sección? ("Datos Regulador", "Datos Cilindros",
+      // "Datos Válvulas del Cilindro"). Ojo: "Válvulas del Cilindro" tiene las
+      // dos palabras, por eso se prueba válvula PRIMERO.
+      const mh = l.match(/^datos\s+(.*)$/i);
+      if (mh) {
+        const resto = mh[1].toLowerCase();
+        mapa = null;
+        if (/v[aá]lvula/.test(resto)) seccion = 'valvula';
+        else if (/cilindro/.test(resto)) seccion = 'cilindro';
+        else if (/regulador/.test(resto)) seccion = 'regulador';
+        else seccion = null; // "Datos del PEC", "Datos del Vehículo", etc.
+        continue;
       }
-    });
+      if (!seccion) continue;
+
+      const c = columnas(l);
+      if (!c.length) continue;
+      // Fila de títulos de la tabla: contiene "Código Homologación".
+      if (c.some(x => /c[oó]digo\s*homologaci/i.test(x))) { mapa = mapaColumnas(c); continue; }
+
+      // Fila de datos. Tomamos código y serie por la posición que indican los
+      // títulos; si no hay títulos, asumimos las dos primeras columnas.
+      const col = (key, def) => (mapa && mapa[key] >= 0 && mapa[key] < c.length) ? c[mapa[key]] : def;
+      let codigo = col('codigo', c[0]);
+      let serie = col('serie', c[1]);
+      if (!esCodigoHom(codigo)) {
+        const cand = c.find(esCodigoHom);
+        if (!cand) continue; // no es una fila de equipo (texto suelto)
+        codigo = cand;
+        if (!serie || serie === codigo) { const s = c.find(x => /^\d{3,10}$/.test(x)); if (s) serie = s; }
+      }
+      codigo = (codigo || '').trim();
+      serie = (serie || '').trim();
+
+      if (seccion === 'regulador') {
+        if (!regulador.codigo && !regulador.serie) { regulador.codigo = codigo; regulador.serie = serie; }
+      } else if (seccion === 'cilindro') {
+        const cil = { codigo, serie };
+        const crpcMat = col('crpc', '');
+        if (crpcMat && !/^\d/.test(crpcMat)) cil.crpc = crpcMat.trim();
+        const ff = mesAnioDe(col('fechaFab', ''));
+        if (ff) { cil.fabricadoMes = ff.mes; cil.fabricadoAnio = ff.anio; }
+        const fc = mesAnioDe(col('fechaCrpc', ''));
+        if (fc) { cil.revisadoMes = fc.mes; cil.revisadoAnio = fc.anio; }
+        cilindros.push(cil);
+      } else if (seccion === 'valvula') {
+        valvulas.push({ codigo, serie });
+      }
+    }
 
     // Compatibilidad: se mantienen los campos singulares (primer cilindro /
     // primera válvula) además de los arrays con todos.
