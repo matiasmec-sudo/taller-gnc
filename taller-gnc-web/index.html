@@ -1564,6 +1564,8 @@ Documentación para realizar la renovación:
           </div>
           ${abierto ? `<div class="hist-detalle">${clienteDatosBlock(cliente)}
             <div class="form-actions" style="margin-top:8px;">
+              <button type="button" class="btn btn-ghost btn-sm" data-reimprimir-cliente="${cliente.id}" data-reimprimir-id="${tramite.id}">Imprimir ficha</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-comprobante-cliente="${cliente.id}" data-comprobante-id="${tramite.id}">Comprobante</button>
               <button type="button" class="btn btn-ghost btn-sm" data-ultimo-tramite="${cliente.id}">Ver último trámite</button>
               <button type="button" class="btn btn-danger-outline btn-sm" data-borrar-tramite-cliente="${cliente.id}" data-borrar-tramite-id="${tramite.id}">Eliminar trámite</button>
             </div></div>` : ''}`;
@@ -1843,6 +1845,7 @@ Documentación para realizar la renovación:
       <div class="form-actions">
         <button type="button" class="btn btn-agent" id="btn-ut-pec">Enviar al PEC</button>
         <button type="button" class="btn btn-primary" id="btn-ut-imprimir">Imprimir</button>
+        <button type="button" class="btn btn-ghost" data-comprobante-cliente="${c.id}" data-comprobante-id="${t.id}">Comprobante</button>
         <button type="button" class="btn btn-ghost" id="btn-ut-editar">Editar</button>
         <button type="button" class="btn btn-ghost" id="btn-ut-cerrar">Cerrar</button>
       </div>
@@ -3358,6 +3361,63 @@ Documentación para realizar la renovación:
     }
     doc.setFontSize(9);
     doc.text('GRILLA DE CALIBRACIÓN — imprimir sobre planilla en blanco al 100%', 24 + ajX, 4 + ajY);
+    return doc.output('blob');
+  }
+
+  // Comprobante para el cliente: documento propio del taller (NO la ficha
+  // oficial del PEC), con los datos del trámite para que el cliente se lo
+  // lleve. Es un PDF autocontenido (no va sobre planilla preimpresa).
+  async function generarComprobante(cliente, tramite) {
+    await cargarLibreriasPec();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const tc = tallerConfig;
+    const L = 20, R = 190;
+    let y = 22;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+    doc.text(tallerNombre || 'Taller GNC', L, y); y += 7;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90);
+    [tc.razonSocial, tc.direccion, [tc.cuit ? 'CUIT ' + tc.cuit : '', tc.codigoTaller ? 'Cód. Taller ' + tc.codigoTaller : ''].filter(Boolean).join('    ')]
+      .filter(Boolean).forEach(l => { doc.text(String(l), L, y); y += 5; });
+    doc.setTextColor(0); y += 3;
+    doc.setDrawColor(200); doc.line(L, y, R, y); y += 9;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+    doc.text('Comprobante de trámite de GNC', L, y); y += 9;
+    doc.setFontSize(11);
+    const row = (k, v) => {
+      doc.setFont('helvetica', 'bold'); doc.text(k, L, y);
+      doc.setFont('helvetica', 'normal'); doc.text(String(v || '—'), L + 42, y, { maxWidth: R - L - 42 });
+      y += 7;
+    };
+    const titulo = (txt) => { y += 2; doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text(txt, L, y); y += 6; doc.setFontSize(11); };
+    row('Fecha:', fmtDate(tramite.fecha));
+    row('Trámite:', tramiteTipoLabel(tramite.tipo));
+    titulo('Cliente');
+    row('Nombre:', cliente.nombre);
+    row('Documento:', [cliente.tipo_documento, cliente.dni].filter(Boolean).join(' '));
+    row('Teléfono:', cliente.telefono);
+    row('Domicilio:', [cliente.domicilio, cliente.ciudad, cliente.provincia].filter(Boolean).join(', '));
+    titulo('Vehículo');
+    row('Patente:', cliente.patente);
+    row('Marca/Modelo:', [cliente.marca, cliente.modelo, cliente.anio].filter(Boolean).join(' '));
+    const resumen = equipoResumen(tramite.equipo);
+    if (resumen) {
+      titulo('Equipo'); doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+      const lines = doc.splitTextToSize(resumen.replace(/ · /g, '\n'), R - L);
+      doc.text(lines, L, y); y += lines.length * 5 + 1; doc.setFontSize(11);
+    }
+    if (tramite.obleaAnterior || tramite.obleaNueva) row('N° Oblea:', `${tramite.obleaAnterior || '—'}  ->  ${tramite.obleaNueva || '—'}`);
+    if (tramite.detalle) {
+      titulo('Observaciones'); doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+      const ol = doc.splitTextToSize(tramite.detalle, R - L);
+      doc.text(ol, L, y); y += ol.length * 5 + 1; doc.setFontSize(11);
+    }
+    y += 8;
+    if (tramite.firma) { try { doc.addImage(tramite.firma, 'PNG', L, y, 50, 18); } catch (e) { /* firma inválida, se omite */ } }
+    y += 20; doc.setDrawColor(150); doc.line(L, y, L + 60, y); y += 5;
+    doc.setFontSize(9); doc.setTextColor(90); doc.text('Firma del propietario', L, y); doc.setTextColor(0);
+    doc.setTextColor(120); doc.setFontSize(8);
+    doc.text('Este comprobante es un resumen emitido por el taller y no reemplaza la documentación oficial de ENARGAS.', L, 288, { maxWidth: R - L });
     return doc.output('blob');
   }
 
@@ -5559,6 +5619,33 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     }
     root.querySelectorAll('[data-editar-tramite-cliente]').forEach(btn => {
       btn.addEventListener('click', () => entrarAEditarTramite(btn.getAttribute('data-editar-tramite-cliente'), btn.getAttribute('data-editar-tramite-id')));
+    });
+
+    // Reimprimir la ficha (solo datos sobre planilla preimpresa) de cualquier
+    // trámite ya guardado, no solo el último.
+    async function abrirPdfTramite(clienteId, tramiteId, cual) {
+      const c = clientes.find(x => x.id === clienteId);
+      const t = c && (c.tramites || []).find(x => x.id === tramiteId);
+      if (!c || !t) return;
+      try {
+        if (cual === 'ficha' && !localStorage.getItem('gnc_hint_imprimir_v1')) {
+          localStorage.setItem('gnc_hint_imprimir_v1', '1');
+          await customAlert('Se abre un PDF con SOLO los datos, ubicados donde caen los casilleros de la planilla. Poné la planilla ya impresa en la impresora e imprimí al 100% (tamaño real).', 'Imprimir solo los datos');
+        }
+        const blob = cual === 'ficha' ? await generarPecPdfSoloDatos(c, t) : await generarComprobante(c, t);
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } catch (e) {
+        console.error(e);
+        await customAlert('No se pudo generar el PDF: ' + (e.message || e));
+      }
+    }
+    root.querySelectorAll('[data-reimprimir-cliente]').forEach(btn => {
+      btn.addEventListener('click', () => abrirPdfTramite(btn.getAttribute('data-reimprimir-cliente'), btn.getAttribute('data-reimprimir-id'), 'ficha'));
+    });
+    root.querySelectorAll('[data-comprobante-cliente]').forEach(btn => {
+      btn.addEventListener('click', () => abrirPdfTramite(btn.getAttribute('data-comprobante-cliente'), btn.getAttribute('data-comprobante-id'), 'comprobante'));
     });
 
     // Eliminar un trámite (desde el historial, la tarjeta del cliente o
