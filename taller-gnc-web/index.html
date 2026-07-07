@@ -107,16 +107,22 @@ window.storage = {
   font-family: var(--display); font-weight: 700; font-size: 24px;
   letter-spacing: 0.2px; margin: 0;
 }
-#gnc-app .taller-name-input {
-  background: transparent; border: none; border-bottom: 1px dashed rgba(255,255,255,0.45);
+#gnc-app .taller-name-top {
   color: #fff; font-family: var(--display); font-weight: 700; font-size: 24px;
-  letter-spacing: 0.2px; padding: 2px 0;
-  width: 260px; max-width: 100%; outline: none;
+  letter-spacing: 0.2px; padding: 2px 0; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-#gnc-app .taller-name-input:focus { border-bottom-color: #fff; }
 @media (max-width: 480px) {
-  #gnc-app .taller-name-input { flex: 1 1 100%; font-size: 20px; }
+  #gnc-app .taller-name-top { font-size: 20px; }
 }
+/* Encabezado con botón "Volver" en cada panel abierto desde el menú */
+#gnc-app .panel-head { margin: -4px 0 10px; }
+#gnc-app .btn-volver {
+  background: transparent; border: none; color: var(--flame); cursor: pointer;
+  font-family: var(--sans); font-weight: 700; font-size: 14px; padding: 6px 2px;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+#gnc-app .btn-volver:hover { text-decoration: underline; }
 /* Botones y links dentro del banner azul, en blanco */
 #gnc-app .topbar .btn-ghost { color: rgba(255,255,255,0.9); border-color: rgba(255,255,255,0.4); }
 #gnc-app .topbar .btn-ghost:hover { color: #fff; border-color: #fff; background: rgba(255,255,255,0.12); }
@@ -974,6 +980,12 @@ Documentación para realizar la renovación:
       if (!c.ultimoAvisoMes || typeof c.ultimoAvisoMes !== 'object') { c.ultimoAvisoMes = {}; changed = true; }
       if (typeof c.notas !== 'string') { c.notas = ''; changed = true; }
       if (!Array.isArray(c.turnos)) { c.turnos = []; changed = true; }
+      // El estado "incompleto" se eliminó: ahora un trámite es Pendiente
+      // (empezado y sin enviar) o Enviado. Los viejos "incompletos" pasan
+      // a Pendiente.
+      (c.tramites || []).forEach(t => {
+        if (t.estadoPec === 'incompleto') { t.estadoPec = 'pendiente'; t.motivoIncompleto = ''; changed = true; }
+      });
     });
     return changed;
   }
@@ -1258,12 +1270,19 @@ Documentación para realizar la renovación:
     return items;
   }
 
+  // Encabezado con botón "Volver" común a todos los paneles que se abren
+  // desde el menú — cierra el panel y vuelve a la pantalla principal.
+  function panelVolver() {
+    return `<div class="panel-head"><button type="button" class="btn-volver" data-volver>← Volver</button></div>`;
+  }
+
   function pendientesPanel(entrando) {
     const items = pendientesItems();
     const notifSoportado = typeof Notification !== 'undefined';
     const notifPermiso = notifSoportado ? Notification.permission : 'unsupported';
     return `<div class="panel incompletos-banner ${entrando ? 'panel-entrando' : ''}" id="pendientes-panel">
-      <h2 style="margin-top:0;">⚠ ${items.length} trámite(s) sin enviar o incompletos</h2>
+      ${panelVolver()}
+      <h2 style="margin-top:0;">⚠ ${items.length} trámite(s) sin enviar</h2>
       ${notifPermiso === 'default' ? '<div class="agent-hint"><button type="button" class="btn btn-ghost btn-sm" id="btn-activar-avisos">Activar aviso diario (lun. a sáb. 15hs)</button></div>' : notifPermiso === 'denied' ? '<div class="agent-hint">Los avisos están bloqueados en el navegador — para activarlos, habilitá las notificaciones para este sitio desde la configuración del navegador.</div>' : notifPermiso === 'granted' ? '<div class="agent-hint">✓ Aviso diario activado (lun. a sáb. 15hs, mientras tengas la app abierta).</div>' : ''}
       ${items.length ? `<div class="tramites-list">
         ${items.map(({ cliente, tramite }) => `
@@ -1271,15 +1290,11 @@ Documentación para realizar la renovación:
             <div>
               <div class="doc-label">${escapeHtml(cliente.nombre)} · ${escapeHtml(cliente.patente || 's/d')}</div>
               <div class="doc-sub">${tramiteTipoLabel(tramite.tipo)} · ${fmtDate(tramite.fecha)}</div>
-              ${tramite.estadoPec === 'incompleto' && tramite.motivoIncompleto ? `<div class="tramite-motivo">Motivo: ${escapeHtml(tramite.motivoIncompleto)}</div>` : ''}
             </div>
-            <span class="badge ${tramite.estadoPec === 'incompleto' ? 'badge-danger' : 'badge-warn'}">${ESTADO_PEC_LABELS[tramite.estadoPec]}</span>
+            <span class="badge badge-warn">${ESTADO_PEC_LABELS[tramite.estadoPec]}</span>
             <button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${cliente.id}" data-editar-tramite-id="${tramite.id}">Editar</button>
           </div>`).join('')}
-      </div>` : `<div class="empty">${emptyIconSvg()}No hay trámites pendientes ni incompletos.</div>`}
-      <div class="form-actions">
-        <button type="button" class="btn btn-ghost" id="btn-close-pendientes">Cerrar</button>
-      </div>
+      </div>` : `<div class="empty">${emptyIconSvg()}No hay trámites pendientes.</div>`}
     </div>`;
   }
 
@@ -1313,6 +1328,7 @@ Documentación para realizar la renovación:
       else grupos.push({ dia, items: [it] });
     });
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="historial-panel">
+      ${panelVolver()}
       <h2 style="margin-top:0;">Historial de trámites</h2>
       ${items.length ? grupos.map(g => `
         <div class="hist-dia">${g.dia === 'sin fecha' ? 'Sin fecha' : fmtDate(g.dia)}</div>
@@ -1326,9 +1342,8 @@ Documentación para realizar la renovación:
               <div class="hist-patente">${escapeHtml(cliente.patente || 'SIN PATENTE')}${modelo ? ` <span class="hist-modelo">${escapeHtml(modelo)}</span>` : ''}</div>
               <div class="hist-tipo">${tramiteTipoLabel(tramite.tipo)}</div>
               <div class="hist-nombre">${escapeHtml(cliente.nombre)}${cliente.telefono ? ` · Tel: ${escapeHtml(cliente.telefono)}` : ''}</div>
-              ${tramite.estadoPec === 'incompleto' && tramite.motivoIncompleto ? `<div class="tramite-motivo">Motivo: ${escapeHtml(tramite.motivoIncompleto)}</div>` : ''}
             </div>
-            <span class="badge ${tramite.estadoPec === 'enviado' ? 'badge-ok' : tramite.estadoPec === 'incompleto' ? 'badge-danger' : 'badge-warn'}">${ESTADO_PEC_LABELS[tramite.estadoPec]}</span>
+            <span class="badge ${tramite.estadoPec === 'enviado' ? 'badge-ok' : 'badge-warn'}">${ESTADO_PEC_LABELS[tramite.estadoPec]}</span>
             ${tramite.estadoPec !== 'enviado' ? `<button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${cliente.id}" data-editar-tramite-id="${tramite.id}">Editar</button>` : ''}
             ${tramite.estadoPec === 'enviado' && cliente.telefono ? (
               tramite.avisoObleaEnviado
@@ -1342,15 +1357,13 @@ Documentación para realizar la renovación:
             </div></div>` : ''}`;
         }).join('')}
         </div>`).join('') : `<div class="empty">${emptyIconSvg()}Todavía no hay trámites cargados.</div>`}
-      <div class="form-actions">
-        <button type="button" class="btn btn-ghost" id="btn-close-historial">Cerrar</button>
-      </div>
     </div>`;
   }
 
   // Panel de copia de seguridad cifrada en la nube.
   function respaldoPanel(entrando) {
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="respaldo-panel">
+      ${panelVolver()}
       <h2 style="margin-top:0;">Copia de seguridad en la nube ${infoAyuda('ayuda-respaldo')}</h2>
       ${ayudaBloque('ayuda-respaldo', 'La copia incluye los clientes, trámites, firmas, fotos de documentación y la configuración del taller. Antes de subirse se cifra EN TU EQUIPO con la clave que elijas: sin esa clave nadie puede leer la copia — ni siquiera nosotros. Anotá la clave en un lugar seguro: si la perdés, la copia no se puede recuperar. Para pasar los datos a un celular nuevo: instalá Estelita, activala con tu código de licencia y usá "Recuperar copia" con la misma clave.')}
       <div class="agent-hint" id="respaldo-ultima">${respaldoUltima === null ? 'Consultando si hay copias guardadas...' : (respaldoUltima ? 'Última copia guardada: ' + respaldoUltima : 'Todavía no hay ninguna copia en la nube.')}</div>
@@ -1360,7 +1373,6 @@ Documentación para realizar la renovación:
       <div class="form-actions">
         <button type="button" class="btn btn-primary" id="btn-respaldo-subir">Guardar copia ahora</button>
         <button type="button" class="btn btn-agent" id="btn-respaldo-bajar">Recuperar copia</button>
-        <button type="button" class="btn btn-ghost" id="btn-close-respaldo">Cerrar</button>
       </div>
       <div id="respaldo-status"></div>
       <h3>Sincronización automática ${infoAyuda('ayuda-sync')}</h3>
@@ -1568,6 +1580,7 @@ Documentación para realizar la renovación:
       { titulo: 'Próximos', items: items.filter(i => i.turno.fecha > manana) },
     ].filter(g => g.items.length);
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="turnos-panel">
+      ${panelVolver()}
       <h2 style="margin-top:0;">Turnos ${infoAyuda('ayuda-turnos')}</h2>
       ${ayudaBloque('ayuda-turnos', 'Los turnos se agendan desde el alta de un cliente nuevo o con el botón "Turno" de su tarjeta. Para los de hoy y mañana aparece el botón de WhatsApp con el recordatorio ya escrito; una vez enviado queda marcado y no se repite. Estelita también te avisa a vos con la notificación diaria si hay turnos para mañana sin avisar.')}
       ${grupos.length ? grupos.map(g => `
@@ -1586,9 +1599,6 @@ Documentación para realizar la renovación:
               <button type="button" class="btn btn-trash" data-borrar-turno-cliente="${cliente.id}" data-borrar-turno-id="${turno.id}" title="Borrar turno" aria-label="Borrar turno">${trashSvg()}</button>
             </div>`).join('')}
         </div>`).join('') : `<div class="empty">${emptyIconSvg()}No hay turnos agendados. Se agendan desde el alta de un cliente o con el botón "Turno" de su tarjeta.</div>`}
-      <div class="form-actions">
-        <button type="button" class="btn btn-ghost" id="btn-close-turnos">Cerrar</button>
-      </div>
     </div>`;
   }
 
@@ -1607,7 +1617,7 @@ Documentación para realizar la renovación:
       <div class="client-detalle-grid" style="margin-bottom:10px;">
         <div><span class="doc-label">Tipo</span><div>${tramiteTipoLabel(t.tipo)}</div></div>
         <div><span class="doc-label">Fecha</span><div>${fmtDate(t.fecha)}</div></div>
-        <div><span class="doc-label">Estado</span><div><span class="badge ${t.estadoPec === 'enviado' ? 'badge-ok' : t.estadoPec === 'incompleto' ? 'badge-danger' : 'badge-warn'}">${ESTADO_PEC_LABELS[t.estadoPec]}</span></div></div>
+        <div><span class="doc-label">Estado</span><div><span class="badge ${t.estadoPec === 'enviado' ? 'badge-ok' : 'badge-warn'}">${ESTADO_PEC_LABELS[t.estadoPec]}</span></div></div>
         <div><span class="doc-label">PEC</span><div>${escapeHtml(pec.razonSocial || '—')}</div></div>
         <div><span class="doc-label">Cliente</span><div>${escapeHtml(c.nombre)}${c.telefono ? ' · ' + escapeHtml(c.telefono) : ''}</div></div>
         <div><span class="doc-label">Vehículo</span><div>${escapeHtml([c.marca, c.modelo, c.anio].filter(Boolean).join(' ')) || '—'}</div></div>
@@ -1671,6 +1681,7 @@ Documentación para realizar la renovación:
     const existentes = new Set(clientes.map(c => (c.patente || '').toUpperCase()));
     const previewRows = rows.slice(0, 50);
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="bulk-import-panel">
+      ${panelVolver()}
       <h2>Importar clientes ${infoAyuda('ayuda-importar')}</h2>
       ${ayudaBloque('ayuda-importar', 'Importación inicial de la cartera de clientes del taller. Se aceptan planillas de Excel (.xlsx o .csv) o fotografías de las páginas del cuaderno del taller (hasta 6 por tanda, bien iluminadas; se leen incluso los renglones manuscritos). Solo se requieren la patente y el teléfono de cada cliente: los demás datos pueden completarse más adelante. Las columnas de la planilla se reconocen automáticamente, en cualquier orden. Antes de confirmar, se muestra una vista previa para revisar las filas detectadas y destildar las que no correspondan.')}
       <div class="scan-slot-buttons" style="margin-top:4px;">
@@ -2310,11 +2321,17 @@ Documentación para realizar la renovación:
   function tallerConfigPanel(entrando) {
     const t = tallerConfig;
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="taller-config-panel">
+      ${panelVolver()}
       <h2>Configuración del taller</h2>
       <p class="scan-sub">Estos datos son fijos (no cambian de cliente en cliente) y van a completar automáticamente la planilla que se manda al PEC.</p>
-      <div class="agent-hint" style="margin-bottom:12px;">Código de licencia de este equipo: <b>${escapeHtml(localStorage.getItem(LICENSE_KEY) || '(sin activar)')}</b> — es el que tenés que usar para activar Estelita en otro dispositivo y recuperar ahí tu copia de seguridad.</div>
+      <div class="agent-hint" style="margin-bottom:12px;">Código de licencia de este equipo: <b>${escapeHtml(localStorage.getItem(LICENSE_KEY) || '(sin activar)')}</b> — es el que tenés que usar para activar Estelita en otro dispositivo y recuperar ahí tu copia de seguridad.
+        <div class="form-actions" style="margin-top:8px;"><button type="button" class="btn btn-ghost btn-sm" id="btn-change-license">Cambiar código de licencia</button></div>
+      </div>
       <h3 style="margin-top:0;">Taller de montaje</h3>
       <div class="form-grid">
+        <label>Nombre del taller (el que se ve arriba de la app)
+          <input type="text" id="tc-nombre" value="${escapeHtml(tallerNombre)}" placeholder="Ej: Taller GNC de Matías">
+        </label>
         <label>Razón Social del Taller
           <input type="text" id="tc-razon-social" value="${escapeHtml(t.razonSocial)}" placeholder="Ej: Juan Pérez S.A.">
         </label>
@@ -2561,18 +2578,7 @@ Documentación para realizar la renovación:
       </div>
       <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Observaciones adicionales</label>
       <textarea id="t-detalle" placeholder="Cualquier detalle que no entre en los campos de arriba...">${escapeHtml(d.detalle)}</textarea>
-      <div class="form-grid" style="margin-top:10px;">
-        <label>Estado
-          <select id="t-estado">
-            <option value="pendiente" ${d.estado === 'pendiente' ? 'selected' : ''}>Pendiente</option>
-            <option value="enviado" ${d.estado === 'enviado' ? 'selected' : ''}>Enviado al PEC</option>
-            <option value="incompleto" ${d.estado === 'incompleto' ? 'selected' : ''}>Incompleto</option>
-          </select>
-        </label>
-        <label>Motivo (si quedó incompleto)
-          <input type="text" id="t-motivo" value="${escapeHtml(d.motivo)}" placeholder="Ej: falta firma del propietario">
-        </label>
-      </div>
+      <div class="agent-hint" style="margin-top:10px;">El estado se pone solo: si tocás <b>Enviar al PEC</b> queda como <b>Enviado</b>; si tocás <b>Guardar trámite</b> (o salís guardando) queda en <b>Pendientes</b> hasta que lo envíes.</div>
       <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Firma del propietario</label>
       <div class="signature-box">
         <canvas id="sig-canvas" width="600" height="200"></canvas>
@@ -3318,19 +3324,17 @@ Documentación para realizar la renovación:
   }
 
   function tramiteRow(clienteId, t) {
-    const badgeClass = t.estadoPec === 'enviado' ? 'badge-ok' : t.estadoPec === 'incompleto' ? 'badge-danger' : 'badge-warn';
+    const badgeClass = t.estadoPec === 'enviado' ? 'badge-ok' : 'badge-warn';
     const resumenEquipo = equipoResumen(t.equipo);
     return `<div class="tramite-row">
       <div>
         <div class="doc-label">${tramiteTipoLabel(t.tipo)} · ${fmtDate(t.fecha)}</div>
         ${resumenEquipo ? `<div class="doc-sub">${escapeHtml(resumenEquipo)}</div>` : ''}
         ${t.detalle ? `<div class="doc-sub">${escapeHtml(t.detalle)}</div>` : ''}
-        ${t.estadoPec === 'incompleto' && t.motivoIncompleto ? `<div class="tramite-motivo">Motivo: ${escapeHtml(t.motivoIncompleto)}</div>` : ''}
       </div>
       <select data-tramite-status="${clienteId}" data-tramite-id="${t.id}">
         <option value="pendiente" ${t.estadoPec === 'pendiente' ? 'selected' : ''}>Pendiente</option>
         <option value="enviado" ${t.estadoPec === 'enviado' ? 'selected' : ''}>Enviado al PEC</option>
-        <option value="incompleto" ${t.estadoPec === 'incompleto' ? 'selected' : ''}>Incompleto</option>
       </select>
       <span class="badge ${badgeClass}">${ESTADO_PEC_LABELS[t.estadoPec]}</span>
       ${t.estadoPec !== 'enviado' ? `<button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${clienteId}" data-editar-tramite-id="${t.id}">Editar</button>` : ''}
@@ -3495,6 +3499,13 @@ Documentación para realizar la renovación:
   // resultado — mientras está activo, al volver el foco a esta pestaña la
   // app intenta leer el portapapeles y cargar los datos sola.
   let esperandoEnargas = false;
+  // --- Autoguardado del trámite en curso (para no perderlo si se apaga el
+  // celular). Ids del cliente/trámite que el autoguardado dejó como Pendiente,
+  // para reusarlos al guardar de verdad (sin duplicar) o borrarlos al descartar.
+  let autosaveClienteId = null;
+  let autosaveTramiteId = null;
+  let autosaveClienteCreado = false; // true si el cliente lo creó el autoguardado
+  let autosaveHash = null;           // evita reescribir si nada cambió
 
   // Carga un texto de ENARGAS por el mismo camino que un pegado manual, si
   // parece un resultado de la consulta (2 o más datos reconocidos — así una
@@ -3561,6 +3572,9 @@ Documentación para realizar la renovación:
         ts: Date.now(),
         editingId, showForm, wizardStep, editingTramiteId, modoSoloDatos,
         clienteDraft, tramiteDraftEquipo, tramiteDraftCampos, currentSignature,
+        // Ids del autoguardado: si la app se reabre tras un corte, el trámite
+        // restaurado sigue apuntando al mismo pendiente (no se duplica).
+        autosaveClienteId, autosaveTramiteId, autosaveClienteCreado,
         // Las fotos también viajan en el borrador — eran lo primero que se
         // perdía si Android mataba la app o se cerraba la pestaña.
         scanFiles: { ...scanFiles }, fotosEditadas,
@@ -3569,6 +3583,116 @@ Documentación para realizar la renovación:
   }
   function limpiarSnapshotWizard() {
     try { localStorage.removeItem(WIZARD_SNAPSHOT_KEY); } catch (e) { /* ok */ }
+  }
+
+  // Autoguardado del trámite en curso como Pendiente. Corre cada pocos
+  // segundos mientras el asistente está abierto: así, si el celular se apaga
+  // o Android mata la app, el trámite ya figura en Pendientes con todo lo
+  // cargado. Reusa el mismo cliente/trámite en cada pasada (no duplica) y
+  // NO toca los datos de un cliente ya existente hasta que se guarde a
+  // propósito.
+  async function autoguardarBorradorTramite() {
+    if (!clienteDraft || !tramiteDraftEquipo || !tramiteDraftCampos) return;
+    if (modoSoloDatos) return;    // "Actualizar datos" no genera trámite
+    if (editingTramiteId) return; // editar un trámite ya existente: ya está guardado
+    syncClienteDraftFromDOM();
+    syncEquipoFromDOM();
+    syncTramiteCamposFromDOM();
+    const nombre = (clienteDraft.nombre || '').trim();
+    const telefono = (clienteDraft.telefono || '').trim();
+    const patente = (clienteDraft.patente || '').trim().toUpperCase();
+    if (!nombre || !telefono || !patente) return; // todavía no hay lo mínimo para guardar
+
+    const data = {
+      nombre, telefono, patente,
+      dni: (clienteDraft.dni || '').trim(),
+      tipo_documento: clienteDraft.tipo_documento,
+      domicilio: (clienteDraft.domicilio || '').trim(),
+      cpa: (clienteDraft.cpa || '').trim(),
+      provincia: (clienteDraft.provincia || '').trim(),
+      ciudad: (clienteDraft.ciudad || '').trim(),
+      marca: (clienteDraft.marca || '').trim(),
+      modelo: (clienteDraft.modelo || '').trim(),
+      anio: (clienteDraft.anio || '').trim(),
+      inyeccion: clienteDraft.inyeccion,
+      uso: clienteDraft.uso,
+    };
+    const tramiteData = {
+      tipo: tramiteDraftCampos.tipo,
+      fecha: tramiteDraftCampos.fecha,
+      equipo: tramiteDraftEquipo,
+      detalle: (tramiteDraftCampos.detalle || '').trim(),
+      estadoPec: 'pendiente',
+      motivoIncompleto: '',
+      obleaAnterior: (tramiteDraftCampos.obleaAnterior || '').trim(),
+      obleaNueva: (tramiteDraftCampos.obleaNueva || '').trim(),
+      pecIndex: Number.isInteger(tramiteDraftCampos.pecIndex) ? tramiteDraftCampos.pecIndex : 0,
+      firma: currentSignature || null,
+      autoguardado: true,
+    };
+
+    // Si nada cambió desde el último autoguardado, no reescribir (evita subir
+    // la copia cifrada a la nube en cada tecla).
+    const hash = JSON.stringify([data, tramiteData]);
+    if (hash === autosaveHash) return;
+
+    let clientId;
+    if (editingId && clientes.some(c => c.id === editingId)) {
+      // Cliente ya existente: solo le sumamos el trámite pendiente, sin pisar
+      // sus datos hasta que se guarde a propósito.
+      clientId = editingId;
+      autosaveClienteCreado = false;
+    } else if (autosaveClienteId && clientes.some(c => c.id === autosaveClienteId)) {
+      clientId = autosaveClienteId;
+      const i0 = clientes.findIndex(c => c.id === clientId);
+      clientes[i0] = { ...clientes[i0], ...data };
+    } else {
+      clientId = 'c' + Date.now() + Math.random().toString(36).slice(2, 7);
+      clientes.push({ id: clientId, ...blankClienteBase(), ...data, tramites: [], ultimoAvisoMes: {}, notas: '' });
+      autosaveClienteCreado = true;
+    }
+    autosaveClienteId = clientId;
+
+    const idx = clientes.findIndex(c => c.id === clientId);
+    if (idx === -1) return;
+    if (autosaveTramiteId && clientes[idx].tramites.some(t => t.id === autosaveTramiteId)) {
+      const ti = clientes[idx].tramites.findIndex(t => t.id === autosaveTramiteId);
+      clientes[idx].tramites[ti] = { ...clientes[idx].tramites[ti], ...tramiteData };
+    } else {
+      autosaveTramiteId = 't' + Date.now() + Math.random().toString(36).slice(2, 7);
+      clientes[idx].tramites.push({ id: autosaveTramiteId, ...tramiteData, creadoEn: new Date().toISOString() });
+    }
+
+    // Fotos: solo si el usuario las cambió; nunca borra las ya guardadas.
+    try {
+      if (fotosEditadas && Object.values(scanFiles).some(v => v)) {
+        await window.storage.set(`fotos:${clientId}`, JSON.stringify(scanFiles), false);
+        clientesConFotos.add(clientId);
+      }
+    } catch (e) { /* fotos pesadas: sigue; el guardado real reintenta */ }
+
+    autosaveHash = hash;
+    await saveClientes(false); // persiste local sin forzar subida a la nube en cada tick
+  }
+
+  // "Salir sin guardar": borra lo que el autoguardado hubiera dejado.
+  async function descartarBorradorAutoguardado() {
+    if (autosaveClienteId) {
+      const idx = clientes.findIndex(c => c.id === autosaveClienteId);
+      if (idx !== -1) {
+        const cli = clientes[idx];
+        if (autosaveTramiteId) cli.tramites = (cli.tramites || []).filter(t => t.id !== autosaveTramiteId);
+        // Si el cliente lo creó el autoguardado y quedó sin trámites, lo
+        // sacamos (no dejamos un cliente fantasma).
+        if (autosaveClienteCreado && (cli.tramites || []).length === 0) {
+          clientes.splice(idx, 1);
+          try { await window.storage.delete(`fotos:${autosaveClienteId}`, false); } catch (e) { /* no existía */ }
+          clientesConFotos.delete(autosaveClienteId);
+        }
+        await saveClientes(false);
+      }
+    }
+    autosaveClienteId = null; autosaveTramiteId = null; autosaveClienteCreado = false; autosaveHash = null;
   }
 
   // Al abrir la app: si venimos de un "Compartir" de Android (query
@@ -3600,6 +3724,9 @@ Documentación para realizar la renovación:
       tramiteDraftEquipo = snap.tramiteDraftEquipo || null;
       tramiteDraftCampos = snap.tramiteDraftCampos || null;
       currentSignature = snap.currentSignature || null;
+      autosaveClienteId = snap.autosaveClienteId || null;
+      autosaveTramiteId = snap.autosaveTramiteId || null;
+      autosaveClienteCreado = !!snap.autosaveClienteCreado;
       if (snap.scanFiles) Object.assign(scanFiles, snap.scanFiles);
       fotosEditadas = !!snap.fotosEditadas;
       esperandoEnargas = !compartido; // si ya llegó texto compartido, no hay que esperar el portapapeles
@@ -3648,8 +3775,8 @@ Documentación para realizar la renovación:
     };
   }
   const TRAMITE_DRAFT_CAMPOS_IDS = {
-    tipo: 't-tipo', fecha: 't-fecha', detalle: 't-detalle', estado: 't-estado',
-    motivo: 't-motivo', obleaAnterior: 't-oblea-anterior', obleaNueva: 't-oblea-nueva',
+    tipo: 't-tipo', fecha: 't-fecha', detalle: 't-detalle',
+    obleaAnterior: 't-oblea-anterior', obleaNueva: 't-oblea-nueva',
   };
   function syncTramiteCamposFromDOM() {
     if (!tramiteDraftCampos) return;
@@ -4017,6 +4144,9 @@ Documentación para realizar la renovación:
   // Pasadas periódicas y al volver a la app (con el debounce de guardados
   // esto mantiene los dispositivos emparejados sin que nadie toque nada).
   setInterval(() => { if (ready && syncActiva()) sincronizar('periodico'); }, 5 * 60 * 1000);
+  // Autoguardado del trámite en curso: si el celular se apaga o se cierra la
+  // app a la mitad, el trámite ya queda listado en Pendientes sin perder nada.
+  setInterval(() => { if (ready && showForm && clienteDraft) autoguardarBorradorTramite().catch(() => {}); }, 8000);
   let ultimoSyncPorFoco = 0;
   window.addEventListener('focus', () => {
     if (!ready || !syncActiva()) return;
@@ -4400,13 +4530,12 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-import">+ Importar clientes (Excel / cuaderno)</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-export-csv">Exportar CSV</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-respaldo">Copia de seguridad en la nube</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-taller-config">⚙️ Configuración del taller</button>
                 ${showInstallButton ? `<button type="button" class="btn btn-ghost btn-sm" id="btn-install-app">📲 Instalar app</button>` : ''}
               </div>` : ''}
             </div>
             <span class="tag">ESTELITA</span>
-            <input class="taller-name-input" id="taller-input" value="${escapeHtml(tallerNombre)}">
-            <button type="button" class="license-link" id="btn-toggle-taller-config">Configurar datos del taller</button>
-            <button type="button" class="license-link" id="btn-change-license">Cambiar código de licencia</button>
+            <span class="taller-name-top">${escapeHtml(tallerNombre)}</span>
           </div>
         </div>
 
@@ -4483,14 +4612,28 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     });
   }
 
+  // Cierra TODOS los paneles de consulta que se abren desde el menú ☰ o la
+  // barra de abajo — así en pantalla queda un solo panel a la vez y "Volver"
+  // devuelve siempre a la pantalla principal. No toca el asistente de trámite.
+  function cerrarPanelesConsulta() {
+    showPendientes = false;
+    showHistorial = false;
+    showTallerConfig = false;
+    showRespaldo = false;
+    showTurnos = false;
+    showBulkImport = false;
+    showQuickAdd = false;
+  }
+
   function attachEvents() {
-    const tallerInput = root.querySelector('#taller-input');
-    if (tallerInput) {
-      tallerInput.addEventListener('change', (e) => {
-        tallerNombre = e.target.value.trim() || 'Mi Taller GNC';
-        saveTaller();
+    // Botón "← Volver" común a todos los paneles del menú.
+    root.querySelectorAll('[data-volver]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        cerrarPanelesConsulta();
+        render();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       });
-    }
+    });
 
     // Barra de navegación inferior (mobile). Solo abre/cierra los paneles de
     // consulta — a propósito no toca el wizard ni las fotos, para no perder
@@ -4498,13 +4641,22 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     root.querySelectorAll('[data-nav]').forEach(btn => {
       btn.addEventListener('click', () => {
         const destino = btn.dataset.nav;
-        showPendientes = destino === 'pendientes' ? !showPendientes : false;
-        showHistorial = destino === 'historial' ? !showHistorial : false;
-        showTallerConfig = destino === 'config' ? !showTallerConfig : false;
-        showRespaldo = false;
-        showTurnos = false;
+        const yaAbierto = (destino === 'pendientes' && showPendientes)
+          || (destino === 'historial' && showHistorial)
+          || (destino === 'config' && showTallerConfig);
+        cerrarPanelesConsulta();
         menuOpen = false;
+        if (!yaAbierto) {
+          if (destino === 'pendientes') showPendientes = true;
+          else if (destino === 'historial') showHistorial = true;
+          else if (destino === 'config') showTallerConfig = true;
+        }
         render();
+        if (showTallerConfig) consultarTecnicosVinculados().then(() => {
+          if (!showTallerConfig) return;
+          syncTallerConfigFromDOM();
+          render();
+        });
         window.scrollTo({ top: 0, behavior: 'smooth' });
       });
     });
@@ -4517,7 +4669,10 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
     const btnToggleTallerConfig = root.querySelector('#btn-toggle-taller-config');
     if (btnToggleTallerConfig) btnToggleTallerConfig.addEventListener('click', () => {
-      showTallerConfig = !showTallerConfig;
+      const abierto = showTallerConfig;
+      cerrarPanelesConsulta();
+      menuOpen = false;
+      showTallerConfig = !abierto;
       render();
       if (showTallerConfig) consultarTecnicosVinculados().then(() => {
         if (!showTallerConfig) return;
@@ -4553,6 +4708,8 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     const btnSaveTallerConfig = root.querySelector('#btn-save-taller-config');
     if (btnSaveTallerConfig) btnSaveTallerConfig.addEventListener('click', async () => {
       syncTallerConfigFromDOM();
+      const nombreEl = root.querySelector('#tc-nombre');
+      if (nombreEl) { tallerNombre = nombreEl.value.trim() || 'Mi Taller GNC'; await saveTaller(); }
       const mensajes = tallerConfig.mensajes || {};
       const pecs = (tallerConfig.pecs || []).map(p => ({
         codigoPec: (p.codigoPec || '').trim(), razonSocial: (p.razonSocial || '').trim(),
@@ -4687,6 +4844,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       editingId = null; showForm = true;
       showBulkImport = false;
       enargasPasteOpen = false;
+      autosaveClienteId = null; autosaveTramiteId = null; autosaveClienteCreado = false; autosaveHash = null;
       clienteDraft = blankClienteBase();
       tramiteDraftEquipo = blankEquipo(null);
       aplicarValoresPorTipoTramite(elegido.tipo, tramiteDraftEquipo);
@@ -4802,28 +4960,30 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
     const btnImport = root.querySelector('#btn-import');
     if (btnImport) btnImport.addEventListener('click', () => {
+      const abierto = showBulkImport;
       showForm = false; editingId = null;
+      cerrarPanelesConsulta();
       menuOpen = false;
-      showBulkImport = !showBulkImport;
+      showBulkImport = !abierto;
       bulkImportRows = []; bulkImportSkip = new Set();
       render();
     });
 
     const btnHistorial = root.querySelector('#btn-historial');
     if (btnHistorial) btnHistorial.addEventListener('click', () => {
+      const abierto = showHistorial;
       showForm = false; editingId = null;
+      cerrarPanelesConsulta();
       menuOpen = false;
-      showBulkImport = false;
-      showPendientes = false;
-      showHistorial = !showHistorial;
+      showHistorial = !abierto;
       render();
     });
 
     // --- Copia de seguridad en la nube ---
     const btnRespaldoMenu = root.querySelector('#btn-respaldo');
     if (btnRespaldoMenu) btnRespaldoMenu.addEventListener('click', async () => {
+      cerrarPanelesConsulta();
       menuOpen = false;
-      showHistorial = false; showPendientes = false; showBulkImport = false;
       showRespaldo = true;
       respaldoUltima = null;
       render();
@@ -4890,7 +5050,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       if (el) { el.className = 'agent-result ' + clase; el.textContent = texto; }
     }
     function respaldoBotones(deshabilitar) {
-      ['#btn-respaldo-subir', '#btn-respaldo-bajar', '#btn-close-respaldo'].forEach(sel => {
+      ['#btn-respaldo-subir', '#btn-respaldo-bajar'].forEach(sel => {
         const b = root.querySelector(sel);
         if (b) b.disabled = deshabilitar;
       });
@@ -4986,11 +5146,11 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
 
     const btnPendientes = root.querySelector('#btn-pendientes');
     if (btnPendientes) btnPendientes.addEventListener('click', () => {
+      const abierto = showPendientes;
       showForm = false; editingId = null;
+      cerrarPanelesConsulta();
       menuOpen = false;
-      showBulkImport = false;
-      showHistorial = false;
-      showPendientes = !showPendientes;
+      showPendientes = !abierto;
       render();
     });
 
@@ -5039,6 +5199,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       editingId = clienteId;
       wizardStep = 3;
       editingTramiteId = tramiteId;
+      autosaveClienteId = null; autosaveTramiteId = null; autosaveClienteCreado = false; autosaveHash = null;
       currentSignature = tramite.firma || null;
       clienteDraft = { ...cliente };
       fotosEditadas = false;
@@ -5286,6 +5447,10 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       esperandoEnargas = false;
       modoSoloDatos = false;
       fotosEditadas = false;
+      autosaveClienteId = null;
+      autosaveTramiteId = null;
+      autosaveClienteCreado = false;
+      autosaveHash = null;
       if (!conservarBorrador) limpiarSnapshotWizard();
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
     }
@@ -5295,10 +5460,46 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       syncClienteDraftFromDOM();
       syncEquipoFromDOM();
       syncTramiteCamposFromDOM();
-      const ok = await customConfirm('El trámite queda guardado como borrador (con las fotos y todo lo cargado) y se retoma solo al volver a abrir la app. ¿Querés cerrarlo?', { titulo: 'Cerrar trámite', okLabel: 'Cerrar' });
-      if (!ok) return;
-      cerrarWizard(true);
-      render();
+      // "Actualizar datos" no crea trámite: acá cancelar es solo salir sin
+      // guardar los cambios del cliente (los guarda su propio botón).
+      if (modoSoloDatos) {
+        const ok = await customConfirm('¿Salir sin guardar los cambios? Para guardarlos, usá el botón "Guardar datos".', { titulo: 'Actualizar datos', danger: true, okLabel: 'Salir sin guardar' });
+        if (!ok) return;
+        cerrarWizard(false);
+        render();
+        return;
+      }
+      const puedeGuardar = clienteDraft
+        && (clienteDraft.nombre || '').trim()
+        && (clienteDraft.telefono || '').trim()
+        && (clienteDraft.patente || '').trim();
+      if (!puedeGuardar) {
+        // Sin los datos mínimos no hay nada para guardar: solo salir o seguir.
+        const salir = await customConfirm('Todavía no cargaste los datos mínimos (nombre, teléfono y patente), así que no hay nada para guardar. ¿Querés salir y descartar lo cargado?', { titulo: 'Cerrar trámite', danger: true, okLabel: 'Salir sin guardar' });
+        if (!salir) return;
+        await descartarBorradorAutoguardado();
+        cerrarWizard(false);
+        render();
+        return;
+      }
+      const eleccion = await mostrarModal({
+        titulo: 'Cerrar trámite',
+        mensaje: '¿Qué querés hacer con este trámite?',
+        botones: [
+          { label: 'Guardar y salir', value: 'guardar', variant: 'primary' },
+          { label: 'Salir sin guardar', value: 'descartar', variant: 'danger' },
+          { label: 'Seguir editando', value: 'seguir', variant: 'ghost' },
+        ],
+      });
+      if (eleccion === 'guardar') {
+        // Queda en Pendientes; guardarClienteYTramite cierra y redibuja solo.
+        await guardarClienteYTramite('pendiente');
+      } else if (eleccion === 'descartar') {
+        await descartarBorradorAutoguardado();
+        cerrarWizard(false);
+        render();
+      }
+      // 'seguir' (o cerrar el modal): no hacer nada, el asistente continúa.
     });
 
     const btnUsarDocGuardada = root.querySelector('#btn-usar-doc-guardada');
@@ -5464,9 +5665,10 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
     // --- Turnos ---
     const btnTurnos = root.querySelector('#btn-turnos');
     if (btnTurnos) btnTurnos.addEventListener('click', () => {
+      const abierto = showTurnos;
+      cerrarPanelesConsulta();
       menuOpen = false;
-      showHistorial = false; showPendientes = false; showBulkImport = false; showRespaldo = false;
-      showTurnos = !showTurnos;
+      showTurnos = !abierto;
       render();
     });
     const btnCloseTurnos = root.querySelector('#btn-close-turnos');
@@ -5922,6 +6124,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       if (!clienteDraft) return;
       syncClienteDraftFromDOM();
       syncEquipoFromDOM();
+      syncTramiteCamposFromDOM();
 
       const nombre = (clienteDraft.nombre || '').trim();
       if (!nombre) { await customAlert('Poné al menos el nombre del cliente.'); wizardStep = 1; render(); return; }
@@ -5992,12 +6195,15 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         uso: clienteDraft.uso,
       };
 
+      // Un trámite en curso puede haberse autoguardado ya como Pendiente
+      // (opción b): en ese caso reusamos ese mismo cliente y trámite en vez
+      // de crear duplicados.
+      const efectivoClienteId = editingId || autosaveClienteId;
       let clientId;
-      if (editingId) {
-        clientId = editingId;
-        const idx0 = clientes.findIndex(c => c.id === editingId);
-        if (idx0 === -1) return;
-        clientes[idx0] = { ...clientes[idx0], ...data };
+      const idxEf = efectivoClienteId ? clientes.findIndex(c => c.id === efectivoClienteId) : -1;
+      if (idxEf !== -1) {
+        clientId = efectivoClienteId;
+        clientes[idxEf] = { ...clientes[idxEf], ...data };
       } else {
         clientId = 'c' + Date.now() + Math.random().toString(36).slice(2, 7);
         clientes.push({ id: clientId, ...blankClienteBase(), ...data, tramites: [], ultimoAvisoMes: {}, notas: '' });
@@ -6027,15 +6233,18 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       }
 
       const idx = clientes.findIndex(c => c.id === clientId);
-      const estadoPec = estadoForzado || root.querySelector('#t-estado').value;
-      const detalle = root.querySelector('#t-detalle').value.trim();
-      const motivoIncompleto = estadoPec === 'incompleto' ? root.querySelector('#t-motivo').value.trim() : '';
-      const obleaAnterior = root.querySelector('#t-oblea-anterior').value.trim();
-      const obleaNueva = root.querySelector('#t-oblea-nueva').value.trim();
+      // El estado lo define la acción, no un selector: "Enviar al PEC" fuerza
+      // 'enviado'; guardar (o "Guardar y salir") lo deja en 'pendiente'.
+      const estadoPec = estadoForzado || 'pendiente';
+      const detalle = (tramiteDraftCampos.detalle || '').trim();
+      const motivoIncompleto = '';
+      const obleaAnterior = (tramiteDraftCampos.obleaAnterior || '').trim();
+      const obleaNueva = (tramiteDraftCampos.obleaNueva || '').trim();
 
+      const efectivoTramiteId = editingTramiteId || autosaveTramiteId;
       let savedTramiteId;
-      if (editingTramiteId) {
-        const tIdx = clientes[idx].tramites.findIndex(t => t.id === editingTramiteId);
+      if (efectivoTramiteId && clientes[idx].tramites.some(t => t.id === efectivoTramiteId)) {
+        const tIdx = clientes[idx].tramites.findIndex(t => t.id === efectivoTramiteId);
         if (tIdx !== -1) {
           const prev = clientes[idx].tramites[tIdx];
           clientes[idx].tramites[tIdx] = {
@@ -6204,11 +6413,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         const t = c.tramites.find(x => x.id === tramiteId);
         if (!t) return;
         t.estadoPec = sel.value;
-        if (t.estadoPec !== 'incompleto') t.motivoIncompleto = '';
-        else {
-          const motivo = prompt('¿Cuál es el motivo por el que quedó incompleto?', t.motivoIncompleto || '');
-          t.motivoIncompleto = motivo || '';
-        }
+        t.motivoIncompleto = '';
         await saveClientes();
         render();
       });
