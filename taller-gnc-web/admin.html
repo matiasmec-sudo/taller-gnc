@@ -40,6 +40,8 @@
   .estado { font-size:12px; font-weight:700; padding:3px 9px; border-radius:999px; }
   .estado.activo { background:#E3F6EC; color:var(--verde); }
   .estado.suspendido { background:#FDE8E5; color:var(--rojo); }
+  .estado.warn { background:#FCF1DC; color:#B36F00; }
+  .estado.prueba { background:#E7F0FF; color:var(--azul); }
   .acciones { display:flex; gap:6px; flex-wrap:wrap; }
   .muted { color:var(--suave); font-size:12px; }
   #tabla-msg { color:var(--rojo); font-size:13px; margin:10px 0; }
@@ -71,11 +73,11 @@
     <div id="tabla-msg"></div>
     <table>
       <thead><tr>
-        <th>Código</th><th>Taller</th><th>Estado</th><th>Últ. actividad</th><th>Lecturas 30d</th><th>Costo IA (mes)</th><th class="col-alta">Alta</th><th>Tope/día</th><th class="col-notas">Notas</th><th>Acciones</th>
+        <th>Código</th><th>Taller</th><th>Plan</th><th>Estado</th><th>Pago al día</th><th>Últ. actividad</th><th>Costo IA (mes)</th><th class="col-notas">Notas</th><th>Acciones</th>
       </tr></thead>
       <tbody id="filas"></tbody>
     </table>
-    <p class="muted" style="margin-top:14px;">Para <b>revocar</b> un taller usá <b>Suspender</b> (corta el acceso). <b>Eliminar</b> borra el registro. El tope diario acota el gasto si un código se filtra. <b>Últ. actividad</b> y <b>Lecturas</b> cuentan las lecturas de IA de los últimos 30 días (los talleres que trabajan aparecen arriba y resaltados) — sirve para identificar un código aunque no le hayas puesto el nombre. <b>Costo IA (mes)</b> es lo que te factura Anthropic por ese código en el mes en curso (en dólares); el total está arriba.</p>
+    <p class="muted" style="margin-top:14px;"><b>Pago al día:</b> cuando te transfieren, tocá <b>“+1 mes”</b> — se renueva un mes y queda al día; si la fecha vence (+5 días de gracia), la app <b>se corta sola</b>. La columna <b>Estado</b> avisa: Al día / Vence en Xd / Vencida / En prueba / Suspendida. <b>Suspender</b> revoca al instante. (Cuando conectemos Mercado Pago, el “+1 mes” lo hace solo el cobro.) <b>Últ. actividad</b> = lecturas de IA recientes (identifica un código aunque no tenga nombre). <b>Costo IA (mes)</b> = lo que te factura Anthropic por ese código; el total está arriba.</p>
   </div>
 </div>
 
@@ -115,33 +117,52 @@
     return 'US$' + n.toFixed(2).replace('.', ',');
   }
 
+  const GRACIA = 5;
+  const PLAN_LABELS = { basico: 'Básico', profesional: 'Profesional', full: 'Full' };
+  function diasHasta(iso) { return Math.round((new Date(iso + 'T00:00:00') - new Date(HOY + 'T00:00:00')) / 86400000); }
+  function estadoSub(l) {
+    if (l.estado !== 'activo') return { txt: 'Suspendida', cls: 'suspendido' };
+    if (l.prueba) {
+      if (l.pagoHasta) { const d = diasHasta(l.pagoHasta); return d >= 0 ? { txt: 'Prueba (' + d + 'd)', cls: 'prueba' } : { txt: 'Prueba vencida', cls: 'warn' }; }
+      return { txt: 'En prueba', cls: 'prueba' };
+    }
+    if (!l.pagoHasta) return { txt: 'Activa', cls: 'activo' };
+    const d = diasHasta(l.pagoHasta);
+    if (d < -GRACIA) return { txt: 'Vencida', cls: 'suspendido' };
+    if (d < 0) return { txt: 'Vencida (gracia)', cls: 'warn' };
+    if (d <= 7) return { txt: d === 0 ? 'Vence hoy' : 'Vence en ' + d + 'd', cls: 'warn' };
+    return { txt: 'Al día', cls: 'activo' };
+  }
+
   function render(data) {
     const licencias = data.licencias || [];
     const costoTotal = Number(data.costoTotalMes) || 0;
     const activos = licencias.filter(l => l.estado === 'activo').length;
     const activasHoy = licencias.filter(l => Number(l.usoHoy) > 0).length;
+    const porVencer = licencias.filter(l => { if (l.estado !== 'activo' || l.prueba || !l.pagoHasta) return false; const d = diasHasta(l.pagoHasta); return d <= 7 && d >= -GRACIA; }).length;
     // Los talleres con actividad más reciente arriba, para verlos de un vistazo.
     const orden = licencias.slice().sort((a, b) => (b.ultimoUso || '').localeCompare(a.ultimoUso || ''));
     $('#resumen').innerHTML =
       `<div class="card"><b>${licencias.length}</b><span>Licencias</span></div>
        <div class="card"><b>${activos}</b><span>Activas</span></div>
-       <div class="card"><b>${licencias.length - activos}</b><span>Suspendidas</span></div>
+       <div class="card"><b>${porVencer}</b><span>Por vencer</span></div>
        <div class="card"><b>${activasHoy}</b><span>Usaron hoy</span></div>
        <div class="card"><b>${fmtUSD(costoTotal)}</b><span>Costo IA (mes)</span></div>`;
     $('#filas').innerHTML = orden.map(l => {
       const reciente = l.ultimoUso && diasDesde(l.ultimoUso) <= 7;
+      const e = estadoSub(l);
       return `
-      <tr data-cod="${esc(l.codigo)}" data-taller="${esc(l.taller || '')}" data-tope="${esc(l.topeDia || 0)}" data-notas="${esc(l.notas || '')}"${reciente ? ' style="background:#F3F9F5;"' : ''}>
+      <tr data-cod="${esc(l.codigo)}" data-taller="${esc(l.taller || '')}" data-tope="${esc(l.topeDia || 0)}" data-notas="${esc(l.notas || '')}" data-plan="${esc(l.plan || '')}" data-medio="${esc(l.medioPago || '')}" data-pago="${esc(l.pagoHasta || '')}" data-email="${esc(l.email || '')}"${reciente ? ' style="background:#F3F9F5;"' : ''}>
         <td><span class="cod">${esc(l.codigo)}</span></td>
-        <td>${esc(l.taller) || '<span class="muted">— sin nombre —</span>'}</td>
-        <td><span class="estado ${l.estado === 'activo' ? 'activo' : 'suspendido'}">${l.estado === 'activo' ? 'Activa' : 'Suspendida'}</span></td>
+        <td>${esc(l.taller) || '<span class="muted">— sin nombre —</span>'}${l.email ? '<div class="muted" style="font-size:11px;">' + esc(l.email) + '</div>' : ''}</td>
+        <td>${PLAN_LABELS[l.plan] || '<span class="muted">—</span>'}${l.medioPago ? ' <span class="muted">(' + (l.medioPago === 'mp' ? 'MP' : 'transf.') + ')</span>' : ''}</td>
+        <td><span class="estado ${e.cls}">${e.txt}</span></td>
+        <td>${l.pagoHasta ? esc(l.pagoHasta) : '<span class="muted">—</span>'}</td>
         <td>${fmtAct(l.ultimoUso)}</td>
-        <td>${Number(l.usoTotal) > 0 ? esc(l.usoTotal) + (Number(l.usoHoy) > 0 ? ' <span class="muted">(hoy ' + esc(l.usoHoy) + ')</span>' : '') : '<span class="muted">0</span>'}</td>
         <td>${fmtUSD(l.costoMesUSD)}${Number(l.readsMes) > 0 ? ' <span class="muted">(' + esc(l.readsMes) + ')</span>' : ''}</td>
-        <td class="col-alta muted">${esc(l.alta || '')}</td>
-        <td>${Number(l.topeDia) > 0 ? esc(l.topeDia) : '<span class="muted">sin tope</span>'}</td>
         <td class="col-notas muted">${esc(l.notas) || ''}</td>
         <td><div class="acciones">
+          <button class="btn btn-ghost btn-sm" data-a="pago" title="Registrar pago: +1 mes">+1 mes</button>
           <button class="btn btn-ghost btn-sm" data-a="copiar">Copiar</button>
           <button class="btn btn-ghost btn-sm" data-a="editar">Editar</button>
           ${l.estado === 'activo'
@@ -149,7 +170,7 @@
             : '<button class="btn btn-ghost btn-sm" data-a="reactivar">Reactivar</button>'}
           <button class="btn btn-danger btn-sm" data-a="eliminar">Eliminar</button>
         </div></td>
-      </tr>`; }).join('') || '<tr><td colspan="10" class="muted" style="text-align:center;padding:24px;">No hay licencias todavía. Creá la primera con "+ Nueva licencia".</td></tr>';
+      </tr>`; }).join('') || '<tr><td colspan="9" class="muted" style="text-align:center;padding:24px;">No hay licencias todavía. Creá la primera con "+ Nueva licencia".</td></tr>';
   }
 
   async function cargar() {
@@ -188,13 +209,25 @@
   $('#btn-salir').addEventListener('click', () => mostrarLogin(''));
   $('#btn-refrescar').addEventListener('click', cargar);
 
+  function pedirPlan(actual) {
+    const p = prompt('Plan — escribí: basico / profesional / full (o vacío):', actual || '');
+    if (p === null) return null;
+    const v = p.trim().toLowerCase();
+    return ['', 'basico', 'profesional', 'full'].includes(v) ? v : (alert('Plan inválido, se deja sin plan.'), '');
+  }
+
   $('#btn-nueva').addEventListener('click', async () => {
     const taller = prompt('Nombre del taller (opcional, para tu referencia):', '');
     if (taller === null) return;
+    const email = prompt('Email del taller (opcional):', '');
+    if (email === null) return;
+    const plan = pedirPlan(''); if (plan === null) return;
+    const pago = prompt('Pago al día hasta (AAAA-MM-DD, vacío = sin control):', '');
+    if (pago === null) return;
     const topeStr = prompt('Tope de lecturas por día para este código:', '50');
     if (topeStr === null) return;
     try {
-      const data = await api('agregar', { taller: taller.trim(), topeDia: Number(topeStr) || 50 });
+      const data = await api('agregar', { taller: taller.trim(), email: email.trim(), plan, pagoHasta: pago.trim(), medioPago: 'transferencia', topeDia: Number(topeStr) || 50 });
       await cargar();
       prompt('Licencia creada. Copiá este código y entregáselo al taller:', data.codigo);
     } catch (e) { alert('No se pudo crear: ' + e.message); }
@@ -211,7 +244,11 @@
         catch (e) { prompt('Copiá el código:', cod); }
         return;
       }
-      if (a === 'suspender') {
+      if (a === 'pago') {
+        if (!confirm('Registrar un pago de ' + cod + '? Extiende "pago al día" un mes y la deja activa.')) return;
+        const r = await api('registrar-pago', { codigo: cod });
+        alert('Pago registrado. Ahora está al día hasta ' + (r.pagoHasta || '—') + '.');
+      } else if (a === 'suspender') {
         if (!confirm('Suspender ' + cod + '? El taller deja de poder usar la app hasta que lo reactives.')) return;
         await api('estado', { codigo: cod, estado: 'suspendido' });
       } else if (a === 'reactivar') {
@@ -223,11 +260,16 @@
         const fila = btn.closest('tr');
         const taller = prompt('Nombre del taller:', fila.getAttribute('data-taller') || '');
         if (taller === null) return;
+        const email = prompt('Email del taller:', fila.getAttribute('data-email') || '');
+        if (email === null) return;
+        const plan = pedirPlan(fila.getAttribute('data-plan') || ''); if (plan === null) return;
+        const pago = prompt('Pago al día hasta (AAAA-MM-DD, vacío = sin control):', fila.getAttribute('data-pago') || '');
+        if (pago === null) return;
         const tope = prompt('Tope de lecturas por día (0 = sin tope):', fila.getAttribute('data-tope') || '0');
         if (tope === null) return;
-        const notas = prompt('Notas (ej. pago al día hasta 10/08):', fila.getAttribute('data-notas') || '');
+        const notas = prompt('Notas:', fila.getAttribute('data-notas') || '');
         if (notas === null) return;
-        await api('editar', { codigo: cod, taller: taller.trim(), topeDia: Number(tope) || 0, notas: notas.trim() });
+        await api('editar', { codigo: cod, taller: taller.trim(), email: email.trim(), plan, pagoHasta: pago.trim(), topeDia: Number(tope) || 0, notas: notas.trim() });
       }
       await cargar();
     } catch (e) {

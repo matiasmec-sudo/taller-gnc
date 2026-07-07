@@ -70,13 +70,26 @@ export async function guardarLicencias(licencias) {
 //   TODOS los códigos del env la primera vez, así no se pierde ninguno.
 // - Si el store está vacío o no se puede leer (Blob caído): respaldo del env
 //   (LICENSE_CODES), para que los talleres existentes nunca queden afuera.
+// Días de gracia después de la fecha de "pago al día hasta" antes de cortar,
+// por si un cobro se atrasa un par de días o un webhook llega tarde.
+export const GRACIA_DIAS = 5;
+
 export async function licenciaValida(codigo) {
   const cod = (codigo || '').trim();
   if (!cod) return false;
   const lics = await leerLicencias();
   if (lics.length) {
     const l = lics.find(x => x.codigo === cod);
-    return !!(l && l.estado === 'activo');
+    if (!l || l.estado !== 'activo') return false;
+    // Corte automático por vencimiento: si tiene fecha de "pago al día hasta"
+    // y ya pasó (más la gracia), deja de valer aunque figure activa. Las
+    // licencias sin pagoHasta (ej. las viejas) no se ven afectadas.
+    if (l.pagoHasta) {
+      const limite = new Date(l.pagoHasta + 'T00:00:00');
+      limite.setDate(limite.getDate() + GRACIA_DIAS);
+      if (new Date() > limite) return false;
+    }
+    return true;
   }
   return codigosEnv().includes(cod);
 }
