@@ -6668,12 +6668,30 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         const valsSic = (parsed.equipo.valvulas && parsed.equipo.valvulas.length)
           ? parsed.equipo.valvulas
           : (parsed.equipo.valvula && (parsed.equipo.valvula.codigo || parsed.equipo.valvula.serie) ? [parsed.equipo.valvula] : []);
-        valsSic.forEach((val, i) => {
-          if (!(val.codigo || val.serie)) return;
-          if (!tramiteDraftEquipo.valvulas[i]) tramiteDraftEquipo.valvulas[i] = blankEquipo().valvulas[0];
-          Object.assign(tramiteDraftEquipo.valvulas[i], val);
-          aplicados.push(valsSic.length > 1 ? `Válvula ${i + 1}` : 'Válvula');
-        });
+        const tipoParaValv = tramiteDraftCampos && tramiteDraftCampos.tipo;
+        const valsReales = valsSic.filter(v => v.codigo || v.serie);
+        if (tipoParaValv === 'prueba_hidraulica') {
+          // En prueba hidráulica cada válvula del vehículo se reemplaza: la
+          // actual va de "Baja" y se agrega una nueva de "Montaje". Se
+          // reconstruye SIEMPRE desde el SIC (no desde la lista ya modificada),
+          // así al pegar de nuevo no se duplica ninguna válvula.
+          if (valsReales.length) {
+            const nuevas = [];
+            valsReales.forEach(v => {
+              nuevas.push({ codigo: v.codigo, serie: v.serie, msb: 'baja' });
+              nuevas.push({ codigo: '', serie: '', msb: 'montaje' });
+            });
+            tramiteDraftEquipo.valvulas = nuevas;
+            aplicados.push(valsReales.length > 1 ? 'Válvulas' : 'Válvula');
+          }
+        } else {
+          valsSic.forEach((val, i) => {
+            if (!(val.codigo || val.serie)) return;
+            if (!tramiteDraftEquipo.valvulas[i]) tramiteDraftEquipo.valvulas[i] = blankEquipo().valvulas[0];
+            Object.assign(tramiteDraftEquipo.valvulas[i], val);
+            aplicados.push(valsSic.length > 1 ? `Válvula ${i + 1}` : 'Válvula');
+          });
+        }
         // También se cachea en el cliente para que la próxima vez que se le
         // inicie un trámite, el equipo ya venga precargado sin pegar de nuevo.
         clienteDraft.ultimoEquipoConocido = {
@@ -6714,19 +6732,8 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
           // por defecto, también para el segundo cilindro traído del SIC.
           if (!c.msdb) c.msdb = 'sigue';
         });
-        // Válvulas en prueba hidráulica: CADA válvula del vehículo se
-        // reemplaza — la actual va de "Baja" y se agrega una nueva de
-        // "Montaje". La regla vale para todas: si el SIC trajo dos válvulas,
-        // quedan cuatro filas (baja + montaje por cada una).
-        const valvReales = (tramiteDraftEquipo.valvulas || []).filter(v => v.codigo || v.serie);
-        if (valvReales.length) {
-          const nuevas = [];
-          valvReales.forEach(v => {
-            nuevas.push({ codigo: v.codigo, serie: v.serie, msb: 'baja' });
-            nuevas.push({ codigo: '', serie: '', msb: 'montaje' });
-          });
-          tramiteDraftEquipo.valvulas = nuevas;
-        }
+        // (Las válvulas de la prueba hidráulica ya se arman arriba, al cargar
+        // las del SIC: baja + montaje por cada una, reconstruidas desde el SIC.)
       }
 
       // Aviso: entre la renovación de la oblea (hoy) y el vencimiento de la
