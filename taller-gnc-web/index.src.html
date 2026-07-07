@@ -817,6 +817,7 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 
   function boot() {
     aplicarTema();
+    cargarCodigosPostales(); // en segundo plano; completa el CPA por localidad
     if (!localStorage.getItem(LICENSE_KEY)) {
       showActivationScreen();
     } else {
@@ -1219,6 +1220,29 @@ Documentación para realizar la renovación:
   const CODIGOS_POSTALES = {
     'mar del plata': '7600',
   };
+  // Devuelve el CPA de una localidad, o '' si no la conocemos.
+  function cpaDeCiudad(ciudad) {
+    return CODIGOS_POSTALES[normalizarCiudad(ciudad)] || '';
+  }
+  // Suma al mapa las localidades de un objeto { provincia: { localidad: cp } }
+  // sin pisar las que ya estan (la zona del taller manda).
+  function mergeCodigosPostales(data) {
+    if (!data || typeof data !== 'object') return;
+    Object.keys(data).forEach(function (prov) {
+      const m = data[prov];
+      if (m && typeof m === 'object') Object.keys(m).forEach(function (loc) { if (!(loc in CODIGOS_POSTALES)) CODIGOS_POSTALES[loc] = m[loc]; });
+    });
+  }
+  const CP_CACHE_KEY = 'gnc_cp_localidades_v1';
+  // Carga la base de codigos postales: primero de la cache local (sirve sin
+  // internet) y despues la refresca desde el archivo, guardandola en la cache.
+  async function cargarCodigosPostales() {
+    try { const c = localStorage.getItem(CP_CACHE_KEY); if (c) mergeCodigosPostales(JSON.parse(c)); } catch (e) { /* cache invalida */ }
+    try {
+      const r = await fetch('cp-localidades.json', { cache: 'no-cache' });
+      if (r.ok) { const data = await r.json(); mergeCodigosPostales(data); try { localStorage.setItem(CP_CACHE_KEY, JSON.stringify(data)); } catch (e) {} }
+    } catch (e) { /* sin internet: queda lo que habia en la cache */ }
+  }
   function normalizarCiudad(s) {
     return (s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   }
@@ -4168,7 +4192,7 @@ Documentación para realizar la renovación:
       dni: (clienteDraft.dni || '').trim(),
       tipo_documento: clienteDraft.tipo_documento,
       domicilio: (clienteDraft.domicilio || '').trim(),
-      cpa: (clienteDraft.cpa || '').trim(),
+      cpa: (clienteDraft.cpa || '').trim() || cpaDeCiudad(clienteDraft.ciudad),
       provincia: (clienteDraft.provincia || '').trim(),
       ciudad: (clienteDraft.ciudad || '').trim(),
       marca: (clienteDraft.marca || '').trim(),
@@ -6990,7 +7014,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         dni: (clienteDraft.dni || '').trim(),
         tipo_documento: clienteDraft.tipo_documento,
         domicilio: (clienteDraft.domicilio || '').trim(),
-        cpa: (clienteDraft.cpa || '').trim(),
+        cpa: (clienteDraft.cpa || '').trim() || cpaDeCiudad(clienteDraft.ciudad),
         provincia: (clienteDraft.provincia || '').trim(),
         ciudad: (clienteDraft.ciudad || '').trim(),
         marca: (clienteDraft.marca || '').trim(),
