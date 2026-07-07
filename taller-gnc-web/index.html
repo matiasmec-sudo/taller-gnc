@@ -4281,7 +4281,10 @@ Documentación para realizar la renovación:
   // Comprime y redimensiona la foto en el navegador antes de guardarla,
   // para que no pese demasiado (las fotos de celular sin comprimir son
   // varios MB y no entran cómodas en el almacenamiento del navegador).
-  function compressImageFile(file, maxDim = 1280, quality = 0.72) {
+  // 1568 px es el máximo que aprovecha el modelo de visión; con 0.85 de
+  // calidad la letra chica (cédulas verdes viejas) se lee bastante mejor,
+  // y el peso del archivo sigue siendo razonable.
+  function compressImageFile(file, maxDim = 1568, quality = 0.85) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -4761,10 +4764,10 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          // Lectura de documentos nítidos (DNI/cédula): Haiku alcanza sobrado
-          // y cuesta ~4-5 veces menos que Sonnet. El cuaderno manuscrito, que
-          // es más difícil de leer, sigue usando Sonnet.
-          model: 'claude-haiku-4-5-20251001',
+          // Sonnet para leer documentos: las cédulas verdes viejas (letra
+          // chica y gastada) las lee mucho mejor que Haiku. El costo por
+          // lectura sigue siendo insignificante (~US$0,015).
+          model: 'claude-sonnet-4-6',
           max_tokens: 1000,
           messages: [{ role: 'user', content }],
           license: localStorage.getItem(LICENSE_KEY)
