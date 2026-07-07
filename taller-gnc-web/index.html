@@ -2493,30 +2493,64 @@ Documentación para realizar la renovación:
       return { codigo, serie };
     }
 
-    const regBloque = seccion(/datos\s*(?:del\s*)?regulador/i, /datos\s*(?:del\s*)?cilindro/i);
-    const cilBloque = seccion(/datos\s*(?:del\s*)?cilindro(?!.*v[aá]lvula)/i, /datos?\s*v[aá]lvula/i);
-    const valBloque = seccion(/datos?\s*v[aá]lvula/i, /informaci[oó]n\s*desplegada|declaraci[oó]n\s*jurada/i);
-
-    const regulador = codigoYSerie(regBloque);
-    const cilindro = codigoYSerie(cilBloque);
-    const valvula = codigoYSerie(valBloque);
-    const crpcMaterial = entre(cilBloque, /(?<!fecha\s)crpc/i, /fecha\s*crpc/i);
-    if (crpcMaterial) cilindro.crpc = crpcMaterial;
-
-    // En la tabla del SIC los encabezados ("Fecha Fab.", "Fecha CRPC") van
-    // en una fila y los valores en la siguiente, lejos uno del otro — así
-    // que en vez de buscar el valor pegado a la etiqueta, tomamos las
-    // fechas tipo mes/año en el orden en que aparecen: la primera es
-    // Fecha Fab. y la segunda, si existe, es Fecha CRPC.
-    const fechasNN = [...cilBloque.matchAll(/(\d{1,2})\s*\/\s*(\d{1,2})(?!\d)/g)];
-    function mesAnio(m) {
-      return { mes: m[1], anio: m[2].length <= 2 ? '20' + m[2].padStart(2, '0') : m[2] };
+    // Parsea UN bloque de cilindro (código, serie, CRPC y fechas Fab./CRPC).
+    function parseCilindro(bloque) {
+      const cil = codigoYSerie(bloque);
+      const crpcMaterial = entre(bloque, /(?<!fecha\s)crpc/i, /fecha\s*crpc/i);
+      if (crpcMaterial) cil.crpc = crpcMaterial;
+      // En la tabla del SIC los encabezados ("Fecha Fab.", "Fecha CRPC") van
+      // en una fila y los valores en la siguiente, lejos uno del otro — así
+      // que tomamos las fechas tipo mes/año en el orden en que aparecen: la
+      // primera es Fecha Fab. y la segunda, si existe, es Fecha CRPC.
+      const fechasNN = [...bloque.matchAll(/(\d{1,2})\s*\/\s*(\d{1,2})(?!\d)/g)];
+      const mesAnio = (m) => ({ mes: m[1], anio: m[2].length <= 2 ? '20' + m[2].padStart(2, '0') : m[2] });
+      if (fechasNN[0]) { const f = mesAnio(fechasNN[0]); cil.fabricadoMes = f.mes; cil.fabricadoAnio = f.anio; }
+      if (fechasNN[1]) { const f = mesAnio(fechasNN[1]); cil.revisadoMes = f.mes; cil.revisadoAnio = f.anio; }
+      return cil;
     }
-    if (fechasNN[0]) { const f = mesAnio(fechasNN[0]); cilindro.fabricadoMes = f.mes; cilindro.fabricadoAnio = f.anio; }
-    if (fechasNN[1]) { const f = mesAnio(fechasNN[1]); cilindro.revisadoMes = f.mes; cilindro.revisadoAnio = f.anio; }
 
-    const hayAlgo = [regulador, cilindro, valvula].some(e => e.codigo || e.serie);
-    return hayAlgo ? { regulador, cilindro, valvula } : null;
+    const regBloque = seccion(/datos\s*(?:del\s*)?regulador/i, /datos\s*(?:del\s*)?cilindro/i);
+    const regulador = codigoYSerie(regBloque);
+
+    // Fin de la zona de equipos: donde arranca la DDJJ / info desplegada.
+    const finM = text.match(/informaci[oó]n\s*desplegada|declaraci[oó]n\s*jurada/i);
+    const finEquipo = finM ? finM.index : text.length;
+
+    // El SIC repite el encabezado "Datos Cilindro" por CADA cilindro (o lo
+    // numera "Cilindro 1 / Cilindro 2"); ambos casos matchean el mismo
+    // patrón. Buscamos TODAS las apariciones y armamos un cilindro por cada
+    // una, con su válvula (que en el SIC viene inmediatamente después de su
+    // cilindro). Así se cargan uno o dos cilindros sin pedir nada aparte.
+    const cilRe = /datos\s*(?:del\s*)?cilindro/ig;
+    const cilPuntos = [];
+    let mc;
+    while ((mc = cilRe.exec(text)) && mc.index < finEquipo) {
+      cilPuntos.push({ inicio: mc.index, contenido: mc.index + mc[0].length });
+    }
+
+    const cilindros = [];
+    const valvulas = [];
+    cilPuntos.forEach((p, i) => {
+      const hasta = (i + 1 < cilPuntos.length) ? cilPuntos[i + 1].inicio : finEquipo;
+      const bloque = text.slice(p.contenido, hasta);
+      const valM = bloque.match(/datos?\s*v[aá]lvula/i);
+      const cilParte = valM ? bloque.slice(0, valM.index) : bloque;
+      const valParte = valM ? bloque.slice(valM.index + valM[0].length) : '';
+      const cil = parseCilindro(cilParte);
+      if (cil.codigo || cil.serie) cilindros.push(cil);
+      if (valParte) {
+        const val = codigoYSerie(valParte);
+        if (val.codigo || val.serie) valvulas.push(val);
+      }
+    });
+
+    // Compatibilidad: se mantienen los campos singulares (primer cilindro /
+    // primera válvula) además de los arrays con todos.
+    const cilindro = cilindros[0] || { codigo: '', serie: '' };
+    const valvula = valvulas[0] || { codigo: '', serie: '' };
+
+    const hayAlgo = [regulador, ...cilindros, ...valvulas].some(e => e && (e.codigo || e.serie));
+    return hayAlgo ? { regulador, cilindro, valvula, cilindros, valvulas } : null;
   }
 
   // Estado del permiso de lectura del portapapeles: 'granted' (activado),
@@ -6599,14 +6633,28 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
           Object.assign(tramiteDraftEquipo.regulador, parsed.equipo.regulador);
           aplicados.push('Regulador');
         }
-        if (parsed.equipo.cilindro.codigo || parsed.equipo.cilindro.serie) {
-          Object.assign(tramiteDraftEquipo.cilindros[0], parsed.equipo.cilindro);
-          aplicados.push('Cilindro');
-        }
-        if (parsed.equipo.valvula.codigo || parsed.equipo.valvula.serie) {
-          Object.assign(tramiteDraftEquipo.valvulas[0], parsed.equipo.valvula);
-          aplicados.push('Válvula');
-        }
+        // Cilindros: se cargan TODOS los que trae el SIC (uno o dos). Si el
+        // trámite tenía menos filas de cilindro que las que informa el SIC,
+        // se agregan las que falten.
+        const cilsSic = (parsed.equipo.cilindros && parsed.equipo.cilindros.length)
+          ? parsed.equipo.cilindros
+          : (parsed.equipo.cilindro && (parsed.equipo.cilindro.codigo || parsed.equipo.cilindro.serie) ? [parsed.equipo.cilindro] : []);
+        cilsSic.forEach((cil, i) => {
+          if (!(cil.codigo || cil.serie)) return;
+          if (!tramiteDraftEquipo.cilindros[i]) tramiteDraftEquipo.cilindros[i] = blankEquipo().cilindros[0];
+          Object.assign(tramiteDraftEquipo.cilindros[i], cil);
+          aplicados.push(cilsSic.length > 1 ? `Cilindro ${i + 1}` : 'Cilindro');
+        });
+        // Válvulas: idem, una por cada cilindro que trae el SIC.
+        const valsSic = (parsed.equipo.valvulas && parsed.equipo.valvulas.length)
+          ? parsed.equipo.valvulas
+          : (parsed.equipo.valvula && (parsed.equipo.valvula.codigo || parsed.equipo.valvula.serie) ? [parsed.equipo.valvula] : []);
+        valsSic.forEach((val, i) => {
+          if (!(val.codigo || val.serie)) return;
+          if (!tramiteDraftEquipo.valvulas[i]) tramiteDraftEquipo.valvulas[i] = blankEquipo().valvulas[0];
+          Object.assign(tramiteDraftEquipo.valvulas[i], val);
+          aplicados.push(valsSic.length > 1 ? `Válvula ${i + 1}` : 'Válvula');
+        });
         // También se cachea en el cliente para que la próxima vez que se le
         // inicie un trámite, el equipo ya venga precargado sin pegar de nuevo.
         clienteDraft.ultimoEquipoConocido = {
@@ -6628,6 +6676,9 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         (tramiteDraftEquipo.cilindros || []).forEach(c => {
           c.revisadoMes = mes; c.revisadoAnio = anio;
           if (crpcDefault) c.crpc = crpcDefault;
+          // En prueba hidráulica el cilindro no se cambia: "Sin Cambios" (SC)
+          // por defecto, también para el segundo cilindro traído del SIC.
+          if (!c.msdb) c.msdb = 'sigue';
         });
       }
 
