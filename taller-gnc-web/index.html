@@ -4761,7 +4761,10 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
+          // Lectura de documentos nítidos (DNI/cédula): Haiku alcanza sobrado
+          // y cuesta ~4-5 veces menos que Sonnet. El cuaderno manuscrito, que
+          // es más difícil de leer, sigue usando Sonnet.
+          model: 'claude-haiku-4-5-20251001',
           max_tokens: 1000,
           messages: [{ role: 'user', content }],
           license: localStorage.getItem(LICENSE_KEY)

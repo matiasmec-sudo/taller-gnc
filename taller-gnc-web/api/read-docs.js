@@ -1,7 +1,7 @@
 // Esta función corre en el servidor de Vercel, NO en el celular del usuario.
 // Por eso la clave de API (ANTHROPIC_API_KEY) queda oculta y segura:
 // nunca viaja al navegador ni queda visible en el código de la página.
-import { licenciaValida, chequearTope } from './_licencias.js';
+import { licenciaValida, chequearTope, registrarConsumo } from './_licencias.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -42,6 +42,11 @@ export default async function handler(req, res) {
     });
 
     const data = await response.json();
+    // Registrar el consumo real (tokens + costo) para el panel, antes de
+    // responder. Solo si la llamada fue exitosa y trae el detalle de tokens.
+    if (response.ok && data && data.usage) {
+      await registrarConsumo(license, anthropicBody.model, data.usage);
+    }
     res.status(response.status).json(data);
   } catch (e) {
     res.status(500).json({ error: e.message || 'Error llamando a la API' });
