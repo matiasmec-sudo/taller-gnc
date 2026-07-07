@@ -2838,7 +2838,17 @@ Documentación para realizar la renovación:
         <button type="button" class="btn btn-agent btn-sm" id="btn-vincular-tecnico">Vincular un técnico</button>
         ${tecnicosVinculados ? '<button type="button" class="btn btn-danger-outline btn-sm" id="btn-desvincular-tecnicos">Desvincular todos</button>' : ''}
       </div>
-      <div id="vinculo-codigo"></div>`;
+      <div id="vinculo-codigo"></div>
+      <div style="font-size:13px; font-weight:700; margin:16px 0 6px; color:var(--text);">Registro de autos revisados${t.tecnicoNombre ? ' — ' + escapeHtml(t.tecnicoNombre) : ''}</div>
+      ${(() => { const revs = revisionesDelTecnico(); return revs.length
+        ? `<div class="tramites-list">${revs.slice(0, 80).map(r => `
+            <div class="tramite-row">
+              <div class="tramite-row-info">
+                <div class="doc-label">${escapeHtml(r.patente)}${r.cliente ? ' · ' + escapeHtml(r.cliente) : ''}</div>
+                <div class="doc-sub">${fmtDate(r.fecha)} · ${estadoRevTexto(r.estado)}</div>
+              </div>
+            </div>`).join('')}</div>`
+        : '<p class="scan-sub">Todavía no hay autos revisados por el técnico.</p>'; })()}`;
     const secMensajes = `
       <div class="agent-hint" style="margin-top:0;">Editá el texto de los mensajes que se mandan a los clientes para ponerle la impronta de tu taller. Las palabras entre llaves como {nombre} o {patente} se reemplazan solas al enviar — dejalas tal cual donde quieras que aparezca ese dato.</div>
       ${Object.entries(MENSAJES_DEFAULT).map(([key, def]) => `
@@ -4475,6 +4485,22 @@ Documentación para realizar la renovación:
       return `<div class="rev-bitacora-item">${cuando ? `<span class="rev-bitacora-fecha">${cuando}</span> — ` : ''}${txt}</div>`;
     };
     return `<div class="rev-bitacora"><div class="rev-bitacora-tit">Revisión del técnico</div>${t.revisionLog.map(linea).join('')}</div>`;
+  }
+  // Registro de todos los autos que pasaron por el técnico (tienen bitácora),
+  // del más nuevo al más viejo — para el registro en "Mi taller".
+  function revisionesDelTecnico() {
+    const items = [];
+    clientes.forEach(c => (c.tramites || []).forEach(t => {
+      if (Array.isArray(t.revisionLog) && t.revisionLog.length) {
+        const ult = t.revisionLog[t.revisionLog.length - 1];
+        items.push({ patente: c.patente || 's/patente', cliente: c.nombre || '', fecha: t.fecha || '', estado: ult.estado, ts: ult.ts });
+      }
+    }));
+    items.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
+    return items;
+  }
+  function estadoRevTexto(e) {
+    return e === 'aprobada' ? '🟢 Aprobada' : e === 'observada' ? '🔴 Observada' : e === 'enviada' ? '⏳ Enviada, sin responder' : (e || '');
   }
   const TRAMITE_DRAFT_CAMPOS_IDS = {
     tipo: 't-tipo', fecha: 't-fecha', detalle: 't-detalle',
