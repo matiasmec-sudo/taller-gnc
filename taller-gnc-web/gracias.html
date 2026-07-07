@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estelita — ¡Bienvenido!</title>
+<link rel="icon" href="icon-192.png">
+<style>
+  :root { --azul:#1D5BD8; --azul-osc:#123C8F; --fondo:#F4F6FA; --surface:#fff; --linea:#E3E8F0; --tinta:#16233B; --suave:#5A6B85; --verde:#1E9E5A; --celeste:#EAF1FE; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif; background:var(--fondo); color:var(--tinta); }
+  .wrap { max-width:520px; margin:0 auto; padding:40px 18px; text-align:center; }
+  .marca { display:flex; align-items:center; gap:10px; justify-content:center; margin-bottom:18px; }
+  .marca img { width:38px; height:38px; border-radius:9px; }
+  .marca b { font-size:20px; letter-spacing:2.5px; color:var(--azul-osc); }
+  .card { background:var(--surface); border:1px solid var(--linea); border-radius:18px; padding:30px 24px; box-shadow:0 10px 30px rgba(18,60,143,.1); }
+  h1 { font-size:23px; margin:0 0 8px; }
+  p { color:var(--suave); font-size:15px; line-height:1.5; }
+  .codigo { font-size:34px; font-weight:800; letter-spacing:6px; color:var(--azul-osc); background:var(--celeste); border:2px dashed var(--azul); border-radius:14px; padding:16px; margin:18px 0; font-family:"Consolas",monospace; }
+  .btn { display:inline-block; margin-top:8px; padding:14px 26px; border-radius:12px; background:var(--azul); color:#fff; font-size:16px; font-weight:700; text-decoration:none; border:none; cursor:pointer; }
+  .btn:hover { background:var(--azul-osc); }
+  .spin { width:34px; height:34px; border:4px solid var(--celeste); border-top-color:var(--azul); border-radius:50%; animation:g 1s linear infinite; margin:14px auto; }
+  @keyframes g { to { transform:rotate(360deg); } }
+  .pasos { text-align:left; margin:18px auto 0; max-width:340px; color:var(--tinta); font-size:14.5px; }
+  .pasos li { margin-bottom:8px; }
+  .err { color:#C0281A; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="marca"><img src="icon-192.png" alt=""><b>ESTELITA</b></div>
+  <div class="card" id="card">
+    <h1>¡Estamos activando tu cuenta!</h1>
+    <div class="spin"></div>
+    <p>Esto tarda unos segundos. No cierres esta página.</p>
+  </div>
+</div>
+
+<script>
+  const token = new URLSearchParams(location.search).get('s') || '';
+  const card = document.getElementById('card');
+  let intentos = 0;
+
+  function mostrarCodigo(codigo) {
+    card.innerHTML = `
+      <h1>¡Listo! Tu cuenta está activa 🎉</h1>
+      <p>Este es tu <b>código de licencia</b>. Anotalo — también te lo mandamos por email.</p>
+      <div class="codigo">${codigo}</div>
+      <ol class="pasos">
+        <li>Abrí Estelita (botón de abajo).</li>
+        <li>Pegá este código cuando te lo pida.</li>
+        <li>¡Listo! Tenés 14 días gratis.</li>
+      </ol>
+      <a class="btn" href="https://taller-gnc.vercel.app" target="_blank" rel="noopener">Abrir Estelita</a>`;
+  }
+  function mostrarEspera() {
+    card.innerHTML = `
+      <h1>Tu suscripción se está confirmando</h1>
+      <p>Mercado Pago está terminando de confirmar el pago. Puede tardar un ratito.</p>
+      <p>Tu código va a aparecer acá y te lo mandamos por email. Si no aparece en unos minutos, escribinos por WhatsApp y te lo pasamos al toque.</p>
+      <a class="btn" href="/suscribite.html">Volver</a>`;
+  }
+
+  async function chequear() {
+    if (!token) { mostrarEspera(); return; }
+    try {
+      const r = await fetch('/api/mp', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ accion:'estado-signup', token }) });
+      const data = await r.json();
+      if (data && data.codigo) { mostrarCodigo(data.codigo); return; }
+    } catch (e) { /* reintenta */ }
+    intentos++;
+    if (intentos > 40) { mostrarEspera(); return; } // ~2 min
+    setTimeout(chequear, 3000);
+  }
+  chequear();
+</script>
+</body>
+</html>
