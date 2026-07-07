@@ -217,7 +217,11 @@
         </div>
         <span class="badge ${r.estado}">${r.estado === 'pendiente' ? 'Pendiente' : r.estado === 'aprobada' ? 'Aprobada' : 'Con observaciones'}</span>
       </div>
-      ${r.estado === 'pendiente' ? `<button class="btn btn-azul btn-block" data-abrir="${esc(r.id)}">Revisar</button>` : (r.observaciones ? `<div class="msj err" style="margin-top:8px;">${esc(r.observaciones)}</div>` : '')}
+      ${r.estado === 'pendiente'
+        ? `<button class="btn btn-azul btn-block" data-abrir="${esc(r.id)}">Revisar</button>`
+        : r.estado === 'observada'
+          ? `${r.observaciones ? `<div class="msj err" style="margin-top:8px;">${esc(r.observaciones)}</div>` : ''}<button class="btn btn-verde btn-block" data-abrir="${esc(r.id)}">Ya se resolvió — revisar de nuevo</button>`
+          : ''}
     </div>`;
   }
 

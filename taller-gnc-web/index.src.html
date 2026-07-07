@@ -556,6 +556,12 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
   display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
 }
 #gnc-app .tramite-row select { font-size: 11px; padding: 5px 7px; }
+#gnc-app .tramite-row-info { flex: 1; min-width: 150px; }
+#gnc-app .tramite-row-acciones { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+#gnc-app .rev-estado { font-size: 12px; margin-top: 3px; font-weight: 600; }
+#gnc-app .rev-estado.pend { color: var(--warn); }
+#gnc-app .rev-estado.obs { color: var(--danger); }
+#gnc-app .rev-estado.ok { color: var(--ok); }
 #gnc-app .tramite-motivo { font-family: var(--mono); font-size: 11px; color: var(--danger); margin-top: 2px; width: 100%; }
 
 /* FIRMA ELECTRONICA */
@@ -1592,16 +1598,29 @@ Documentación para realizar la renovación:
       <h2 style="margin-top:0;">⚠ ${items.length} trámite(s) sin enviar</h2>
       ${notifPermiso === 'default' ? '<div class="agent-hint"><button type="button" class="btn btn-ghost btn-sm" id="btn-activar-avisos">Activar aviso diario (lun. a sáb. 15hs)</button></div>' : notifPermiso === 'denied' ? '<div class="agent-hint">Los avisos están bloqueados en el navegador — para activarlos, habilitá las notificaciones para este sitio desde la configuración del navegador.</div>' : notifPermiso === 'granted' ? '<div class="agent-hint">✓ Aviso diario activado (lun. a sáb. 15hs, mientras tengas la app abierta).</div>' : ''}
       ${items.length ? `<div class="tramites-list">
-        ${items.map(({ cliente, tramite }) => `
-          <div class="tramite-row">
-            <div>
+        ${items.map(({ cliente, tramite }) => {
+          const rev = tramite.revisionId ? tramite.revisionEstado : null;
+          const revHtml = rev === 'pendiente'
+            ? '<div class="rev-estado pend">🟠 Esperando la revisión del técnico</div>'
+            : rev === 'observada'
+              ? `<div class="rev-estado obs">🔴 El técnico observó: ${escapeHtml(tramite.revisionObs || 'sin detalle')}</div>`
+              : rev === 'aprobada'
+                ? '<div class="rev-estado ok">🟢 Aprobado por el técnico — listo para enviar</div>'
+                : '';
+          return `<div class="tramite-row">
+            <div class="tramite-row-info">
               <div class="doc-label">${escapeHtml(cliente.nombre)} · ${escapeHtml(cliente.patente || 's/d')}</div>
               <div class="doc-sub">${tramiteTipoLabel(tramite.tipo)} · ${fmtDate(tramite.fecha)}</div>
+              ${revHtml}
             </div>
-            <span class="badge badge-warn">${ESTADO_PEC_LABELS[tramite.estadoPec]}</span>
-            <button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${cliente.id}" data-editar-tramite-id="${tramite.id}">Editar</button>
-            <button type="button" class="btn btn-trash btn-sm" data-borrar-tramite-cliente="${cliente.id}" data-borrar-tramite-id="${tramite.id}" title="Eliminar trámite" aria-label="Eliminar trámite">${trashSvg()}</button>
-          </div>`).join('')}
+            <div class="tramite-row-acciones">
+              <button type="button" class="btn btn-agent btn-sm" data-pec-cliente="${cliente.id}" data-pec-id="${tramite.id}">Enviar al PEC</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-imprimir-cliente="${cliente.id}" data-imprimir-id="${tramite.id}">Imprimir</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${cliente.id}" data-editar-tramite-id="${tramite.id}">Editar</button>
+              <button type="button" class="btn btn-trash btn-sm" data-borrar-tramite-cliente="${cliente.id}" data-borrar-tramite-id="${tramite.id}" title="Eliminar trámite" aria-label="Eliminar trámite">${trashSvg()}</button>
+            </div>
+          </div>`;
+        }).join('')}
       </div>` : `<div class="empty">${emptyIconSvg()}No hay trámites pendientes.</div>`}
     </div>`;
   }
@@ -4906,6 +4925,32 @@ Documentación para realizar la renovación:
     } catch (e) { /* sin conexión: se reintenta */ }
   }, 20000);
 
+  // Los trámites que quedaron en Pendientes esperando al técnico también
+  // "escuchan": cuando el panel está abierto, se consulta el estado de cada
+  // revisión no aprobada y, si el técnico respondió (o resolvió una
+  // observación), se refleja solo en el cuadrante.
+  let chequeandoRevPend = false;
+  async function revisarEstadoTecnicoPendientes() {
+    if (chequeandoRevPend || !ready) return;
+    const items = pendientesItems().filter(({ tramite }) => tramite.revisionId && tramite.revisionEstado && tramite.revisionEstado !== 'aprobada');
+    if (!items.length) return;
+    chequeandoRevPend = true;
+    let cambio = false;
+    for (const { tramite } of items) {
+      try {
+        const r = await apiTecnicoTaller({ accion: 'revision-estado', id: tramite.revisionId });
+        if (r.revision && r.revision.estado && r.revision.estado !== tramite.revisionEstado) {
+          tramite.revisionEstado = r.revision.estado;
+          tramite.revisionObs = r.revision.observaciones || '';
+          cambio = true;
+        }
+      } catch (e) { /* sin conexión: se reintenta */ }
+    }
+    chequeandoRevPend = false;
+    if (cambio) { await saveClientes(); render(); }
+  }
+  setInterval(() => { if (showPendientes) revisarEstadoTecnicoPendientes(); }, 20000);
+
   // Fotos de documentación guardadas de un cliente (clave fotos:<id>).
   // Devuelve siempre un objeto { foto1, foto2 } (con null si no hay).
   async function fotosGuardadas(clienteId) {
@@ -5357,6 +5402,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
           else if (destino === 'hoy') showHoy = true;
         }
         render();
+        if (showPendientes) revisarEstadoTecnicoPendientes();
         if (showTallerConfig) consultarTecnicosVinculados().then(() => {
           if (!showTallerConfig) return;
           syncTallerConfigFromDOM();
@@ -5906,6 +5952,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       menuOpen = false;
       showPendientes = !abierto;
       render();
+      if (showPendientes) revisarEstadoTecnicoPendientes();
     });
 
     const btnClosePendientes = root.querySelector('#btn-close-pendientes');
@@ -6012,6 +6059,37 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     });
     root.querySelectorAll('[data-comprobante-cliente]').forEach(btn => {
       btn.addEventListener('click', () => abrirPdfTramite(btn.getAttribute('data-comprobante-cliente'), btn.getAttribute('data-comprobante-id'), 'comprobante'));
+    });
+
+    // Imprimir y Enviar al PEC directo desde Pendientes, sin entrar a editar.
+    root.querySelectorAll('[data-imprimir-cliente]').forEach(btn => {
+      btn.addEventListener('click', () => abrirPdfTramite(btn.getAttribute('data-imprimir-cliente'), btn.getAttribute('data-imprimir-id'), 'ficha'));
+    });
+    root.querySelectorAll('[data-pec-cliente]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const c = clientes.find(x => x.id === btn.getAttribute('data-pec-cliente'));
+        const t = c && (c.tramites || []).find(x => x.id === btn.getAttribute('data-pec-id'));
+        if (!c || !t) return;
+        if (!t.firma) { await customAlert('Este trámite no tiene la firma del propietario. Tocá "Editar" para agregarla antes de enviarlo al PEC.'); return; }
+        // Si el técnico observó un problema y no se resolvió, pedir confirmación.
+        if (t.revisionId && t.revisionEstado === 'observada') {
+          const ok = await customConfirm(`El técnico informó un problema: ${t.revisionObs || 'sin detalle'}. ¿Enviar al PEC igual?`, { titulo: 'Revisión del técnico', danger: true, okLabel: 'Enviar igual' });
+          if (!ok) return;
+        }
+        try {
+          btn.disabled = true;
+          t.estadoPec = 'enviado';
+          await saveClientes();
+          const blob = await generarPecPdfSoloDatos(c, t, { conFotos: true });
+          const filename = `PEC_${(c.patente || c.nombre || 'tramite').replace(/\s+/g, '_')}_${t.fecha || ''}.pdf`;
+          const fotosIncluidas = clientesConFotos.has(c.id) ? 1 : 0;
+          await compartirPecPdf(blob, filename, c, fotosIncluidas, pecDeTramite(t));
+          render();
+        } catch (e) {
+          console.error(e);
+          await customAlert('Se marcó como enviado, pero no se pudo generar el PDF: ' + (e.message || e));
+        } finally { btn.disabled = false; }
+      });
     });
 
     // Eliminar un trámite (desde el historial, la tarjeta del cliente o
