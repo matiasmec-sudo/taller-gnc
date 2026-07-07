@@ -103,6 +103,12 @@ window.storage = {
   box-shadow: 0 8px 24px rgba(20,40,90,0.18);
 }
 #gnc-app .menu-dropdown .btn { width: 100%; text-align: left; justify-content: flex-start; color: var(--text); border-color: transparent; }
+#gnc-app .menu-group-label {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+  color: var(--text-muted); padding: 8px 10px 3px;
+}
+#gnc-app .menu-sep { height: 1px; background: var(--line); margin: 6px 6px 2px; }
+#gnc-app .menu-ico { width: 17px; height: 17px; color: var(--text-muted); flex-shrink: 0; }
 #gnc-app .menu-badge {
   position: absolute; top: -6px; right: -6px; background: var(--danger); color: #fff;
   border-radius: 999px; font-size: 10px; line-height: 1; padding: 3px 5px; font-weight: 700;
@@ -2208,6 +2214,25 @@ Documentación para realizar la renovación:
       <path d="M15 20V15a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v5" stroke="#1D5BD8" stroke-width="2"/>
       <path d="M20 28h8" stroke="#6B7688" stroke-width="2" stroke-linecap="round"/>
     </svg>`;
+  }
+
+  // Íconos de línea (estilo Lucide) para el menú lateral. Todos con el mismo
+  // trazo y color gris (via la clase .menu-ico). Se devuelven como SVG inline.
+  const MENU_ICONS = {
+    clipboard: '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>',
+    calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+    history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+    chart: '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
+    upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/>',
+    cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+    settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/>',
+    moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.93 4.93l1.41 1.41"/><path d="M17.66 17.66l1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M6.34 17.66l-1.41 1.41"/><path d="M19.07 4.93l-1.41 1.41"/>',
+    smartphone: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>',
+  };
+  function menuIco(name) {
+    return `<svg class="menu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MENU_ICONS[name] || ''}</svg>`;
   }
 
   // Escapa un valor para CSV: neutraliza caracteres que Excel/Sheets podría
@@ -5126,16 +5151,21 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
             <div class="menu-wrap">
               <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-menu" style="position:relative;">☰${(pendCount + turnosAvisoCount) ? `<span class="menu-badge">${pendCount + turnosAvisoCount}</span>` : ''}</button>
               ${menuOpen ? `<div class="menu-dropdown">
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-pendientes">Trámites pendientes${pendCount ? ` <span class="menu-badge-inline">${pendCount}</span>` : ''}</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-turnos">Turnos${turnosAvisoCount ? ` <span class="menu-badge-inline">${turnosAvisoCount}</span>` : ''}</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-historial">Historial de trámites</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-estadisticas">📊 Estadísticas</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-import">+ Importar clientes (Excel / cuaderno)</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-export-csv">Exportar CSV</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-respaldo">Copia de seguridad en la nube</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-taller-config">⚙️ Configuración del taller</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-tema">${temaOscuroActivo() ? '☀️ Modo claro' : '🌙 Modo oscuro'}</button>
-                ${showInstallButton ? `<button type="button" class="btn btn-ghost btn-sm" id="btn-install-app">📲 Instalar app</button>` : ''}
+                <div class="menu-group-label">Gestión diaria</div>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-pendientes">${menuIco('clipboard')}Trámites pendientes${pendCount ? ` <span class="menu-badge-inline">${pendCount}</span>` : ''}</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-turnos">${menuIco('calendar')}Turnos${turnosAvisoCount ? ` <span class="menu-badge-inline">${turnosAvisoCount}</span>` : ''}</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-historial">${menuIco('history')}Historial de trámites</button>
+                <div class="menu-sep"></div>
+                <div class="menu-group-label">Datos</div>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-estadisticas">${menuIco('chart')}Estadísticas</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-import">${menuIco('download')}Importar clientes (Excel / cuaderno)</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-export-csv">${menuIco('upload')}Exportar CSV</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-respaldo">${menuIco('cloud')}Copia de seguridad en la nube</button>
+                <div class="menu-sep"></div>
+                <div class="menu-group-label">Ajustes</div>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-taller-config">${menuIco('settings')}Configuración del taller</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-tema">${temaOscuroActivo() ? menuIco('sun') + 'Modo claro' : menuIco('moon') + 'Modo oscuro'}</button>
+                ${showInstallButton ? `<button type="button" class="btn btn-ghost btn-sm" id="btn-install-app">${menuIco('smartphone')}Instalar app</button>` : ''}
               </div>` : ''}
             </div>
             <span class="tag">ESTELITA</span>
