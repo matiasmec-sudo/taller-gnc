@@ -12,6 +12,16 @@ import { put } from '@vercel/blob';
 
 const STORE_PATH = 'sistema/licencias.json';
 const USO_PREFIX = 'sistema/uso-';
+const CONSUMO_PREFIX = 'sistema/consumo-';
+
+// Precios de la IA en US$ por millón de tokens (entrada/salida). Aproximados
+// — actualizá acá si Anthropic cambia las tarifas. Sirven para estimar el
+// costo real de cada lectura en el panel.
+const PRECIOS_IA = {
+  'claude-sonnet-4-6': { in: 3, out: 15 },
+  'claude-haiku-4-5-20251001': { in: 1, out: 5 },
+};
+const PRECIO_DEFECTO = { in: 3, out: 15 };
 
 function blobBaseUrl() {
   const partes = (process.env.BLOB_READ_WRITE_TOKEN || '').split('_');
@@ -95,6 +105,38 @@ export async function leerActividad(dias = 30) {
     }
   }));
   return out;
+}
+
+// Registra el consumo real de IA de una lectura (tokens + costo estimado en
+// US$) por código, acumulado por mes (sistema/consumo-YYYY-MM.json). Se llama
+// DESPUÉS de la respuesta de Anthropic (que trae el detalle de tokens).
+// Best-effort: nunca tira error para no afectar la respuesta de la lectura.
+export async function registrarConsumo(codigo, model, usage) {
+  try {
+    const cod = (codigo || '').trim();
+    if (!cod || !usage) return;
+    const inTok = Number(usage.input_tokens) || 0;
+    const outTok = Number(usage.output_tokens) || 0;
+    const p = PRECIOS_IA[model] || PRECIO_DEFECTO;
+    const costo = (inTok / 1e6) * p.in + (outTok / 1e6) * p.out;
+    const mes = new Date().toISOString().slice(0, 7);
+    const path = `${CONSUMO_PREFIX}${mes}.json`;
+    let data = {};
+    try { data = (await leerJsonBlob(path)) || {}; } catch (e) { data = {}; }
+    const c = data[cod] || (data[cod] = { reads: 0, inTok: 0, outTok: 0, costoUSD: 0 });
+    c.reads += 1; c.inTok += inTok; c.outTok += outTok; c.costoUSD += costo;
+    await escribirJsonBlob(path, data);
+  } catch (e) { /* best-effort */ }
+}
+
+// Consumo del mes indicado (por defecto el actual): { codigo: {reads, costoUSD, ...} }.
+export async function leerConsumoMes(mes) {
+  try {
+    const m = mes || new Date().toISOString().slice(0, 7);
+    return (await leerJsonBlob(`${CONSUMO_PREFIX}${m}.json`)) || {};
+  } catch (e) {
+    return {};
+  }
 }
 
 // Tope diario de lecturas por código (anti-abuso de un código filtrado).

@@ -71,11 +71,11 @@
     <div id="tabla-msg"></div>
     <table>
       <thead><tr>
-        <th>Código</th><th>Taller</th><th>Estado</th><th>Últ. actividad</th><th>Lecturas 30d</th><th class="col-alta">Alta</th><th>Tope/día</th><th class="col-notas">Notas</th><th>Acciones</th>
+        <th>Código</th><th>Taller</th><th>Estado</th><th>Últ. actividad</th><th>Lecturas 30d</th><th>Costo IA (mes)</th><th class="col-alta">Alta</th><th>Tope/día</th><th class="col-notas">Notas</th><th>Acciones</th>
       </tr></thead>
       <tbody id="filas"></tbody>
     </table>
-    <p class="muted" style="margin-top:14px;">Para <b>revocar</b> un taller usá <b>Suspender</b> (corta el acceso). <b>Eliminar</b> borra el registro. El tope diario acota el gasto si un código se filtra. <b>Últ. actividad</b> y <b>Lecturas</b> cuentan las lecturas de IA de los últimos 30 días (los talleres que trabajan aparecen arriba y resaltados) — sirve para identificar un código aunque no le hayas puesto el nombre.</p>
+    <p class="muted" style="margin-top:14px;">Para <b>revocar</b> un taller usá <b>Suspender</b> (corta el acceso). <b>Eliminar</b> borra el registro. El tope diario acota el gasto si un código se filtra. <b>Últ. actividad</b> y <b>Lecturas</b> cuentan las lecturas de IA de los últimos 30 días (los talleres que trabajan aparecen arriba y resaltados) — sirve para identificar un código aunque no le hayas puesto el nombre. <b>Costo IA (mes)</b> es lo que te factura Anthropic por ese código en el mes en curso (en dólares); el total está arriba.</p>
   </div>
 </div>
 
@@ -108,7 +108,16 @@
     return esc(iso);
   }
 
-  function render(licencias) {
+  function fmtUSD(n) {
+    n = Number(n) || 0;
+    if (n === 0) return '<span class="muted">US$0</span>';
+    if (n < 0.01) return 'US$&lt;0,01';
+    return 'US$' + n.toFixed(2).replace('.', ',');
+  }
+
+  function render(data) {
+    const licencias = data.licencias || [];
+    const costoTotal = Number(data.costoTotalMes) || 0;
     const activos = licencias.filter(l => l.estado === 'activo').length;
     const activasHoy = licencias.filter(l => Number(l.usoHoy) > 0).length;
     // Los talleres con actividad más reciente arriba, para verlos de un vistazo.
@@ -117,7 +126,8 @@
       `<div class="card"><b>${licencias.length}</b><span>Licencias</span></div>
        <div class="card"><b>${activos}</b><span>Activas</span></div>
        <div class="card"><b>${licencias.length - activos}</b><span>Suspendidas</span></div>
-       <div class="card"><b>${activasHoy}</b><span>Usaron hoy</span></div>`;
+       <div class="card"><b>${activasHoy}</b><span>Usaron hoy</span></div>
+       <div class="card"><b>${fmtUSD(costoTotal)}</b><span>Costo IA (mes)</span></div>`;
     $('#filas').innerHTML = orden.map(l => {
       const reciente = l.ultimoUso && diasDesde(l.ultimoUso) <= 7;
       return `
@@ -127,6 +137,7 @@
         <td><span class="estado ${l.estado === 'activo' ? 'activo' : 'suspendido'}">${l.estado === 'activo' ? 'Activa' : 'Suspendida'}</span></td>
         <td>${fmtAct(l.ultimoUso)}</td>
         <td>${Number(l.usoTotal) > 0 ? esc(l.usoTotal) + (Number(l.usoHoy) > 0 ? ' <span class="muted">(hoy ' + esc(l.usoHoy) + ')</span>' : '') : '<span class="muted">0</span>'}</td>
+        <td>${fmtUSD(l.costoMesUSD)}${Number(l.readsMes) > 0 ? ' <span class="muted">(' + esc(l.readsMes) + ')</span>' : ''}</td>
         <td class="col-alta muted">${esc(l.alta || '')}</td>
         <td>${Number(l.topeDia) > 0 ? esc(l.topeDia) : '<span class="muted">sin tope</span>'}</td>
         <td class="col-notas muted">${esc(l.notas) || ''}</td>
@@ -138,14 +149,14 @@
             : '<button class="btn btn-ghost btn-sm" data-a="reactivar">Reactivar</button>'}
           <button class="btn btn-danger btn-sm" data-a="eliminar">Eliminar</button>
         </div></td>
-      </tr>`; }).join('') || '<tr><td colspan="9" class="muted" style="text-align:center;padding:24px;">No hay licencias todavía. Creá la primera con "+ Nueva licencia".</td></tr>';
+      </tr>`; }).join('') || '<tr><td colspan="10" class="muted" style="text-align:center;padding:24px;">No hay licencias todavía. Creá la primera con "+ Nueva licencia".</td></tr>';
   }
 
   async function cargar() {
     $('#tabla-msg').textContent = '';
     try {
       const data = await api('listar');
-      render(data.licencias || []);
+      render(data);
     } catch (e) {
       if (e.message === '401') return mostrarLogin('La sesión expiró o la contraseña cambió.');
       $('#tabla-msg').textContent = 'No se pudo cargar: ' + e.message;
