@@ -7,12 +7,18 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener('push', (e) => {
   let data = {};
   try { data = e.data ? e.data.json() : {}; } catch (err) { /* texto plano */ }
-  e.waitUntil(self.registration.showNotification(data.title || 'Estelita Técnico', {
-    body: data.body || 'Tenés una revisión pendiente.',
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
-    tag: 'estelita-revision',
-  }));
+  e.waitUntil(Promise.all([
+    self.registration.showNotification(data.title || 'Estelita Técnico', {
+      body: data.body || 'Tenés una revisión pendiente.',
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag: 'estelita-revision',
+    }),
+    // Si la app está abierta, avisarle para que se actualice al instante.
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+      cs.forEach(c => { try { c.postMessage({ type: 'revision-nueva' }); } catch (err) { /* ok */ } });
+    }),
+  ]));
 });
 
 self.addEventListener('notificationclick', (e) => {

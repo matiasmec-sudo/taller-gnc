@@ -189,16 +189,17 @@
     </div>`;
   }
   function pintarLista() {
-    const pendientes = revisiones.filter(r => r.estado === 'pendiente');
-    const resueltas = revisiones.filter(r => r.estado !== 'pendiente').slice(0, 5);
+    // Solo quedan a la vista los trámites que hay que revisar: los pendientes
+    // y los observados (que esperan que se resuelva el problema). Los aprobados
+    // salen solos, y al enviarse al PEC el taller los cierra y desaparecen.
+    const activas = revisiones.filter(r => r.estado === 'pendiente' || r.estado === 'observada');
     app.innerHTML = `
       ${tarjetaAgenda()}
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-        <div style="font-size:13px; color:var(--suave);">${pendientes.length ? pendientes.length + ' revisión(es) pendiente(s)' : 'Sin revisiones pendientes'}</div>
+        <div style="font-size:13px; color:var(--suave);">${activas.length ? activas.length + ' trámite(s) para revisar' : 'Sin trámites para revisar'}</div>
         <button class="refrescar" id="btn-refrescar">Actualizar</button>
       </div>
-      ${pendientes.length ? pendientes.map(tarjeta).join('') : '<div class="card"><div class="vacio">Cuando el taller te envíe una revisión, va a aparecer acá (y te va a llegar una notificación).</div></div>'}
-      ${resueltas.length ? `<div class="titulo-seccion">Últimas resueltas</div>${resueltas.map(tarjeta).join('')}` : ''}
+      ${activas.length ? activas.map(tarjeta).join('') : '<div class="card"><div class="vacio">Cuando el taller te envíe un trámite para revisar, va a aparecer acá (y te va a llegar una notificación).</div></div>'}
     `;
     document.getElementById('btn-refrescar').addEventListener('click', cargarPendientes);
     app.querySelectorAll('[data-abrir]').forEach(b => b.addEventListener('click', () => {
@@ -335,9 +336,16 @@
       navigator.serviceWorker.register('/sw-tecnico.js', { scope: '/tecnico.html' }).catch(() => {});
     }
   }
-  // Refresco automático cada 30 segundos con la app abierta.
-  setInterval(() => { if (localStorage.getItem(TOKEN_KEY) && !abierta) cargarPendientes(); }, 30000);
+  // Refresco automático cada 8 segundos con la app abierta.
+  setInterval(() => { if (localStorage.getItem(TOKEN_KEY) && !abierta) cargarPendientes(); }, 8000);
   window.addEventListener('focus', () => { if (localStorage.getItem(TOKEN_KEY) && !abierta) cargarPendientes(); });
+  // Cuando llega una notificación push, el service worker avisa a la app
+  // abierta para que se actualice al instante (sin esperar los 8 segundos).
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      if (e.data && e.data.type === 'revision-nueva' && localStorage.getItem(TOKEN_KEY) && !abierta) cargarPendientes();
+    });
+  }
 })();
 </script>
 </body>
