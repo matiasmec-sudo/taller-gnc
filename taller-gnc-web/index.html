@@ -123,6 +123,18 @@ window.storage = {
   display: inline-flex; align-items: center; gap: 4px;
 }
 #gnc-app .btn-volver:hover { text-decoration: underline; }
+/* Configuración por ítems (acordeón): se abre una sección a la vez */
+#gnc-app .config-item { border: 1px solid var(--line); border-radius: 12px; margin-bottom: 8px; overflow: hidden; background: var(--surface); }
+#gnc-app .config-item.abierta { border-color: var(--flame-dim); }
+#gnc-app .config-item-head {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  background: transparent; border: none; cursor: pointer; text-align: left;
+  padding: 14px; font-family: var(--sans); font-weight: 700; font-size: 15px; color: var(--text);
+}
+#gnc-app .config-item.abierta .config-item-head { border-bottom: 1px solid var(--line); }
+#gnc-app .config-item-head:hover { background: var(--surface-alt); }
+#gnc-app .config-item-caret { color: var(--flame); font-size: 13px; margin-left: 10px; }
+#gnc-app .config-item-body { padding: 12px 14px 16px; }
 /* Botones y links dentro del banner azul, en blanco */
 #gnc-app .topbar .btn-ghost { color: rgba(255,255,255,0.9); border-color: rgba(255,255,255,0.4); }
 #gnc-app .topbar .btn-ghost:hover { color: #fff; border-color: #fff; background: rgba(255,255,255,0.12); }
@@ -628,6 +640,8 @@ window.storage = {
   let tallerNombre = 'Mi Taller GNC';
   let tallerConfig = { ...TALLER_CONFIG_DEFAULT };
   let showTallerConfig = false;
+  // Sección de la configuración abierta (acordeón): null = todas cerradas.
+  let tallerConfigSeccion = null;
   // Id del cliente para el que está abierto el asistente "Inicio de trámite"
   // (null = todavía no se abrió ninguno, o se está dando de alta uno nuevo
   // vía showForm).
@@ -2318,16 +2332,22 @@ Documentación para realizar la renovación:
     </div>`;
   }
 
+  // Tarjeta plegable del acordeón de configuración: solo muestra el cuerpo si
+  // esta sección es la abierta (tallerConfigSeccion).
+  function configSeccionCard(key, titulo, contenido) {
+    const abierta = tallerConfigSeccion === key;
+    return `<div class="config-item ${abierta ? 'abierta' : ''}">
+      <button type="button" class="config-item-head" data-config-sec="${key}">
+        <span class="config-item-titulo">${titulo}</span>
+        <span class="config-item-caret">${abierta ? '▾' : '▸'}</span>
+      </button>
+      ${abierta ? `<div class="config-item-body">${contenido}</div>` : ''}
+    </div>`;
+  }
+
   function tallerConfigPanel(entrando) {
     const t = tallerConfig;
-    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="taller-config-panel">
-      ${panelVolver()}
-      <h2>Configuración del taller</h2>
-      <p class="scan-sub">Estos datos son fijos (no cambian de cliente en cliente) y van a completar automáticamente la planilla que se manda al PEC.</p>
-      <div class="agent-hint" style="margin-bottom:12px;">Código de licencia de este equipo: <b>${escapeHtml(localStorage.getItem(LICENSE_KEY) || '(sin activar)')}</b> — es el que tenés que usar para activar Estelita en otro dispositivo y recuperar ahí tu copia de seguridad.
-        <div class="form-actions" style="margin-top:8px;"><button type="button" class="btn btn-ghost btn-sm" id="btn-change-license">Cambiar código de licencia</button></div>
-      </div>
-      <h3 style="margin-top:0;">Taller de montaje</h3>
+    const secDatos = `
       <div class="form-grid">
         <label>Nombre del taller (el que se ve arriba de la app)
           <input type="text" id="tc-nombre" value="${escapeHtml(tallerNombre)}" placeholder="Ej: Taller GNC de Matías">
@@ -2353,20 +2373,9 @@ Documentación para realizar la renovación:
         <label>Código Taller
           <input type="text" id="tc-codigo-taller" value="${escapeHtml(t.codigoTaller)}" placeholder="Ej: LET0238">
         </label>
-        <label>Ajuste de impresión horizontal (mm) ${infoAyuda('ayuda-ajuste-imp')}
-          <input type="number" step="0.5" id="tc-ajuste-x" value="${escapeHtml(String(t.impresionAjusteX || 0))}">
-        </label>
-        <label>Ajuste de impresión vertical (mm)
-          <input type="number" step="0.5" id="tc-ajuste-y" value="${escapeHtml(String(t.impresionAjusteY || 0))}">
-        </label>
-      </div>
-      ${ayudaBloque('ayuda-ajuste-imp', 'Solo para "Imprimir solo los datos" sobre una planilla preimpresa: si los datos salen corridos respecto de los casilleros, ajustá acá cuántos milímetros moverlos. Positivo = hacia la derecha / abajo; negativo = hacia la izquierda / arriba.')}
-      <div class="form-actions" style="margin-top:2px;">
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-grilla-calibracion">Imprimir grilla de calibración ${infoAyuda('ayuda-grilla')}</button>
-      </div>
-      ${ayudaBloque('ayuda-grilla', 'Imprime una regla en milímetros. Poné una planilla EN BLANCO en la impresora e imprimí esta grilla encima (al 100%). Después sacale una foto y mandánosla: con la regla sobre los casilleros podemos ubicar cada dato en el lugar exacto de una sola vez.')}
-      <h3>Productores de Equipos Completos (PEC) ${infoAyuda('ayuda-pecs')}</h3>
-      ${ayudaBloque('ayuda-pecs', 'Si tu taller trabaja con más de un PEC, agregalos acá. Al iniciar cada trámite vas a poder elegir a cuál se envía la ficha técnica, y el WhatsApp va a salir directo al teléfono de ese PEC.')}
+      </div>`;
+    const secPec = `
+      <div class="agent-hint" style="margin-top:0;">Si tu taller trabaja con más de un PEC, agregalos acá. Al iniciar cada trámite vas a poder elegir a cuál se envía la ficha técnica, y el WhatsApp va a salir directo al teléfono de ese PEC.</div>
       ${(t.pecs || []).map((p, i) => `
       <div class="pec-bloque">
         <div class="pec-bloque-titulo">
@@ -2396,26 +2405,54 @@ Documentación para realizar la renovación:
       </div>`).join('')}
       <div class="form-actions" style="margin-top:4px;">
         <button type="button" class="btn btn-ghost btn-sm" id="btn-add-pec">+ Agregar PEC</button>
-      </div>
-      <h3>App del técnico ${infoAyuda('ayuda-tecnico')}</h3>
-      ${ayudaBloque('ayuda-tecnico', 'El técnico instala la app "Estelita Técnico" en su celular (taller-gnc.vercel.app/tecnico.html) y la vincula con un código de 6 números que generás acá — de un solo uso y con 15 minutos de validez. El técnico nunca ve tu código de licencia y su app solo sirve para responder revisiones. Cuando le envíes una revisión desde el paso 1 de un trámite, le llega una notificación al celular aunque tenga la app cerrada.')}
+      </div>`;
+    const secTecnico = `
+      <div class="agent-hint" style="margin-top:0;">El técnico instala la app "Estelita Técnico" en su celular (taller-gnc.vercel.app/tecnico.html) y la vincula con un código de 6 números que generás acá — de un solo uso y con 15 minutos de validez. El técnico nunca ve tu código de licencia y su app solo sirve para responder revisiones. Cuando le envíes una revisión desde el paso 1 de un trámite, le llega una notificación al celular aunque tenga la app cerrada.</div>
       <div class="agent-hint" id="tecnico-estado">${tecnicosVinculados === null ? 'Consultando...' : tecnicosVinculados ? tecnicosVinculados + ' celular(es) de técnico vinculado(s).' : 'Ningún técnico vinculado todavía.'}</div>
       <div class="form-actions" style="margin-top:6px;">
         <button type="button" class="btn btn-agent btn-sm" id="btn-vincular-tecnico">Vincular un técnico</button>
         ${tecnicosVinculados ? '<button type="button" class="btn btn-danger-outline btn-sm" id="btn-desvincular-tecnicos">Desvincular todos</button>' : ''}
       </div>
-      <div id="vinculo-codigo"></div>
-      <h3>Mensajes de WhatsApp ${infoAyuda('ayuda-mensajes')}</h3>
-      ${ayudaBloque('ayuda-mensajes', 'Editá el texto de los mensajes que se mandan a los clientes para ponerle la impronta de tu taller. Las palabras entre llaves como {nombre} o {patente} se reemplazan solas al enviar — dejalas tal cual donde quieras que aparezca ese dato. Debajo de cada mensaje están las etiquetas que podés usar.')}
+      <div id="vinculo-codigo"></div>`;
+    const secMensajes = `
+      <div class="agent-hint" style="margin-top:0;">Editá el texto de los mensajes que se mandan a los clientes para ponerle la impronta de tu taller. Las palabras entre llaves como {nombre} o {patente} se reemplazan solas al enviar — dejalas tal cual donde quieras que aparezca ese dato.</div>
       ${Object.entries(MENSAJES_DEFAULT).map(([key, def]) => `
         <label style="display:block; margin-top:8px;">${def.label}
           <textarea id="tc-msg-${key}" rows="4" style="font-family:inherit; font-size:13px;">${escapeHtml(plantillaMensaje(key))}</textarea>
         </label>
         <div class="agent-hint" style="margin-top:2px;">Etiquetas: ${def.etiquetas.map(e => '{' + e + '}').join(', ')} · <button type="button" class="license-link" data-restaurar-msg="${key}">restaurar texto original</button></div>
-      `).join('')}
-      <div class="form-actions">
+      `).join('')}`;
+    const secImpresion = `
+      <div class="agent-hint" style="margin-top:0;">Solo para "Imprimir solo los datos" sobre una planilla preimpresa: si los datos salen corridos respecto de los casilleros, ajustá acá cuántos milímetros moverlos. Positivo = hacia la derecha / abajo; negativo = hacia la izquierda / arriba.</div>
+      <div class="form-grid">
+        <label>Ajuste de impresión horizontal (mm)
+          <input type="number" step="0.5" id="tc-ajuste-x" value="${escapeHtml(String(t.impresionAjusteX || 0))}">
+        </label>
+        <label>Ajuste de impresión vertical (mm)
+          <input type="number" step="0.5" id="tc-ajuste-y" value="${escapeHtml(String(t.impresionAjusteY || 0))}">
+        </label>
+      </div>
+      <div class="form-actions" style="margin-top:6px;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-grilla-calibracion">Imprimir grilla de calibración</button>
+      </div>
+      <div class="agent-hint" style="margin-top:4px;">La grilla imprime una regla en milímetros: poné una planilla EN BLANCO en la impresora e imprimila encima (al 100%). Sacale una foto y mandánosla para ubicar cada dato en el lugar exacto.</div>`;
+    const secLicencia = `
+      <div class="agent-hint" style="margin-top:0;">Código de licencia de este equipo: <b>${escapeHtml(localStorage.getItem(LICENSE_KEY) || '(sin activar)')}</b> — es el que tenés que usar para activar Estelita en otro dispositivo y recuperar ahí tu copia de seguridad.</div>
+      <div class="form-actions" style="margin-top:8px;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-change-license">Cambiar código de licencia</button>
+      </div>`;
+    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="taller-config-panel">
+      ${panelVolver()}
+      <h2>Configuración del taller</h2>
+      <p class="scan-sub">Tocá cada sección para abrirla y editarla. Al terminar, tocá "Guardar configuración".</p>
+      ${configSeccionCard('datos', 'Datos del taller', secDatos)}
+      ${configSeccionCard('pec', 'Productores de Equipos Completos (PEC)', secPec)}
+      ${configSeccionCard('tecnico', 'App del técnico', secTecnico)}
+      ${configSeccionCard('mensajes', 'Mensajes de WhatsApp', secMensajes)}
+      ${configSeccionCard('impresion', 'Impresión sobre la planilla', secImpresion)}
+      ${configSeccionCard('licencia', 'Licencia del equipo', secLicencia)}
+      <div class="form-actions" style="margin-top:12px;">
         <button class="btn btn-primary" id="btn-save-taller-config">Guardar configuración</button>
-        <button class="btn btn-ghost" id="btn-cancel-taller-config">Cerrar</button>
       </div>
     </div>`;
   }
@@ -2425,16 +2462,21 @@ Documentación para realizar la renovación:
   // quitar un PEC redibuja el formulario y sin esto pisaría lo tipeado).
   function syncTallerConfigFromDOM() {
     const el = id => root.querySelector('#' + id);
-    if (!el('tc-razon-social')) return; // el panel no está en pantalla
-    tallerConfig.razonSocial = el('tc-razon-social').value;
-    tallerConfig.direccion = el('tc-direccion').value;
-    tallerConfig.horario = el('tc-horario').value;
-    tallerConfig.cuit = el('tc-cuit').value;
-    tallerConfig.tecnicoNombre = el('tc-tecnico-nombre').value;
-    tallerConfig.tecnicoMatricula = el('tc-tecnico-matricula').value;
-    tallerConfig.codigoTaller = el('tc-codigo-taller').value;
-    tallerConfig.impresionAjusteX = Number(el('tc-ajuste-x').value) || 0;
-    tallerConfig.impresionAjusteY = Number(el('tc-ajuste-y').value) || 0;
+    if (!el('taller-config-panel')) return; // el panel no está en pantalla
+    // Con la configuración por ítems (acordeón) solo hay una sección visible a
+    // la vez: cada campo se lee solo si está presente (los demás conservan su
+    // valor en memoria, capturado al abrir/cerrar su sección).
+    const setStr = (id, key) => { const e = el(id); if (e) tallerConfig[key] = e.value; };
+    const setNum = (id, key) => { const e = el(id); if (e) tallerConfig[key] = Number(e.value) || 0; };
+    setStr('tc-razon-social', 'razonSocial');
+    setStr('tc-direccion', 'direccion');
+    setStr('tc-horario', 'horario');
+    setStr('tc-cuit', 'cuit');
+    setStr('tc-tecnico-nombre', 'tecnicoNombre');
+    setStr('tc-tecnico-matricula', 'tecnicoMatricula');
+    setStr('tc-codigo-taller', 'codigoTaller');
+    setNum('tc-ajuste-x', 'impresionAjusteX');
+    setNum('tc-ajuste-y', 'impresionAjusteY');
     (tallerConfig.pecs || []).forEach((p, i) => {
       if (!el(`tc-pec-codigo-${i}`)) return;
       p.codigoPec = el(`tc-pec-codigo-${i}`).value;
@@ -4619,6 +4661,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     showPendientes = false;
     showHistorial = false;
     showTallerConfig = false;
+    tallerConfigSeccion = null;
     showRespaldo = false;
     showTurnos = false;
     showBulkImport = false;
@@ -4685,6 +4728,25 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     if (btnCancelTallerConfig) btnCancelTallerConfig.addEventListener('click', () => {
       showTallerConfig = false;
       render();
+    });
+
+    // Acordeón de configuración: abrir una sección a la vez. Antes de cambiar
+    // se guarda en memoria lo tipeado en la sección abierta (incluido el
+    // nombre del taller) para no perderlo.
+    root.querySelectorAll('[data-config-sec]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        syncTallerConfigFromDOM();
+        const nombreEl = root.querySelector('#tc-nombre');
+        if (nombreEl) tallerNombre = nombreEl.value.trim() || tallerNombre;
+        const key = btn.getAttribute('data-config-sec');
+        tallerConfigSeccion = (tallerConfigSeccion === key) ? null : key;
+        render();
+        if (tallerConfigSeccion === 'tecnico') consultarTecnicosVinculados().then(() => {
+          if (tallerConfigSeccion !== 'tecnico') return;
+          syncTallerConfigFromDOM();
+          render();
+        });
+      });
     });
 
     const btnGrillaCalibracion = root.querySelector('#btn-grilla-calibracion');
