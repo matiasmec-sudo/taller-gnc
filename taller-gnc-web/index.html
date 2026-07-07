@@ -2509,38 +2509,55 @@ Documentación para realizar la renovación:
       return cil;
     }
 
-    const regBloque = seccion(/datos\s*(?:del\s*)?regulador/i, /datos\s*(?:del\s*)?cilindro/i);
-    const regulador = codigoYSerie(regBloque);
-
     // Fin de la zona de equipos: donde arranca la DDJJ / info desplegada.
     const finM = text.match(/informaci[oó]n\s*desplegada|declaraci[oó]n\s*jurada/i);
     const finEquipo = finM ? finM.index : text.length;
+    const zona = text.slice(0, finEquipo);
 
-    // El SIC repite el encabezado "Datos Cilindro" por CADA cilindro (o lo
-    // numera "Cilindro 1 / Cilindro 2"); ambos casos matchean el mismo
-    // patrón. Buscamos TODAS las apariciones y armamos un cilindro por cada
-    // una, con su válvula (que en el SIC viene inmediatamente después de su
-    // cilindro). Así se cargan uno o dos cilindros sin pedir nada aparte.
-    const cilRe = /datos\s*(?:del\s*)?cilindro/ig;
-    const cilPuntos = [];
-    let mc;
-    while ((mc = cilRe.exec(text)) && mc.index < finEquipo) {
-      cilPuntos.push({ inicio: mc.index, contenido: mc.index + mc[0].length });
+    // Enfoque robusto (sirva el SIC como sirva el copiado):
+    //  1) Marcamos la posición de cada encabezado de sección
+    //     (Regulador / Cilindro / Válvula).
+    //  2) Marcamos la posición de cada componente real, que en el SIC empieza
+    //     siempre con "Código Homologación" pegado a su valor
+    //     ("Código HomologaciónCC35Número de Serie...").
+    //  3) A cada "Código Homologación" le asignamos el tipo del encabezado
+    //     más cercano que tenga ANTES. Así, si el SIC lista los DOS cilindros
+    //     bajo un solo "Datos Cilindro" (dos filas seguidas), igual salen los
+    //     dos; y si repite el encabezado por cada uno, también.
+    const marcas = [];
+    let hm;
+    const reHead = /datos\s*(?:del\s*|de\s*la\s*)?(regulador|cilindro|v[aá]lvula)/ig;
+    while ((hm = reHead.exec(zona))) {
+      const t = hm[1].toLowerCase();
+      const tipo = t.startsWith('reg') ? 'regulador' : t.startsWith('cil') ? 'cilindro' : 'valvula';
+      marcas.push({ pos: hm.index, kind: 'head', tipo });
     }
+    let cm2;
+    const reCod = /c[oó]digo\s*homologaci[oó]n/ig;
+    while ((cm2 = reCod.exec(zona))) {
+      marcas.push({ pos: cm2.index, kind: 'comp' });
+    }
+    marcas.sort((a, b) => a.pos - b.pos);
 
     const cilindros = [];
     const valvulas = [];
-    cilPuntos.forEach((p, i) => {
-      const hasta = (i + 1 < cilPuntos.length) ? cilPuntos[i + 1].inicio : finEquipo;
-      const bloque = text.slice(p.contenido, hasta);
-      const valM = bloque.match(/datos?\s*v[aá]lvula/i);
-      const cilParte = valM ? bloque.slice(0, valM.index) : bloque;
-      const valParte = valM ? bloque.slice(valM.index + valM[0].length) : '';
-      const cil = parseCilindro(cilParte);
-      if (cil.codigo || cil.serie) cilindros.push(cil);
-      if (valParte) {
-        const val = codigoYSerie(valParte);
+    let regulador = { codigo: '', serie: '' };
+    let seccionActual = 'regulador';
+    marcas.forEach((mk, i) => {
+      if (mk.kind === 'head') { seccionActual = mk.tipo; return; }
+      // Bloque del componente: desde su "Código Homologación" hasta la próxima
+      // marca (otro componente u otro encabezado) o el fin de la zona.
+      const fin = (i + 1 < marcas.length) ? marcas[i + 1].pos : finEquipo;
+      const bloque = zona.slice(mk.pos, fin);
+      if (seccionActual === 'cilindro') {
+        const cil = parseCilindro(bloque);
+        if (cil.codigo || cil.serie) cilindros.push(cil);
+      } else if (seccionActual === 'valvula') {
+        const val = codigoYSerie(bloque);
         if (val.codigo || val.serie) valvulas.push(val);
+      } else {
+        const reg = codigoYSerie(bloque);
+        if ((reg.codigo || reg.serie) && !(regulador.codigo || regulador.serie)) regulador = reg;
       }
     });
 
