@@ -6769,7 +6769,17 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
     if (btnAddCilindro) btnAddCilindro.addEventListener('click', () => {
       syncEquipoFromDOM();
       syncTramiteCamposFromDOM();
-      tramiteDraftEquipo.cilindros.push({ codigo: '', serie: '', periodicidad: '5', nuevoUsado: 'usado', fabricadoMes: '', fabricadoAnio: '', revisadoMes: '', revisadoAnio: '', crpc: '', msdb: '' });
+      // En una prueba hidráulica, el cilindro nuevo también arranca con el
+      // revisado en curso y el CRPC del taller (la revisión los abarca a todos).
+      const esPH = tramiteDraftCampos && tramiteDraftCampos.tipo === 'prueba_hidraulica';
+      const hoy = new Date();
+      tramiteDraftEquipo.cilindros.push({
+        codigo: '', serie: '', periodicidad: '5', nuevoUsado: 'usado', fabricadoMes: '', fabricadoAnio: '',
+        revisadoMes: esPH ? String(hoy.getMonth() + 1).padStart(2, '0') : '',
+        revisadoAnio: esPH ? String(hoy.getFullYear()) : '',
+        crpc: esPH ? (centrosReprueba()[0] || '') : '',
+        msdb: '',
+      });
       render();
     });
 
