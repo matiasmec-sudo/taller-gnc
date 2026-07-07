@@ -247,6 +247,8 @@
         <div class="titulo-seccion">Control según normativa</div>
         ${items.map((it, i) => `
           <label class="check-item"><input type="checkbox" data-item="${i}"> <span>${esc(it)}</span></label>`).join('')}
+        ${r.observaciones ? `<div class="titulo-seccion">Problema que informaste antes</div>
+          <label class="check-item"><input type="checkbox" id="obs-resuelta"> <span>Resuelto: ${esc(r.observaciones)}</span></label>` : ''}
         <div class="titulo-seccion">Observaciones</div>
         <textarea id="nota" rows="2" placeholder="Anotá acá cualquier problema que encuentres"></textarea>
         <div class="fila-botones">
@@ -283,6 +285,11 @@
         msj.innerHTML = '<div class="msj err">Para aprobar, marcá "Coincide" en todos los componentes y tildá todos los puntos del control. Si algo está mal, usá "Informar problema".</div>';
         return;
       }
+      const obsChk = document.getElementById('obs-resuelta');
+      if (obsChk && !obsChk.checked) {
+        msj.innerHTML = '<div class="msj err">Marcá "Resuelto" en el problema que habías informado para poder aprobar.</div>';
+        return;
+      }
     } else {
       const hayProblema = comps.some((c, i) => respuesta.comps[i] === 'no');
       if (!hayProblema && !nota) {
@@ -301,8 +308,14 @@
           observaciones: estado === 'observada' ? [nota, ...detalleComps.filter(d => d.includes('NO COINCIDE'))].filter(Boolean).join(' · ') : nota,
         },
       });
+      // Optimista: reflejamos el nuevo estado al instante para que la tarjeta
+      // salga de "pendientes" sin esperar al storage (que tarda 1-2s en
+      // devolver el cambio); igual se refresca en segundo plano.
+      const local = revisiones.find(x => x.id === r.id);
+      if (local) { local.estado = estado === 'observada' ? 'observada' : 'aprobada'; if (estado === 'observada' && nota) local.observaciones = nota; }
       abierta = null;
-      await cargarPendientes();
+      pintarLista();
+      setTimeout(cargarPendientes, 3000);
     } catch (e) {
       msj.innerHTML = `<div class="msj err">${esc(e.message)}</div>`;
     }
