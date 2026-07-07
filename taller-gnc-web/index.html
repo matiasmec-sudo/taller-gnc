@@ -149,6 +149,12 @@ window.storage = {
   cursor: pointer;
 }
 #gnc-app .hoy-sub { margin: 10px 0 4px; font-family: var(--sans); font-size: 13px; font-weight: 700; color: var(--text-muted); }
+#gnc-app .hist-filtros { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+#gnc-app .hist-filtros input, #gnc-app .hist-filtros select {
+  flex: 1 1 140px; min-width: 120px; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 10px; font-size: 14px;
+  background: var(--surface); color: var(--text);
+}
 #gnc-app .chip {
   flex: 1; background: var(--surface); border-radius: 16px; padding: 12px 8px;
   text-align: center; box-shadow: 0 4px 14px rgba(20,40,90,0.10);
@@ -1425,7 +1431,18 @@ Documentación para realizar la renovación:
   }
 
   function historialPanel(entrando) {
-    const items = todosTramites();
+    const todos = todosTramites();
+    const q = histQuery.trim().toLowerCase();
+    const items = todos.filter(({ cliente, tramite }) => {
+      if (histTipo && tramite.tipo !== histTipo) return false;
+      if (histEstado && (tramite.estadoPec || 'pendiente') !== histEstado) return false;
+      if (q) {
+        const hay = `${cliente.nombre || ''} ${cliente.patente || ''} ${cliente.marca || ''} ${cliente.modelo || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+    const filtrando = !!(q || histTipo || histEstado);
     // Agrupados por día (ya vienen ordenados del más nuevo al más viejo).
     const grupos = [];
     items.forEach(it => {
@@ -1437,6 +1454,19 @@ Documentación para realizar la renovación:
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="historial-panel">
       ${panelVolver()}
       <h2 style="margin-top:0;">Historial de trámites</h2>
+      <div class="hist-filtros">
+        <input type="text" id="hist-buscar" placeholder="Buscar por patente o nombre..." value="${escapeHtml(histQuery)}">
+        <select id="hist-tipo">
+          <option value="">Todos los tipos</option>
+          ${TRAMITE_TIPOS.map(t => `<option value="${t.value}" ${histTipo === t.value ? 'selected' : ''}>${t.label}</option>`).join('')}
+        </select>
+        <select id="hist-estado">
+          <option value="">Todos los estados</option>
+          <option value="pendiente" ${histEstado === 'pendiente' ? 'selected' : ''}>Pendiente</option>
+          <option value="enviado" ${histEstado === 'enviado' ? 'selected' : ''}>Enviado al PEC</option>
+        </select>
+      </div>
+      ${filtrando ? `<p class="scan-sub">${items.length} de ${todos.length} trámite(s) · <button type="button" class="license-link" id="hist-limpiar">limpiar filtros</button></p>` : ''}
       ${items.length ? grupos.map(g => `
         <div class="hist-dia">${g.dia === 'sin fecha' ? 'Sin fecha' : fmtDate(g.dia)}</div>
         <div class="tramites-list">
@@ -1464,7 +1494,7 @@ Documentación para realizar la renovación:
               <button type="button" class="btn btn-danger-outline btn-sm" data-borrar-tramite-cliente="${cliente.id}" data-borrar-tramite-id="${tramite.id}">Eliminar trámite</button>
             </div></div>` : ''}`;
         }).join('')}
-        </div>`).join('') : `<div class="empty">${emptyIconSvg()}Todavía no hay trámites cargados.</div>`}
+        </div>`).join('') : `<div class="empty">${emptyIconSvg()}${filtrando ? 'No hay trámites que coincidan con el filtro.' : 'Todavía no hay trámites cargados.'}</div>`}
     </div>`;
   }
 
@@ -3628,6 +3658,10 @@ Documentación para realizar la renovación:
   let showHoy = false;
   // Id del trámite cuyo detalle de cliente está desplegado en el historial.
   let historialAbierto = null;
+  // Filtros del historial (buscador + tipo + estado).
+  let histQuery = '';
+  let histTipo = '';
+  let histEstado = '';
   // Id del cliente cuyo último trámite se ve en modo solo lectura.
   let verUltimoTramiteId = null;
   // El asistente en modo "Actualizar datos": muestra solo el paso 1 y
@@ -5348,6 +5382,19 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       showHistorial = false;
       render();
     });
+
+    // Filtros del historial (buscador + tipo + estado).
+    const histBuscar = root.querySelector('#hist-buscar');
+    if (histBuscar) {
+      histBuscar.addEventListener('input', (e) => { histQuery = e.target.value; render(); });
+      histBuscar.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); histBuscar.blur(); } });
+    }
+    const histTipoSel = root.querySelector('#hist-tipo');
+    if (histTipoSel) histTipoSel.addEventListener('change', (e) => { histTipo = e.target.value; render(); });
+    const histEstadoSel = root.querySelector('#hist-estado');
+    if (histEstadoSel) histEstadoSel.addEventListener('change', (e) => { histEstado = e.target.value; render(); });
+    const histLimpiar = root.querySelector('#hist-limpiar');
+    if (histLimpiar) histLimpiar.addEventListener('click', () => { histQuery = ''; histTipo = ''; histEstado = ''; render(); });
 
     // Tocar una fila del historial despliega el detalle del cliente abajo.
     root.querySelectorAll('[data-hist-toggle]').forEach(el => {
