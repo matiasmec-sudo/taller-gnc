@@ -146,7 +146,9 @@ window.storage = {
 /* RESUMEN — tarjetas flotantes que pisan el banner azul */
 #gnc-app .resumen-chips {
   display: flex; gap: 10px; margin: -32px 0 18px; position: relative; z-index: 2;
+  cursor: pointer;
 }
+#gnc-app .hoy-sub { margin: 10px 0 4px; font-family: var(--sans); font-size: 13px; font-weight: 700; color: var(--text-muted); }
 #gnc-app .chip {
   flex: 1; background: var(--surface); border-radius: 16px; padding: 12px 8px;
   text-align: center; box-shadow: 0 4px 14px rgba(20,40,90,0.10);
@@ -1288,6 +1290,96 @@ Documentación para realizar la renovación:
   // desde el menú — cierra el panel y vuelve a la pantalla principal.
   function panelVolver() {
     return `<div class="panel-head"><button type="button" class="btn-volver" data-volver>← Volver</button></div>`;
+  }
+
+  // --- Panel "Hoy" (resumen del día) ---
+  function nextYM() {
+    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+  // Turnos agendados para hoy.
+  function turnosHoy() {
+    const hoy = fechaLocalISO();
+    const items = [];
+    clientes.forEach(c => (c.turnos || []).forEach(t => { if (t.fecha === hoy) items.push({ cliente: c, turno: t }); }));
+    items.sort((a, b) => (a.turno.hora || '').localeCompare(b.turno.hora || ''));
+    return items;
+  }
+  // Vencimientos (oblea + prueba hidráulica) agrupados para avisar: los que
+  // vencen este mes, el mes que viene, y los vencidos de los últimos 90 días.
+  function vencimientosAgenda() {
+    const ym = currentYM(), nym = nextYM();
+    const buckets = { vencidos: [], esteMes: [], proximoMes: [] };
+    clientes.forEach(c => {
+      const considerar = (tipo, iso) => {
+        if (!iso) return;
+        const s = statusOf(iso);
+        if (s.days === null) return;
+        const avisado = c.ultimoAvisoMes && c.ultimoAvisoMes[tipo] === ym;
+        const item = { cliente: c, tipo, status: s, avisado };
+        const mo = iso.slice(0, 7);
+        if (mo === ym) buckets.esteMes.push(item);
+        else if (mo === nym) buckets.proximoMes.push(item);
+        else if (s.days < 0 && s.days >= -90) buckets.vencidos.push(item);
+      };
+      considerar('oblea', c.fecha_oblea || null);
+      considerar('prueba', phVencimientoISO(c.fecha_crpc, c.tipo_cilindro));
+    });
+    const ordenar = arr => arr.sort((a, b) => (a.status.days || 0) - (b.status.days || 0));
+    ordenar(buckets.vencidos); ordenar(buckets.esteMes); ordenar(buckets.proximoMes);
+    return buckets;
+  }
+  // Cantidad de vencimientos "para avisar ya" (vencidos + este mes) que
+  // todavía no se avisaron este mes — alimenta el badge del botón "Hoy".
+  function vencimientosParaAvisarCount() {
+    const b = vencimientosAgenda();
+    return [...b.vencidos, ...b.esteMes].filter(i => !i.avisado).length;
+  }
+
+  function hoyPanel(entrando) {
+    const turnos = turnosHoy();
+    const v = vencimientosAgenda();
+    const pend = pendientesItems();
+    const vencItem = (it) => {
+      const c = it.cliente;
+      const tipoTxt = it.tipo === 'oblea' ? 'Oblea' : 'Prueba Hidráulica';
+      return `<div class="doc-row">
+        <div>
+          <div class="doc-label">${escapeHtml(c.nombre)} · ${escapeHtml(c.patente || 's/d')}</div>
+          <div class="doc-sub">${tipoTxt} · ${it.status.label}${it.avisado ? ' · ya avisado' : ''}</div>
+        </div>
+        ${cleanPhone(c.telefono)
+          ? `<a class="btn btn-wa btn-sm" target="_blank" rel="noopener" data-aviso-mes="${c.id}" data-aviso-tipo="${it.tipo}" href="${waLink(c, it.tipo)}">${it.avisado ? 'Avisar de nuevo' : 'Avisar'}</a>`
+          : '<span class="badge badge-warn">Sin teléfono</span>'}
+      </div>`;
+    };
+    const seccionVenc = (titulo, arr) => arr.length ? `<h4 class="hoy-sub">${titulo} (${arr.length})</h4><div class="docs">${arr.map(vencItem).join('')}</div>` : '';
+    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="hoy-panel">
+      ${panelVolver()}
+      <h2 style="margin-top:0;">📅 Hoy — ${fmtDate(fechaLocalISO())}</h2>
+
+      <h3 style="margin-top:6px;">Turnos de hoy</h3>
+      ${turnos.length ? `<div class="docs">${turnos.map(({ cliente, turno }) => `
+        <div class="doc-row">
+          <div>
+            <div class="doc-label">${escapeHtml(cliente.nombre)} · ${escapeHtml(cliente.patente || 's/d')}</div>
+            <div class="doc-sub">${turno.hora ? escapeHtml(turno.hora) + ' hs' : 'sin hora'}${turno.motivo ? ' — ' + escapeHtml(turno.motivo) : ''}</div>
+          </div>
+          ${cleanPhone(cliente.telefono) ? (turno.avisoEnviado
+            ? '<button type="button" class="btn btn-ghost btn-sm" disabled>Aviso enviado</button>'
+            : `<button type="button" class="btn btn-wa btn-sm" data-aviso-turno-cliente="${cliente.id}" data-aviso-turno-id="${turno.id}">Recordar</button>`) : ''}
+        </div>`).join('')}</div>` : '<p class="scan-sub">No hay turnos para hoy.</p>'}
+
+      <h3>Vencimientos para avisar</h3>
+      ${(v.vencidos.length || v.esteMes.length || v.proximoMes.length)
+        ? `${seccionVenc('Vencidos (últimos 90 días)', v.vencidos)}${seccionVenc('Vencen este mes', v.esteMes)}${seccionVenc('Vencen el mes que viene', v.proximoMes)}`
+        : '<p class="scan-sub">No hay vencimientos próximos para avisar. ¡Todo al día!</p>'}
+
+      <h3>Pendientes</h3>
+      ${pend.length
+        ? `<p class="scan-sub">Tenés ${pend.length} trámite(s) sin enviar.</p><div class="form-actions"><button type="button" class="btn btn-ghost btn-sm" data-nav="pendientes">Ver pendientes</button></div>`
+        : '<p class="scan-sub">No hay trámites pendientes.</p>'}
+    </div>`;
   }
 
   function pendientesPanel(entrando) {
@@ -3531,6 +3623,9 @@ Documentación para realizar la renovación:
   let respaldoUltima = null;
   // Panel de turnos (agenda del taller).
   let showTurnos = false;
+  // Panel "Hoy": resumen del día (turnos de hoy, vencimientos para avisar y
+  // pendientes) para arrancar la jornada de un vistazo.
+  let showHoy = false;
   // Id del trámite cuyo detalle de cliente está desplegado en el historial.
   let historialAbierto = null;
   // Id del cliente cuyo último trámite se ve en modo solo lectura.
@@ -4533,7 +4628,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     // (quedaban abajo del formulario y recargaban la pantalla).
     const wizardAbiertoRender = !!(showForm || editing);
     const pendCount = pendientesItems().length;
-    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo || showTurnos || !!verUltimoTramiteId;
+    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo || showTurnos || showHoy || !!verUltimoTramiteId;
     const turnosAvisoCount = turnosParaAvisar().length;
 
     // Para que la animación de entrada de un panel se dispare solo cuando
@@ -4553,13 +4648,14 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       quickAdd: showQuickAdd && !prevPanelState.quickAdd,
       respaldo: showRespaldo && !prevPanelState.respaldo,
       turnos: showTurnos && !prevPanelState.turnos,
+      hoy: showHoy && !prevPanelState.hoy,
       ultimoTramite: !!verUltimoTramiteId && !prevPanelState.ultimoTramite,
     };
     prevPanelState = {
       wizard: wizardAbierto, wizardStep, fotos: !!showFotosFor, historial: showHistorial,
       pendientes: showPendientes, bulkImport: showBulkImport, tallerConfig: showTallerConfig,
       enargasPaste: enargasPasteOpen, quickAdd: showQuickAdd, respaldo: showRespaldo,
-      turnos: showTurnos, ultimoTramite: !!verUltimoTramiteId,
+      turnos: showTurnos, hoy: showHoy, ultimoTramite: !!verUltimoTramiteId,
     };
 
     root.innerHTML = `
@@ -4584,12 +4680,13 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
           </div>
         </div>
 
-        ${wizardAbiertoRender ? '' : `<div class="resumen-chips">
+        ${wizardAbiertoRender ? '' : `<div class="resumen-chips" id="resumen-chips" role="button" tabindex="0" title="Ver los vencimientos para avisar">
           <div class="chip chip-danger"><div class="chip-num">${counts.danger}</div><div class="chip-lbl">Vencidos</div></div>
           <div class="chip chip-warn"><div class="chip-num">${counts.warn}</div><div class="chip-lbl">Por vencer (${WARN_DAYS}d)</div></div>
           <div class="chip chip-ok"><div class="chip-num">${counts.ok}</div><div class="chip-lbl">Al día</div></div>
         </div>`}
 
+        ${showHoy ? hoyPanel(entrando.hoy) : ''}
         ${showTallerConfig ? tallerConfigPanel(entrando.tallerConfig) : ''}
         ${reminderBanner()}
         ${showPendientes ? pendientesPanel(entrando.pendientes) : ''}
@@ -4623,7 +4720,8 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       </div>
       ${algunPanelAbierto ? '' : '<button type="button" class="fab-nuevo-tramite" id="btn-fab-nuevo" aria-label="Nuevo trámite">+ Nuevo trámite</button>'}
       <div class="bottom-nav">
-        <button type="button" class="bn-item ${!showPendientes && !showHistorial && !showTallerConfig ? 'activo' : ''}" data-nav="inicio"><span class="bn-ico">🏠</span>Inicio</button>
+        <button type="button" class="bn-item ${!showPendientes && !showHistorial && !showTallerConfig && !showHoy ? 'activo' : ''}" data-nav="inicio"><span class="bn-ico">🏠</span>Inicio</button>
+        <button type="button" class="bn-item ${showHoy ? 'activo' : ''}" data-nav="hoy">${(turnosHoy().length + vencimientosParaAvisarCount()) ? `<span class="bn-badge">${turnosHoy().length + vencimientosParaAvisarCount()}</span>` : ''}<span class="bn-ico">📅</span>Hoy</button>
         <button type="button" class="bn-item ${showPendientes ? 'activo' : ''}" data-nav="pendientes">${pendCount ? `<span class="bn-badge">${pendCount}</span>` : ''}<span class="bn-ico">📋</span>Pendientes</button>
         <button type="button" class="bn-item ${showHistorial ? 'activo' : ''}" data-nav="historial"><span class="bn-ico">🕓</span>Historial</button>
         <button type="button" class="bn-item ${showTallerConfig ? 'activo' : ''}" data-nav="config"><span class="bn-ico">⚙️</span>Mi taller</button>
@@ -4667,6 +4765,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     tallerConfigSeccion = null;
     showRespaldo = false;
     showTurnos = false;
+    showHoy = false;
     showBulkImport = false;
     showQuickAdd = false;
   }
@@ -4681,6 +4780,15 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       });
     });
 
+    // Tocar los chips de resumen abre el panel "Hoy" (vencimientos para avisar).
+    const chipsBtn = root.querySelector('#resumen-chips');
+    if (chipsBtn) chipsBtn.addEventListener('click', () => {
+      cerrarPanelesConsulta();
+      showHoy = true;
+      render();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
     // Barra de navegación inferior (mobile). Solo abre/cierra los paneles de
     // consulta — a propósito no toca el wizard ni las fotos, para no perder
     // datos a medio cargar si se toca un botón sin querer.
@@ -4689,13 +4797,15 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         const destino = btn.dataset.nav;
         const yaAbierto = (destino === 'pendientes' && showPendientes)
           || (destino === 'historial' && showHistorial)
-          || (destino === 'config' && showTallerConfig);
+          || (destino === 'config' && showTallerConfig)
+          || (destino === 'hoy' && showHoy);
         cerrarPanelesConsulta();
         menuOpen = false;
         if (!yaAbierto) {
           if (destino === 'pendientes') showPendientes = true;
           else if (destino === 'historial') showHistorial = true;
           else if (destino === 'config') showTallerConfig = true;
+          else if (destino === 'hoy') showHoy = true;
         }
         render();
         if (showTallerConfig) consultarTecnicosVinculados().then(() => {
