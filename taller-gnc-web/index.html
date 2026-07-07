@@ -1307,6 +1307,7 @@ Documentación para realizar la renovación:
             </div>
             <span class="badge badge-warn">${ESTADO_PEC_LABELS[tramite.estadoPec]}</span>
             <button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${cliente.id}" data-editar-tramite-id="${tramite.id}">Editar</button>
+            <button type="button" class="btn btn-trash btn-sm" data-borrar-tramite-cliente="${cliente.id}" data-borrar-tramite-id="${tramite.id}" title="Eliminar trámite" aria-label="Eliminar trámite">${trashSvg()}</button>
           </div>`).join('')}
       </div>` : `<div class="empty">${emptyIconSvg()}No hay trámites pendientes.</div>`}
     </div>`;
@@ -1368,6 +1369,7 @@ Documentación para realizar la renovación:
           ${abierto ? `<div class="hist-detalle">${clienteDatosBlock(cliente)}
             <div class="form-actions" style="margin-top:8px;">
               <button type="button" class="btn btn-ghost btn-sm" data-ultimo-tramite="${cliente.id}">Ver último trámite</button>
+              <button type="button" class="btn btn-danger-outline btn-sm" data-borrar-tramite-cliente="${cliente.id}" data-borrar-tramite-id="${tramite.id}">Eliminar trámite</button>
             </div></div>` : ''}`;
         }).join('')}
         </div>`).join('') : `<div class="empty">${emptyIconSvg()}Todavía no hay trámites cargados.</div>`}
@@ -3380,6 +3382,7 @@ Documentación para realizar la renovación:
       </select>
       <span class="badge ${badgeClass}">${ESTADO_PEC_LABELS[t.estadoPec]}</span>
       ${t.estadoPec !== 'enviado' ? `<button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${clienteId}" data-editar-tramite-id="${t.id}">Editar</button>` : ''}
+      <button type="button" class="btn btn-trash btn-sm" data-borrar-tramite-cliente="${clienteId}" data-borrar-tramite-id="${t.id}" title="Eliminar trámite" aria-label="Eliminar trámite">${trashSvg()}</button>
     </div>`;
   }
 
@@ -5280,6 +5283,28 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
     }
     root.querySelectorAll('[data-editar-tramite-cliente]').forEach(btn => {
       btn.addEventListener('click', () => entrarAEditarTramite(btn.getAttribute('data-editar-tramite-cliente'), btn.getAttribute('data-editar-tramite-id')));
+    });
+
+    // Eliminar un trámite (desde el historial, la tarjeta del cliente o
+    // pendientes). Solo borra el trámite; no toca los datos del cliente.
+    root.querySelectorAll('[data-borrar-tramite-cliente]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const clienteId = btn.getAttribute('data-borrar-tramite-cliente');
+        const tramiteId = btn.getAttribute('data-borrar-tramite-id');
+        const c = clientes.find(x => x.id === clienteId);
+        if (!c) return;
+        const t = (c.tramites || []).find(x => x.id === tramiteId);
+        if (!t) return;
+        const desc = `${tramiteTipoLabel(t.tipo)} · ${fmtDate(t.fecha)}`;
+        const msg = t.estadoPec === 'enviado'
+          ? `Este trámite (${desc}) ya fue ENVIADO al PEC. Si lo eliminás, se borra de Estelita pero la ficha que ya se mandó al PEC no se toca. No se puede deshacer. ¿Eliminarlo igual?`
+          : `Vas a eliminar el trámite ${desc}. No se puede deshacer y no se tocan los datos del cliente. ¿Eliminarlo?`;
+        const ok = await customConfirm(msg, { titulo: 'Eliminar trámite', danger: true, okLabel: 'Eliminar' });
+        if (!ok) return;
+        c.tramites = (c.tramites || []).filter(x => x.id !== tramiteId);
+        await saveClientes();
+        render();
+      });
     });
 
     // --- Vista de solo lectura del último trámite ---
