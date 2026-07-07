@@ -646,6 +646,9 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
     // Precio por tipo de trámite (solo para la estimación de ingresos en
     // Estadísticas). { conversion: 50000, ... }
     precios: {},
+    // Centros de reprueba (CRPC) que trabaja el taller, siglas separadas por
+    // coma. Alimentan el desplegable del cilindro y la prueba hidráulica.
+    centrosReprueba: 'GNSE, MMDP',
     // Lista de PECs del taller (algunos talleres trabajan con más de uno).
     // Los campos pec* planos de arriba quedan como espejo del primer PEC
     // por compatibilidad con datos ya guardados.
@@ -1199,6 +1202,15 @@ Documentación para realizar la renovación:
   // trabaja el taller; MMDP = Matafuegos Mar del Plata. Si un cilindro trae
   // otro valor (de una consulta a ENARGAS), se conserva como opción extra.
   const CRPC_OPCIONES = ['', 'GNSE', 'MMDP'];
+  // Centros de reprueba (CRPC) que trabaja el taller — configurables en "Mi
+  // taller" (siglas separadas por coma). Se usan en el desplegable del
+  // cilindro y para completar solo la prueba hidráulica. Si no hay ninguno
+  // configurado, se cae a los históricos GNSE/MMDP.
+  function centrosReprueba() {
+    const raw = (typeof tallerConfig !== 'undefined' && tallerConfig && tallerConfig.centrosReprueba) || '';
+    const arr = String(raw).split(/[,;\n]/).map(s => s.trim()).filter(Boolean);
+    return arr.length ? arr : ['GNSE', 'MMDP'];
+  }
   // Códigos postales conocidos para autocompletar el CPA según la ciudad —
   // por ahora solo cubre la zona del taller; si la ciudad no está en la
   // lista, el CPA se sigue cargando a mano.
@@ -2620,6 +2632,9 @@ Documentación para realizar la renovación:
         <label>Código Taller
           <input type="text" id="tc-codigo-taller" value="${escapeHtml(t.codigoTaller)}" placeholder="Ej: LET0238">
         </label>
+        <label>Centros de reprueba (CRPC) — siglas separadas por coma
+          <input type="text" id="tc-centros-reprueba" value="${escapeHtml(t.centrosReprueba || '')}" placeholder="Ej: GNSE, MMDP">
+        </label>
       </div>`;
     const secPec = `
       <div class="agent-hint" style="margin-top:0;">Si tu taller trabaja con más de un PEC, agregalos acá. Al iniciar cada trámite vas a poder elegir a cuál se envía la ficha técnica, y el WhatsApp va a salir directo al teléfono de ese PEC.</div>
@@ -2730,6 +2745,7 @@ Documentación para realizar la renovación:
     setStr('tc-tecnico-nombre', 'tecnicoNombre');
     setStr('tc-tecnico-matricula', 'tecnicoMatricula');
     setStr('tc-codigo-taller', 'codigoTaller');
+    setStr('tc-centros-reprueba', 'centrosReprueba');
     setNum('tc-ajuste-x', 'impresionAjusteX');
     setNum('tc-ajuste-y', 'impresionAjusteY');
     if (el('tc-precio-' + TRAMITE_TIPOS[0].value)) {
@@ -3468,7 +3484,7 @@ Documentación para realizar la renovación:
     return doc.output('blob');
   }
 
-  async function generarPecPdfSoloDatos(cliente, tramite) {
+  async function generarPecPdfSoloDatos(cliente, tramite, opts = {}) {
     await cargarLibreriasPec();
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -3570,6 +3586,31 @@ Documentación para realizar la renovación:
     // "NOMBRE — DNI 12345678". La firma la hace el cliente a mano.
     const acl = [cliente.nombre, [cliente.tipo_documento, cliente.dni].filter(Boolean).join(' ')].filter(Boolean).join(' — ');
     T(acl, M.aclNombre.x, M.aclNombre.y, 8);
+
+    // Para el envío al PEC: se adjuntan las fotos de la documentación como
+    // páginas siguientes (la del taller no las lleva, imprime solo la hoja).
+    if (opts.conFotos) {
+      const fotos = await fotosGuardadas(cliente.id);
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const paginas = [
+        { titulo: 'Documentación (lado A)', dataUrl: fotos.foto1 },
+        { titulo: 'Documentación (lado B)', dataUrl: fotos.foto2 },
+      ].filter(f => f.dataUrl);
+      for (const f of paginas) {
+        let img;
+        try { img = await pecCargarImagen(f.dataUrl); } catch (e) { continue; }
+        doc.addPage();
+        const margen = 12;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
+        doc.text(`${f.titulo} — ${[cliente.nombre, cliente.patente].filter(Boolean).join(' · ')}`, margen, margen);
+        const maxW = pageW - margen * 2, maxH = pageH - margen * 2 - 6;
+        const r = img.height / img.width;
+        let fw = maxW, fh = maxW * r; if (fh > maxH) { fh = maxH; fw = maxH / r; }
+        const formato = f.dataUrl.slice(0, 20).includes('png') ? 'PNG' : 'JPEG';
+        doc.addImage(f.dataUrl, formato, (pageW - fw) / 2, margen + 4, fw, fh);
+      }
+    }
 
     return doc.output('blob');
   }
@@ -3766,8 +3807,8 @@ Documentación para realizar la renovación:
         <label>Revisado (año)<input type="text" id="eq-cil-revanio-${i}" value="${escapeHtml(cil.revisadoAnio)}" placeholder="AAAA"></label>
         <label>CRPC (centro de reprueba)
           <select id="eq-cil-crpc-${i}">
-            ${CRPC_OPCIONES.map(o => `<option value="${o}" ${cil.crpc === o ? 'selected' : ''}>${o || '-- Elegí --'}</option>`).join('')}
-            ${cil.crpc && !CRPC_OPCIONES.includes(cil.crpc) ? `<option value="${escapeHtml(cil.crpc)}" selected>${escapeHtml(cil.crpc)}</option>` : ''}
+            ${['', ...centrosReprueba()].map(o => `<option value="${escapeHtml(o)}" ${cil.crpc === o ? 'selected' : ''}>${o || '-- Elegí --'}</option>`).join('')}
+            ${cil.crpc && !centrosReprueba().includes(cil.crpc) ? `<option value="${escapeHtml(cil.crpc)}" selected>${escapeHtml(cil.crpc)}</option>` : ''}
           </select>
         </label>
         ${operacionSelect(`eq-cil-msdb-${i}`, cil.msdb)}
@@ -5172,6 +5213,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         tecnicoNombre: (tallerConfig.tecnicoNombre || '').trim(),
         tecnicoMatricula: (tallerConfig.tecnicoMatricula || '').trim(),
         codigoTaller: (tallerConfig.codigoTaller || '').trim(),
+        centrosReprueba: (tallerConfig.centrosReprueba || '').trim(),
         impresionAjusteX: Number(tallerConfig.impresionAjusteX) || 0,
         impresionAjusteY: Number(tallerConfig.impresionAjusteY) || 0,
         mensajes,
@@ -6479,6 +6521,20 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
           valvulas: tramiteDraftEquipo.valvulas.map(v => ({ ...v })),
           otros: JSON.parse(JSON.stringify(tramiteDraftEquipo.otros)),
         };
+      }
+
+      // En una PRUEBA HIDRÁULICA la revisión del cilindro se hace AHORA: el
+      // "revisado" queda con el mes/año en curso (pisa lo que traía el SIC) y
+      // el CRPC con el primer centro de reprueba del taller.
+      if (tramiteDraftCampos && tramiteDraftCampos.tipo === 'prueba_hidraulica') {
+        const hoy = new Date();
+        const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+        const anio = String(hoy.getFullYear());
+        const crpcDefault = centrosReprueba()[0] || '';
+        (tramiteDraftEquipo.cilindros || []).forEach(c => {
+          c.revisadoMes = mes; c.revisadoAnio = anio;
+          if (crpcDefault) c.crpc = crpcDefault;
+        });
       }
 
       // Aviso: entre la renovación de la oblea (hoy) y el vencimiento de la
