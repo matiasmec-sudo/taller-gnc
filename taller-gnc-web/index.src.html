@@ -16,30 +16,83 @@
 </head>
 <body>
 <script>
-// Reemplazo de window.storage (que solo existe dentro de Claude.ai) por una
-// version basada en localStorage del navegador, para que la app funcione
-// de forma totalmente independiente. Misma interfaz (get/set/delete/list),
-// asi que el resto del codigo no necesita cambios.
-window.storage = {
-  async get(key) {
-    const raw = localStorage.getItem(key);
-    if (raw === null) return null;
-    return { key, value: raw, shared: false };
-  },
-  async set(key, value) {
-    localStorage.setItem(key, value);
-    return { key, value, shared: false };
-  },
-  async delete(key) {
-    const existed = localStorage.getItem(key) !== null;
-    localStorage.removeItem(key);
-    return existed ? { key, deleted: true, shared: false } : null;
-  },
-  async list(prefix) {
-    const keys = Object.keys(localStorage).filter(k => !prefix || k.startsWith(prefix));
-    return { keys, prefix, shared: false };
+// window.storage: misma interfaz (get/set/delete/list) que usa toda la app.
+// Todo va a localStorage, MENOS las fotos ("fotos:<id>"), que se guardan en
+// IndexedDB: una base de datos del navegador con muchísima más capacidad que
+// localStorage (que se llena con pocas fotos) y que el navegador no borra solo
+// (con almacenamiento persistente). Las fotos siguen dentro del dispositivo.
+(function () {
+  const DB_NAME = 'estelita';
+  const STORE = 'fotos';
+  let dbPromise = null;
+  function abrirDB() {
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject) => {
+      let req;
+      try { req = indexedDB.open(DB_NAME, 1); } catch (e) { reject(e); return; }
+      req.onupgradeneeded = () => { const db = req.result; if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE); };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return dbPromise;
   }
-};
+  function idbGet(key) { return abrirDB().then(db => new Promise((res, rej) => { const r = db.transaction(STORE, 'readonly').objectStore(STORE).get(key); r.onsuccess = () => res(r.result === undefined ? null : r.result); r.onerror = () => rej(r.error); })); }
+  function idbSet(key, value) { return abrirDB().then(db => new Promise((res, rej) => { const tx = db.transaction(STORE, 'readwrite'); tx.objectStore(STORE).put(value, key); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); })); }
+  function idbDelete(key) { return abrirDB().then(db => new Promise((res, rej) => { const tx = db.transaction(STORE, 'readwrite'); tx.objectStore(STORE).delete(key); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); })); }
+  function idbKeys() { return abrirDB().then(db => new Promise((res, rej) => { const r = db.transaction(STORE, 'readonly').objectStore(STORE).getAllKeys(); r.onsuccess = () => res((r.result || []).map(String)); r.onerror = () => rej(r.error); })); }
+  const esFoto = (key) => typeof key === 'string' && key.indexOf('fotos:') === 0;
+
+  window.storage = {
+    async get(key) {
+      if (esFoto(key)) {
+        try { const v = await idbGet(key); if (v !== null) return { key, value: v, shared: false }; } catch (e) { /* fallback abajo */ }
+        // Puede seguir en localStorage (migración en curso o dato viejo).
+        const raw = localStorage.getItem(key);
+        return raw === null ? null : { key, value: raw, shared: false };
+      }
+      const raw = localStorage.getItem(key);
+      return raw === null ? null : { key, value: raw, shared: false };
+    },
+    async set(key, value) {
+      if (esFoto(key)) { await idbSet(key, value); try { localStorage.removeItem(key); } catch (e) { /* ok */ } return { key, value, shared: false }; }
+      localStorage.setItem(key, value);
+      return { key, value, shared: false };
+    },
+    async delete(key) {
+      if (esFoto(key)) {
+        let existed = false;
+        try { existed = (await idbGet(key)) !== null; } catch (e) { /* ok */ }
+        try { await idbDelete(key); } catch (e) { /* ok */ }
+        try { if (localStorage.getItem(key) !== null) { existed = true; localStorage.removeItem(key); } } catch (e) { /* ok */ }
+        return existed ? { key, deleted: true, shared: false } : null;
+      }
+      const existed = localStorage.getItem(key) !== null;
+      localStorage.removeItem(key);
+      return existed ? { key, deleted: true, shared: false } : null;
+    },
+    async list(prefix) {
+      let keys = Object.keys(localStorage).filter(k => !prefix || k.startsWith(prefix));
+      // Si el prefijo pisa el espacio de fotos, sumamos también las de IndexedDB.
+      const tocaFotos = !prefix || prefix.indexOf('fotos:') === 0 || 'fotos:'.indexOf(prefix) === 0;
+      if (tocaFotos) {
+        try { const idbk = (await idbKeys()).filter(k => !prefix || k.startsWith(prefix)); keys = Array.from(new Set(keys.concat(idbk))); } catch (e) { /* ok */ }
+      }
+      return { keys, prefix, shared: false };
+    },
+  };
+
+  // Migración única: pasar las fotos que hoy están en localStorage a IndexedDB
+  // (libera lugar), y pedir almacenamiento persistente para que el navegador no
+  // las borre solo. Fire-and-forget: las lecturas ya caen a localStorage si algo
+  // todavía no migró.
+  (async function () {
+    try {
+      const claves = Object.keys(localStorage).filter(k => k.indexOf('fotos:') === 0);
+      for (const k of claves) { const v = localStorage.getItem(k); if (v !== null) { try { await idbSet(k, v); localStorage.removeItem(k); } catch (e) { /* se reintenta la próxima */ } } }
+    } catch (e) { /* ok */ }
+    try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch (e) { /* ok */ }
+  })();
+})();
 </script>
 <div id="gnc-app"></div>
 <style>
