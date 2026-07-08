@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Estelita — Demo animada</title>
+<style>
+  :root{ --azul:#1D5BD8; --azul-osc:#123C8F; --fondo:#EAF1FE; --surface:#fff; --linea:#E3E8F0; --tinta:#16233B; --suave:#5A6B85; --verde:#1E9E5A; --wapp:#25D366; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; }
+  body{
+    font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif; color:var(--tinta);
+    background:linear-gradient(160deg,#DCEAFE,#F4F6FA 60%);
+    min-height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:18px 12px 26px; gap:14px;
+  }
+  .titulo{ text-align:center; }
+  .titulo b{ letter-spacing:2.5px; color:var(--azul-osc); font-size:19px; }
+  .titulo span{ display:block; color:var(--suave); font-size:13px; margin-top:2px; }
+
+  /* Teléfono */
+  .phone{
+    position:relative; width:330px; max-width:92vw; aspect-ratio:330/620;
+    background:#0d1b3a; border-radius:34px; padding:12px;
+    box-shadow:0 26px 60px rgba(18,60,143,.34), 0 0 0 2px rgba(255,255,255,.06) inset;
+  }
+  .screen{
+    position:relative; width:100%; height:100%; background:var(--fondo);
+    border-radius:24px; overflow:hidden;
+  }
+  /* barra superior azul */
+  .top{ background:var(--azul); color:#fff; padding:14px 16px 26px; border-radius:0 0 22px 22px; }
+  .top .row{ display:flex; align-items:center; gap:10px; }
+  .top .burger{ font-size:17px; opacity:.9; }
+  .top .brand{ font-weight:800; letter-spacing:2px; font-size:15px; }
+  .top .taller{ font-size:11px; opacity:.85; margin-top:3px; }
+  .body{ padding:12px 14px; }
+
+  /* elementos genéricos */
+  .card{ background:var(--surface); border:1px solid var(--linea); border-radius:14px; padding:11px 12px; box-shadow:0 4px 12px rgba(18,60,143,.06); }
+  .lbl{ font-size:9.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--suave); }
+  .val{ font-size:13px; font-weight:700; margin-top:2px; min-height:15px; }
+  .pill{ display:inline-block; font-size:10px; font-weight:800; color:var(--azul); background:#E7F0FF; border-radius:999px; padding:3px 9px; }
+  .btn{ display:flex; align-items:center; justify-content:center; gap:7px; background:var(--azul); color:#fff; font-weight:700; font-size:13px; border-radius:11px; padding:11px; text-align:center; }
+  .btn.ghost{ background:#fff; color:var(--azul); border:1.5px solid #C7D8F6; }
+  .btn.wapp{ background:var(--wapp); }
+  .h{ font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.8px; color:var(--suave); margin:2px 0 8px; }
+
+  /* FAB */
+  .fab{ position:absolute; right:16px; bottom:18px; width:52px; height:52px; border-radius:50%; background:var(--azul); color:#fff; font-size:28px; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 20px rgba(29,91,216,.45); }
+
+  /* cursor / tap */
+  .tap{ position:absolute; width:34px; height:34px; margin:-17px 0 0 -17px; border-radius:50%; background:rgba(29,91,216,.28); border:2px solid var(--azul); opacity:0; z-index:50; pointer-events:none; }
+  @keyframes tapping{ 0%{opacity:0; transform:scale(1.6);} 30%{opacity:1; transform:scale(.7);} 60%{opacity:1; transform:scale(1);} 100%{opacity:0; transform:scale(1.4);} }
+  .tap.go{ animation:tapping 1s ease forwards; }
+
+  /* animaciones de escena */
+  @keyframes fadeUp{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+  @keyframes pop{ 0%{opacity:0; transform:scale(.9);} 100%{opacity:1; transform:scale(1);} }
+  @keyframes shimmer{ 0%{background-position:-160px 0;} 100%{background-position:220px 0;} }
+  .fadeUp{ opacity:0; animation:fadeUp .5s ease forwards; }
+  .pop{ opacity:0; animation:pop .45s ease forwards; }
+  .skeleton{ background:linear-gradient(90deg,#eef2f9 25%,#dde7f7 37%,#eef2f9 63%); background-size:400px 100%; animation:shimmer 1.1s linear infinite; border-radius:6px; }
+
+  /* spinner */
+  .spin{ width:16px; height:16px; border:2.5px solid #cdddfa; border-top-color:var(--azul); border-radius:50%; animation:rot .8s linear infinite; display:inline-block; vertical-align:middle; }
+  @keyframes rot{ to{ transform:rotate(360deg);} }
+
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .foto{ height:90px; border-radius:12px; background:#dfe8f7 center/cover; display:flex; align-items:center; justify-content:center; color:#8aa3d6; font-size:11px; position:relative; overflow:hidden; }
+  .docimg{ width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; background:linear-gradient(135deg,#f7fafe,#e6eefb); color:#4b689e; }
+  .docimg b{ font-size:10px; letter-spacing:.5px; }
+  .chk{ color:var(--verde); font-weight:800; }
+
+  /* caption */
+  .caption{
+    width:330px; max-width:92vw; min-height:58px; background:var(--surface);
+    border:1px solid var(--linea); border-left:5px solid var(--azul); border-radius:14px;
+    padding:12px 15px; font-size:15px; line-height:1.4; box-shadow:0 8px 22px rgba(18,60,143,.10);
+  }
+  .caption b{ color:var(--azul-osc); }
+
+  .barra{ width:330px; max-width:92vw; height:5px; background:#d7e2f5; border-radius:999px; overflow:hidden; }
+  .barra i{ display:block; height:100%; width:0; background:var(--azul); transition:width .25s linear; }
+
+  /* overlay play / replay */
+  .overlay{ position:absolute; inset:0; background:rgba(13,27,58,.55); border-radius:24px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; z-index:80; color:#fff; }
+  .play{ width:74px; height:74px; border-radius:50%; background:#fff; color:var(--azul); font-size:30px; display:flex; align-items:center; justify-content:center; box-shadow:0 10px 26px rgba(0,0,0,.3); cursor:pointer; padding-left:5px; }
+  .overlay p{ margin:0; font-size:13px; opacity:.95; }
+  .hint{ color:var(--suave); font-size:12px; text-align:center; max-width:330px; }
+</style>
+</head>
+<body>
+  <div class="titulo"><b>ESTELITA</b><span>Cómo se hace un trámite, paso a paso</span></div>
+  <div class="barra"><i id="barra"></i></div>
+
+  <div class="phone">
+    <div class="screen" id="screen"></div>
+    <div class="tap" id="tap"></div>
+    <div class="overlay" id="overlay">
+      <div class="play" id="play">▶</div>
+      <p>Tocá para reproducir</p>
+    </div>
+  </div>
+
+  <div class="caption" id="caption">Estelita: menos tiempo con los papeles, más autos.</div>
+  <p class="hint">Consejo: poné a grabar la pantalla del celular y después tocá ▶.</p>
+
+<script>
+  const screen = document.getElementById('screen');
+  const caption = document.getElementById('caption');
+  const barra = document.getElementById('barra');
+  const tap = document.getElementById('tap');
+  const overlay = document.getElementById('overlay');
+
+  function shell(bodyHtml){
+    return `<div class="top"><div class="row"><span class="burger">☰</span><span class="brand">ESTELITA</span></div><div class="taller">Taller GNC de Matías</div></div><div class="body">${bodyHtml}</div>`;
+  }
+  // muestra un "toque" en coordenadas (x,y) dentro de la pantalla
+  function tapAt(x,y){
+    const ph = document.querySelector('.phone').getBoundingClientRect();
+    const sc = screen.getBoundingClientRect();
+    tap.style.left = (sc.left - ph.left + x) + 'px';
+    tap.style.top  = (sc.top - ph.top + y) + 'px';
+    tap.classList.remove('go'); void tap.offsetWidth; tap.classList.add('go');
+  }
+
+  // ---- Escenas ----
+  const scenes = [
+    { dur: 3400, cap: 'Te muestro cómo cargar un trámite de GNC en menos de 2 minutos.',
+      render(){
+        screen.innerHTML = shell(`
+          <div style="text-align:center; margin-top:60px;" class="fadeUp">
+            <div style="font-size:40px; letter-spacing:5px; font-weight:800; color:var(--azul-osc);">ESTELITA</div>
+            <div style="color:var(--suave); margin-top:10px; font-size:13px;">Gestión de tu taller de GNC</div>
+            <div class="pill" style="margin-top:22px;">Revisiones · Fichas al PEC · Vencimientos</div>
+          </div>`);
+      }},
+
+    { dur: 3600, cap: 'Toco <b>➕ Nuevo</b> y empiezo un trámite.',
+      render(){
+        screen.innerHTML = shell(`
+          <div class="h">Clientes</div>
+          <div class="card fadeUp" style="animation-delay:.05s">
+            <div class="lbl">AB123CD · Revisión</div><div class="val">Juan Pérez</div></div>
+          <div class="card fadeUp" style="margin-top:8px; animation-delay:.15s">
+            <div class="lbl">GHI456 · Revisión</div><div class="val">Marta López</div></div>
+          <div class="card fadeUp" style="margin-top:8px; animation-delay:.25s">
+            <div class="lbl">JKL789 · Alta</div><div class="val">Carlos Ruiz</div></div>
+          <div class="fab pop" style="animation-delay:.4s">＋</div>`);
+        setTimeout(()=>tapAt(286,556), 1700);
+      }},
+
+    { dur: 3600, cap: 'Elijo el <b>tipo de trámite</b> y la fecha.',
+      render(){
+        screen.innerHTML = shell(`
+          <div class="card pop" style="margin-top:10px;">
+            <div class="h" style="margin-top:2px;">Inicio de trámite</div>
+            <div class="lbl">Tipo de trámite</div>
+            <div class="card" style="margin:5px 0 10px; padding:9px 11px; border-color:var(--azul); color:var(--azul-osc); font-weight:700; font-size:13px;">Revisión ▾</div>
+            <div class="lbl">Fecha</div>
+            <div class="card" style="margin:5px 0 12px; padding:9px 11px; font-size:13px;">08/07/2026</div>
+            <div class="btn">Continuar</div>
+          </div>`);
+        setTimeout(()=>tapAt(165,352), 2100);
+      }},
+
+    { dur: 6200, cap: 'Le saco <b>una foto</b> a la documentación y toco <b>Leer datos</b>.',
+      render(){
+        screen.innerHTML = shell(`
+          <div class="h">Paso 1 · Fotos del cliente</div>
+          <div class="grid2">
+            <div class="foto pop"><div class="docimg"><span style="font-size:20px;">🪪</span><b>DNI + Cédula</b><span style="font-size:9px;">Frente</span></div></div>
+            <div class="foto pop" style="animation-delay:.1s"><div class="docimg"><span style="font-size:20px;">🪪</span><b>Dorso</b></div></div>
+          </div>
+          <div class="btn fadeUp" id="leer" style="margin-top:10px; animation-delay:.4s"><span class="spin"></span> Leyendo documentos...</div>
+          <div class="h" style="margin-top:12px;">Datos personales</div>
+          <div class="card"><div class="lbl">Nombre</div><div class="val" id="v-nom"><span class="skeleton" style="display:block;height:12px;width:70%"></span></div></div>
+          <div class="card" style="margin-top:7px;"><div class="lbl">Documento</div><div class="val" id="v-dni"><span class="skeleton" style="display:block;height:12px;width:45%"></span></div></div>`);
+        setTimeout(()=>tapAt(165,250), 900);
+        // completar solos
+        setTimeout(()=>{
+          const nom=document.getElementById('v-nom'), dni=document.getElementById('v-dni'), leer=document.getElementById('leer');
+          if(nom){ nom.innerHTML='<span class="fadeUp chk">✓</span> Roberto Gómez'; }
+          if(dni){ dni.innerHTML='<span class="fadeUp chk">✓</span> DNI 28.455.120'; }
+          if(leer){ leer.classList.remove('btn'); leer.style.cssText='margin-top:10px;color:var(--verde);font-weight:700;font-size:13px;text-align:center;'; leer.innerHTML='✓ Datos leídos del titular de la cédula'; }
+        }, 3500);
+      }},
+
+    { dur: 6400, cap: 'Pego la consulta de <b>ENARGAS</b> y se carga todo el <b>equipo</b>.',
+      render(){
+        screen.innerHTML = shell(`
+          <div class="h">Paso 1 · Vehículo y equipo</div>
+          <div class="grid2" style="grid-template-columns:1fr 1fr;">
+            <div class="card"><div class="lbl">Patente</div><div class="val">NZR856</div></div>
+            <div class="card"><div class="lbl">Marca</div><div class="val">Ford</div></div>
+          </div>
+          <div class="btn ghost fadeUp" id="peg" style="margin-top:9px; animation-delay:.2s">📋 Pegar resultado de ENARGAS</div>
+          <div id="eq"></div>`);
+        setTimeout(()=>tapAt(165,238), 1100);
+        setTimeout(()=>{
+          const eq=document.getElementById('eq');
+          if(eq) eq.innerHTML = `
+            <div class="h" style="margin-top:12px;">Equipo cargado</div>
+            <div class="card fadeUp"><div class="lbl">Regulador</div><div class="val">TY02 · PPA1188474</div></div>
+            <div class="card fadeUp" style="margin-top:7px; animation-delay:.15s"><div class="lbl">Cilindro</div><div class="val">IN37 · 4380428 · CRPC 7/24</div></div>
+            <div class="card fadeUp" style="margin-top:7px; animation-delay:.3s"><div class="lbl">Válvula</div><div class="val">TT18 · 092870</div></div>`;
+          const peg=document.getElementById('peg');
+          if(peg){ peg.style.cssText='margin-top:9px;color:var(--verde);font-weight:700;font-size:13px;text-align:center;'; peg.innerHTML='✓ Equipo cargado sin tipear nada'; }
+        }, 2600);
+      }},
+
+    { dur: 4200, cap: 'La ficha sale por <b>WhatsApp</b> al PEC, ya armada.',
+      render(){
+        screen.innerHTML = shell(`
+          <div class="h">Paso 3 · Enviar al PEC</div>
+          <div class="card pop" style="text-align:center; padding:18px 12px;">
+            <div style="font-size:34px;">📄</div>
+            <div style="font-weight:800; margin-top:6px; font-size:14px;">Ficha técnica lista</div>
+            <div class="lbl" style="margin-top:3px; letter-spacing:.3px;">NZR856 · Revisión · PEC Movil Gas</div>
+          </div>
+          <div class="btn wapp fadeUp" style="margin-top:12px; animation-delay:.3s">Enviar al PEC por WhatsApp</div>
+          <div class="lbl fadeUp" style="text-align:center; margin-top:10px; animation-delay:.5s; text-transform:none; letter-spacing:.2px;">El PDF viaja solo, no hay que adjuntar nada.</div>`);
+        setTimeout(()=>tapAt(165,300), 1900);
+      }},
+
+    { dur: 4600, cap: 'Menos tiempo con los papeles, más autos. <b>Probala gratis 14 días.</b>',
+      render(){
+        screen.innerHTML = shell(`
+          <div style="text-align:center; margin-top:48px;" class="fadeUp">
+            <div style="font-size:38px; letter-spacing:5px; font-weight:800; color:var(--azul-osc);">ESTELITA</div>
+            <div style="color:var(--tinta); margin-top:12px; font-size:15px; font-weight:600;">Más tiempo, mejor atención,<br>más clientes.</div>
+            <div class="pill pop" style="margin-top:20px; font-size:12px; padding:6px 14px; animation-delay:.3s">🎁 Probala gratis 14 días</div>
+            <div style="color:var(--suave); margin-top:16px; font-size:12px;">estelita.app</div>
+          </div>`);
+      }},
+  ];
+
+  let idx = 0, timer = null, running = false;
+  const total = scenes.reduce((a,s)=>a+s.dur, 0);
+
+  function playScene(i){
+    idx = i;
+    const s = scenes[i];
+    s.render();
+    caption.innerHTML = s.cap;
+    // progreso acumulado, animado con transición CSS (no depende de rAF)
+    let acc = 0; for(let k=0;k<i;k++) acc += scenes[k].dur;
+    barra.style.transition = 'none';
+    barra.style.width = (acc / total * 100) + '%';
+    void barra.offsetWidth; // fuerza el reflow para que la transición siguiente corra
+    barra.style.transition = 'width ' + s.dur + 'ms linear';
+    barra.style.width = ((acc + s.dur) / total * 100) + '%';
+    timer = setTimeout(()=>{
+      if(i+1 < scenes.length) playScene(i+1);
+      else finalizar();
+    }, s.dur);
+  }
+
+  function empezar(){
+    overlay.style.display='none';
+    running = true;
+    playScene(0);
+  }
+  function finalizar(){
+    running = false;
+    barra.style.width='100%';
+    overlay.querySelector('p').textContent = 'Reproducir de nuevo';
+    overlay.querySelector('.play').textContent = '⟳';
+    overlay.style.display='flex';
+  }
+
+  document.getElementById('play').addEventListener('click', ()=>{
+    clearTimeout(timer);
+    empezar();
+  });
+</script>
+</body>
+</html>
