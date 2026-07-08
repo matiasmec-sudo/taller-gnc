@@ -13,6 +13,7 @@ import crypto from 'crypto';
 
 const STORE_PATH = 'sistema/licencias.json';
 const SIGNUPS_PATH = 'sistema/signups.json';
+const SUGERENCIAS_PATH = 'sistema/sugerencias.json';
 const USO_PREFIX = 'sistema/uso-';
 const CONSUMO_PREFIX = 'sistema/consumo-';
 
@@ -150,6 +151,37 @@ export async function suspenderPorPreapproval(preapprovalId) {
   l.estado = 'suspendido';
   await guardarLicencias(lics);
   return true;
+}
+
+// --- Sugerencias de los talleres ---
+// Las manda el taller desde Estelita (Mi taller → Sugerencias). Se guardan en
+// un único JSON (array) y se leen desde el panel de admin. Sin datos sensibles:
+// solo el texto, el código de licencia y el nombre del taller para poder
+// identificar quién la mandó y contestarle si hace falta.
+export async function leerSugerencias() {
+  try {
+    const data = await leerJsonBlob(SUGERENCIAS_PATH);
+    return data && Array.isArray(data.sugerencias) ? data.sugerencias : [];
+  } catch (e) {
+    return [];
+  }
+}
+export async function guardarSugerencias(sugerencias) {
+  await escribirJsonBlob(SUGERENCIAS_PATH, { sugerencias, actualizado: new Date().toISOString() });
+}
+export async function agregarSugerencia({ license, taller, texto }) {
+  const lista = await leerSugerencias();
+  const item = {
+    id: crypto.randomUUID ? crypto.randomUUID() : (Date.now() + '-' + crypto.randomInt(1e9)),
+    fecha: new Date().toISOString(),
+    license: String(license || '').trim().slice(0, 40),
+    taller: String(taller || '').trim().slice(0, 120),
+    texto: String(texto || '').trim().slice(0, 2000),
+    estado: 'nueva',
+  };
+  lista.unshift(item); // la más nueva primero
+  await guardarSugerencias(lista.slice(0, 1000)); // tope de resguardo
+  return item;
 }
 
 // ¿La licencia puede usar los servicios pagos?

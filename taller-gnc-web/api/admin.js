@@ -4,7 +4,7 @@
 // eliminar. La primera vez importa (seed) los códigos de LICENSE_CODES para
 // que el panel muestre también los que ya estaban en uso.
 import crypto from 'crypto';
-import { leerLicencias, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, sumarMesISO } from './_licencias.js';
+import { leerLicencias, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, sumarMesISO, leerSugerencias, guardarSugerencias } from './_licencias.js';
 
 function tokenOk(req) {
   const provided = String((req.headers['x-admin-token'] || (req.body && req.body.token) || ''));
@@ -117,6 +117,30 @@ export default async function handler(req, res) {
       lics = lics.filter(x => x.codigo !== req.body.codigo);
       if (lics.length === antes) return res.status(404).json({ error: 'No existe esa licencia.' });
       await guardarLicencias(lics);
+      return res.status(200).json({ ok: true });
+    }
+
+    // --- Sugerencias enviadas por los talleres ---
+    if (accion === 'sugerencias-listar') {
+      const sugerencias = await leerSugerencias();
+      return res.status(200).json({ ok: true, sugerencias });
+    }
+
+    if (accion === 'sugerencia-estado') {
+      const lista = await leerSugerencias();
+      const s = lista.find(x => x.id === req.body.id);
+      if (!s) return res.status(404).json({ error: 'No existe esa sugerencia.' });
+      s.estado = req.body.estado === 'leida' ? 'leida' : 'nueva';
+      await guardarSugerencias(lista);
+      return res.status(200).json({ ok: true });
+    }
+
+    if (accion === 'sugerencia-eliminar') {
+      let lista = await leerSugerencias();
+      const antes = lista.length;
+      lista = lista.filter(x => x.id !== req.body.id);
+      if (lista.length === antes) return res.status(404).json({ error: 'No existe esa sugerencia.' });
+      await guardarSugerencias(lista);
       return res.status(200).json({ ok: true });
     }
 

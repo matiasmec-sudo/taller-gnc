@@ -3085,6 +3085,15 @@ Documentación para realizar la renovación:
       <div class="form-actions" style="margin-top:8px;">
         <button type="button" class="btn btn-ghost btn-sm" id="btn-change-license">Cambiar código de licencia</button>
       </div>`;
+    const secSugerencias = `
+      <div class="agent-hint" style="margin-top:0;">¿Se te ocurre algo para que Estelita te sirva mejor, o hay algo que no funciona como esperabas? Contanos acá y nos llega directo. Leemos todas las sugerencias y las tenemos en cuenta para las próximas mejoras.</div>
+      <label style="display:block;">Tu sugerencia o comentario
+        <textarea id="sug-texto" rows="4" placeholder="Ej: Estaría bueno poder..." style="font-family:inherit; font-size:14px;"></textarea>
+      </label>
+      <div class="form-actions" style="margin-top:8px;">
+        <button type="button" class="btn btn-agent btn-sm" id="btn-enviar-sugerencia">Enviar sugerencia</button>
+      </div>
+      <div id="sug-estado" class="agent-hint" style="margin-top:6px;"></div>`;
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="taller-config-panel">
       ${panelVolver()}
       <h2>Configuración del taller</h2>
@@ -3096,6 +3105,7 @@ Documentación para realizar la renovación:
       ${configSeccionCard('precios', 'Precios de trámites', secPrecios)}
       ${configSeccionCard('impresion', 'Impresión sobre la planilla', secImpresion)}
       ${configSeccionCard('licencia', 'Licencia del equipo', secLicencia)}
+      ${configSeccionCard('sugerencias', 'Sugerencias para mejorar Estelita', secSugerencias)}
       <div class="form-actions" style="margin-top:12px;">
         <button class="btn btn-primary" id="btn-save-taller-config">Guardar configuración</button>
       </div>
@@ -5917,6 +5927,32 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         if (ok) {
           localStorage.removeItem(LICENSE_KEY);
           boot();
+        }
+      });
+    }
+    const btnEnviarSug = root.querySelector('#btn-enviar-sugerencia');
+    if (btnEnviarSug) {
+      btnEnviarSug.addEventListener('click', async () => {
+        const ta = root.querySelector('#sug-texto');
+        const est = root.querySelector('#sug-estado');
+        const texto = (ta ? ta.value : '').trim();
+        if (texto.length < 4) { if (est) { est.style.color = 'var(--rojo)'; est.textContent = 'Escribí un poco más para que podamos entenderla.'; } return; }
+        btnEnviarSug.disabled = true;
+        if (est) { est.style.color = ''; est.textContent = 'Enviando...'; }
+        try {
+          const r = await fetch('/api/sugerencia', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ license: localStorage.getItem(LICENSE_KEY), taller: tallerNombre, texto }),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(data.error || 'No se pudo enviar.');
+          if (ta) ta.value = '';
+          if (est) { est.style.color = 'var(--verde)'; est.textContent = '¡Gracias! Recibimos tu sugerencia.'; }
+        } catch (e) {
+          if (est) { est.style.color = 'var(--rojo)'; est.textContent = 'No se pudo enviar: ' + e.message + ' Probá de nuevo con internet.'; }
+        } finally {
+          btnEnviarSug.disabled = false;
         }
       });
     }
