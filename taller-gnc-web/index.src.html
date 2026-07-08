@@ -2851,14 +2851,14 @@ Documentación para realizar la renovación:
     ];
     return `<div class="scan-box" id="scan-box">
       <h3 style="margin-top:0; border-top:none; padding-top:0;">Fotos del cliente ${infoAyuda('ayuda-fotos-cliente')}</h3>
-      ${ayudaBloque('ayuda-fotos-cliente', 'Colocá el DNI, la Cédula Verde y la Tarjeta de GNC juntos sobre una mesa y tomá una sola foto con todo (Frente). Luego dalos vuelta y tomá otra (Dorso). Las dos fotos quedan guardadas junto con el cliente. Al tocar "Leer datos", del DNI se leen los datos personales y de la Cédula Verde solo la patente; el resto de los datos del vehículo y del equipo se completan con la consulta a ENARGAS. La Tarjeta de GNC no se lee, solo queda de respaldo.')}
+      ${ayudaBloque('ayuda-fotos-cliente', 'Colocá el DNI, la Cédula Verde y la Tarjeta de GNC juntos sobre una mesa y tomá una sola foto con todo (Frente). Luego dalos vuelta y tomá otra (Dorso). Las dos fotos quedan guardadas junto con el cliente. Al tocar "Leer datos", del DNI se leen los datos personales y de la Cédula Verde solo la patente; el resto de los datos del vehículo y del equipo se completan con la consulta a ENARGAS. La Tarjeta de GNC no se lee, solo queda de respaldo. Si el cliente te mandó la documentación en fotos separadas, en "Galería" podés elegir varias a la vez y Estelita las une en una sola imagen.')}
       <div class="scan-grid" style="grid-template-columns: repeat(2, 1fr);">
         ${slots.map(s => `
         <div class="scan-slot">
           <label>${s.label}</label>
           <div class="scan-slot-buttons">
             <label class="btn btn-primary btn-sm">📷 Tomar foto<input type="file" accept="image/*" capture="environment" id="scan-${s.key}" style="display:none;"></label>
-            <label class="btn btn-ghost btn-sm">🖼 Galería<input type="file" accept="image/*" id="scan-${s.key}-galeria" style="display:none;"></label>
+            <label class="btn btn-ghost btn-sm">🖼 Galería<input type="file" accept="image/*" multiple id="scan-${s.key}-galeria" style="display:none;"></label>
           </div>
           <img class="scan-thumb" id="thumb-${s.key}" style="display:${scanFiles[s.key] ? 'block' : 'none'}; height:130px;" src="${scanFiles[s.key] || ''}">
           ${scanFiles[s.key] ? `<button type="button" class="btn btn-ghost btn-sm" data-remove-photo="${s.key}">Quitar foto</button>` : ''}
@@ -4790,6 +4790,47 @@ Documentación para realizar la renovación:
     });
   }
 
+  function cargarImagenDeFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('No se pudo procesar una imagen'));
+        img.src = e.target.result;
+      };
+      reader.onerror = () => reject(new Error('No se pudo leer un archivo'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Une varias fotos en una sola imagen (una debajo de la otra), para cuando el
+  // cliente manda la documentación en fotos separadas. Todo en el dispositivo.
+  async function unirFotosEnUna(files, maxDim = 1568, quality = 0.85) {
+    const imgs = [];
+    for (const f of files) imgs.push(await cargarImagenDeFile(f));
+    const sep = 8; // separación entre fotos
+    const ancho = Math.min(maxDim, Math.max(...imgs.map(i => i.width)));
+    const escaladas = imgs.map(i => ({ img: i, w: ancho, h: Math.round(i.height * ancho / i.width) }));
+    let alto = escaladas.reduce((s, e) => s + e.h, 0) + sep * (escaladas.length - 1);
+    // Si el total queda enorme, se achica todo para no pasar un límite razonable.
+    const ALTO_MAX = 4200;
+    const factor = alto > ALTO_MAX ? ALTO_MAX / alto : 1;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(ancho * factor);
+    canvas.height = Math.round(alto * factor);
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    let y = 0;
+    for (const e of escaladas) {
+      const w = Math.round(e.w * factor), h = Math.round(e.h * factor);
+      ctx.drawImage(e.img, 0, y, w, h);
+      y += h + Math.round(sep * factor);
+    }
+    return canvas.toDataURL('image/jpeg', quality);
+  }
+
   // ---- Respaldo cifrado en la nube ----
   // Todo se cifra EN ESTE DISPOSITIVO (AES-GCM, clave derivada con PBKDF2 de
   // una frase que solo el taller conoce) antes de subirse. El servidor y el
@@ -5225,16 +5266,18 @@ Documentación para realizar la renovación:
         const input = root.querySelector(`#scan-${slot}${sufijo}`);
         if (!input) return;
         input.addEventListener('change', async () => {
-          const file = input.files[0];
-          if (!file) return;
+          const files = Array.from(input.files || []);
+          if (!files.length) return;
           try {
-            const dataUrl = await compressImageFile(file);
+            // Si eligieron varias fotos (desde la galería), se unen en una sola.
+            const dataUrl = files.length > 1 ? await unirFotosEnUna(files) : await compressImageFile(files[0]);
             scanFiles[slot] = dataUrl;
             fotosEditadas = true;
           } catch (e) {
-            await customAlert('No se pudo procesar esa foto, probá con otra.');
+            await customAlert('No se pudo procesar esa(s) foto(s), probá de nuevo.');
             return;
           }
+          input.value = '';
           syncClienteDraftFromDOM();
           render();
         });
