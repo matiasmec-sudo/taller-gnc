@@ -260,7 +260,12 @@
 
 /* CONTROLS */
 #gnc-app .controls {
-  display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; align-items: center;
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+  /* Fija arriba: al bajar por la lista de clientes, la barra de búsqueda
+     (y sus botones) te sigue, así podés buscar o limpiar desde cualquier
+     punto sin volver hasta arriba. */
+  position: sticky; top: 0; z-index: 8;
+  background: var(--bg); padding: 8px 0; margin-bottom: 10px;
 }
 #gnc-app input[type="text"], #gnc-app input[type="tel"], #gnc-app input[type="date"],
 #gnc-app input[type="month"], #gnc-app select, #gnc-app textarea {
@@ -274,7 +279,14 @@
 }
 #gnc-app .search-wrap { position: relative; flex: 1; min-width: 180px; display: flex; }
 #gnc-app .search-wrap .search-ico { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
-#gnc-app .search-wrap .search-input { width: 100%; padding-left: 40px; border-radius: 14px; box-shadow: 0 2px 8px rgba(20,40,90,0.06); }
+#gnc-app .search-wrap .search-input { width: 100%; padding-left: 40px; padding-right: 40px; border-radius: 14px; box-shadow: 0 2px 8px rgba(20,40,90,0.06); }
+#gnc-app .search-wrap .search-clear {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  width: 28px; height: 28px; border-radius: 999px; padding: 0; cursor: pointer;
+  background: var(--surface-alt); border: none; color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center; font-size: 15px; line-height: 1;
+}
+#gnc-app .search-wrap .search-clear:hover { color: var(--flame); background: var(--line); }
 #gnc-app .btn {
   font-family: var(--sans); font-weight: 700; font-size: 13px; letter-spacing: 0.2px;
   border-radius: 12px; padding: 10px 16px; border: 1px solid transparent; cursor: pointer;
@@ -5613,6 +5625,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
           <div class="search-wrap">
             <svg class="search-ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
             <input class="search-input" type="text" id="search-input" placeholder="Buscar por nombre o patente..." value="${escapeHtml(currentQuery)}">
+            ${currentQuery ? '<button type="button" class="search-clear" id="btn-clear-search" title="Limpiar búsqueda" aria-label="Limpiar búsqueda">✕</button>' : ''}
           </div>
           <button class="btn btn-outline" id="btn-new">+ Nuevo cliente</button>
           <button type="button" class="btn btn-outline" id="btn-enargas-directo" title="Abrir la consulta por dominio de ENARGAS">ENARGAS ↗</button>
@@ -5962,6 +5975,16 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         } finally {
           btnEnviarSug.disabled = false;
         }
+      });
+    }
+    const btnClearSearch = root.querySelector('#btn-clear-search');
+    if (btnClearSearch) {
+      btnClearSearch.addEventListener('click', () => {
+        currentQuery = '';
+        window.scrollTo({ top: 0 });
+        render();
+        const inp = root.querySelector('#search-input');
+        if (inp) inp.focus();
       });
     }
     const searchInput = root.querySelector('#search-input');
