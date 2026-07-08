@@ -46,6 +46,15 @@
   .muted { color:var(--suave); font-size:12px; }
   #tabla-msg { color:var(--rojo); font-size:13px; margin:10px 0; }
   @media (max-width:640px){ .col-alta,.col-notas{ display:none; } }
+  /* Sugerencias */
+  #sug-seccion { margin-top:30px; }
+  #sug-seccion h1 { font-size:18px; }
+  .sug-card { background:var(--surface); border:1px solid var(--linea); border-left:4px solid var(--azul); border-radius:12px; padding:14px 16px; margin-bottom:12px; }
+  .sug-card.leida { border-left-color:var(--linea); opacity:.72; }
+  .sug-top { display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:6px; }
+  .sug-taller { font-weight:700; font-size:14px; }
+  .sug-texto { font-size:14px; white-space:pre-wrap; line-height:1.45; margin:6px 0 10px; }
+  #sug-msg { font-size:13px; margin:8px 0; }
 </style>
 </head>
 <body>
@@ -78,6 +87,15 @@
       <tbody id="filas"></tbody>
     </table>
     <p class="muted" style="margin-top:14px;"><b>Pago al día:</b> cuando te transfieren, tocá <b>“+1 mes”</b> — se renueva un mes y queda al día; si la fecha vence (+5 días de gracia), la app <b>se corta sola</b>. La columna <b>Estado</b> avisa: Al día / Vence en Xd / Vencida / En prueba / Suspendida. <b>Suspender</b> revoca al instante. (Cuando conectemos Mercado Pago, el “+1 mes” lo hace solo el cobro.) <b>Últ. actividad</b> = lecturas de IA recientes (identifica un código aunque no tenga nombre). <b>Costo IA (mes)</b> = lo que te factura Anthropic por ese código; el total está arriba.</p>
+
+    <div id="sug-seccion">
+      <div class="top">
+        <h1>Sugerencias de los talleres <span id="sug-contador" class="muted" style="font-weight:400;"></span></h1>
+        <button class="btn btn-ghost btn-sm" id="btn-refrescar-sug">Refrescar</button>
+      </div>
+      <div id="sug-msg"></div>
+      <div id="sug-lista"></div>
+    </div>
   </div>
 </div>
 
@@ -182,6 +200,44 @@
       if (e.message === '401') return mostrarLogin('La sesión expiró o la contraseña cambió.');
       $('#tabla-msg').textContent = 'No se pudo cargar: ' + e.message;
     }
+    cargarSugerencias();
+  }
+
+  function fmtFechaHora(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return esc(iso || '');
+    return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function renderSug(lista) {
+    lista = lista || [];
+    const nuevas = lista.filter(s => s.estado !== 'leida').length;
+    $('#sug-contador').textContent = lista.length ? `(${lista.length}${nuevas ? ` · ${nuevas} sin leer` : ''})` : '';
+    if (!lista.length) { $('#sug-lista').innerHTML = '<p class="muted">Todavía no hay sugerencias.</p>'; return; }
+    $('#sug-lista').innerHTML = lista.map(s => `
+      <div class="sug-card ${s.estado === 'leida' ? 'leida' : ''}" data-id="${esc(s.id)}">
+        <div class="sug-top">
+          <span class="sug-taller">${esc(s.taller) || '<span class="muted">(taller sin nombre)</span>'} <span class="cod">${esc(s.license)}</span></span>
+          <span class="muted">${fmtFechaHora(s.fecha)}</span>
+        </div>
+        <div class="sug-texto">${esc(s.texto)}</div>
+        <div class="acciones">
+          <button class="btn btn-ghost btn-sm" data-sa="${s.estado === 'leida' ? 'nueva' : 'leida'}">${s.estado === 'leida' ? 'Marcar como no leída' : 'Marcar como leída'}</button>
+          <button class="btn btn-danger btn-sm" data-sa="eliminar">Eliminar</button>
+        </div>
+      </div>`).join('');
+  }
+
+  async function cargarSugerencias() {
+    try {
+      const data = await api('sugerencias-listar');
+      $('#sug-msg').textContent = '';
+      renderSug(data.sugerencias);
+    } catch (e) {
+      if (e.message === '401') return;
+      $('#sug-msg').style.color = 'var(--rojo)';
+      $('#sug-msg').textContent = 'No se pudieron cargar las sugerencias: ' + e.message;
+    }
   }
 
   function mostrarPanel() { $('#login').style.display = 'none'; $('#panel').style.display = 'block'; cargar(); }
@@ -208,6 +264,27 @@
   $('#pass').addEventListener('keydown', e => { if (e.key === 'Enter') $('#btn-login').click(); });
   $('#btn-salir').addEventListener('click', () => mostrarLogin(''));
   $('#btn-refrescar').addEventListener('click', cargar);
+  $('#btn-refrescar-sug').addEventListener('click', cargarSugerencias);
+
+  $('#sug-lista').addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('button[data-sa]');
+    if (!btn) return;
+    const card = btn.closest('.sug-card');
+    const id = card.getAttribute('data-id');
+    const a = btn.getAttribute('data-sa');
+    try {
+      if (a === 'eliminar') {
+        if (!confirm('Eliminar esta sugerencia definitivamente?')) return;
+        await api('sugerencia-eliminar', { id });
+      } else {
+        await api('sugerencia-estado', { id, estado: a === 'leida' ? 'leida' : 'nueva' });
+      }
+      await cargarSugerencias();
+    } catch (e) {
+      if (e.message === '401') return mostrarLogin('La sesión expiró.');
+      alert('No se pudo: ' + e.message);
+    }
+  });
 
   function pedirPlan(actual) {
     const p = prompt('Plan — escribí: basico / profesional / full (o vacío):', actual || '');
