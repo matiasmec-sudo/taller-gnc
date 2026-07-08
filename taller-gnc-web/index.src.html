@@ -544,6 +544,7 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 #gnc-app .hist-patente { font-family: var(--display); font-weight: 800; font-size: 18px; letter-spacing: 1px; }
 #gnc-app .hist-tipo { font-size: 13.5px; font-weight: 700; margin-top: 1px; }
 #gnc-app .hist-nombre { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+#gnc-app .turno-confirmar { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 #gnc-app .hist-modelo { font-family: var(--sans); font-size: 13px; font-weight: 600; letter-spacing: 0; color: var(--text-muted); }
 /* Zona tocable de la fila del historial: al tocarla se despliega el
    detalle del cliente hacia abajo (los botones de la derecha quedan aparte). */
@@ -1171,15 +1172,17 @@ Documentación para realizar la renovación:
     const hoy = fechaLocalISO();
     const items = [];
     clientes.forEach(c => (c.turnos || []).forEach(t => {
-      if (t.fecha && t.fecha >= hoy) items.push({ cliente: c, turno: t });
+      if (t.fecha && t.fecha >= hoy && !t.estado) items.push({ cliente: c, turno: t });
     }));
     items.sort((a, b) => (a.turno.fecha + (a.turno.hora || '')).localeCompare(b.turno.fecha + (b.turno.hora || '')));
     return items;
   }
   // El próximo turno de un cliente puntual (para mostrarlo en su tarjeta).
+  // Solo turnos futuros sin confirmar — una vez marcado "Asistió"/"No
+  // asistió", el turno pasa al historial y ya no cuenta como próximo.
   function proximoTurnoDe(c) {
     const hoy = fechaLocalISO();
-    return (c.turnos || []).filter(t => t.fecha && t.fecha >= hoy)
+    return (c.turnos || []).filter(t => t.fecha && t.fecha >= hoy && !t.estado)
       .sort((a, b) => (a.fecha + (a.hora || '')).localeCompare(b.fecha + (b.hora || '')))[0] || null;
   }
   // Turnos de hoy o mañana a los que todavía no se les mandó el recordatorio.
@@ -1986,17 +1989,23 @@ Documentación para realizar la renovación:
   // Panel de turnos: los que vienen, agrupados, con el recordatorio de
   // WhatsApp listo para los de hoy y mañana.
   function turnosPanel(entrando) {
-    const items = turnosProximos();
     const hoy = fechaLocalISO(), manana = mananaISO();
+    // Solo los turnos sin confirmar (los ya confirmados viven en el
+    // historial del cliente). Los pasados sin confirmar se muestran arriba
+    // en "Para confirmar" para que no se pierdan.
+    const todos = [];
+    clientes.forEach(c => (c.turnos || []).forEach(t => { if (t.fecha && !t.estado) todos.push({ cliente: c, turno: t }); }));
+    todos.sort((a, b) => (a.turno.fecha + (a.turno.hora || '')).localeCompare(b.turno.fecha + (b.turno.hora || '')));
     const grupos = [
-      { titulo: 'Hoy', items: items.filter(i => i.turno.fecha === hoy) },
-      { titulo: 'Mañana', items: items.filter(i => i.turno.fecha === manana) },
-      { titulo: 'Próximos', items: items.filter(i => i.turno.fecha > manana) },
+      { titulo: 'Para confirmar', items: todos.filter(i => i.turno.fecha < hoy), confirmar: true },
+      { titulo: 'Hoy', items: todos.filter(i => i.turno.fecha === hoy), confirmar: true, recordar: true },
+      { titulo: 'Mañana', items: todos.filter(i => i.turno.fecha === manana), recordar: true },
+      { titulo: 'Próximos', items: todos.filter(i => i.turno.fecha > manana), recordar: true },
     ].filter(g => g.items.length);
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="turnos-panel">
       ${panelVolver()}
       <h2 style="margin-top:0;">Turnos ${infoAyuda('ayuda-turnos')}</h2>
-      ${ayudaBloque('ayuda-turnos', 'Los turnos se agendan desde el alta de un cliente nuevo o con el botón "Turno" de su tarjeta. Para los de hoy y mañana aparece el botón de WhatsApp con el recordatorio ya escrito; una vez enviado queda marcado y no se repite. Estelita también te avisa a vos con la notificación diaria si hay turnos para mañana sin avisar.')}
+      ${ayudaBloque('ayuda-turnos', 'Los turnos se agendan desde el alta de un cliente nuevo o con el botón "Turno" de su tarjeta. Para los de hoy y mañana aparece el botón de WhatsApp con el recordatorio ya escrito. Cuando el cliente viene (o falta), tocá "Asistió" o "No asistió" y queda guardado en su historial. Estelita también te avisa a vos con la notificación diaria si hay turnos para mañana sin avisar.')}
       ${grupos.length ? grupos.map(g => `
         <div class="hist-dia">${g.titulo}</div>
         <div class="tramites-list">
@@ -2006,8 +2015,12 @@ Documentación para realizar la renovación:
                 <div class="hist-patente">${escapeHtml(cliente.patente || 'SIN PATENTE')}</div>
                 <div class="hist-tipo">${fmtDate(turno.fecha)}${turno.hora ? ' · ' + escapeHtml(turno.hora) + ' hs' : ''}${turno.motivo ? ' — ' + escapeHtml(turno.motivo) : ''}</div>
                 <div class="hist-nombre">${escapeHtml(cliente.nombre)}${cliente.telefono ? ' · ' + escapeHtml(cliente.telefono) : ''}</div>
+                ${g.confirmar ? `<div class="turno-confirmar">
+                  <button type="button" class="btn btn-primary btn-sm" data-asistio-cliente="${cliente.id}" data-asistio-id="${turno.id}">Asistió</button>
+                  <button type="button" class="btn btn-ghost btn-sm" data-noasistio-cliente="${cliente.id}" data-noasistio-id="${turno.id}">No asistió</button>
+                </div>` : ''}
               </div>
-              ${cliente.telefono ? (turno.avisoEnviado
+              ${g.recordar && cliente.telefono ? (turno.avisoEnviado
                 ? '<button type="button" class="btn btn-ghost btn-sm" disabled>Aviso enviado</button>'
                 : `<button type="button" class="btn btn-wa btn-sm" data-aviso-turno-cliente="${cliente.id}" data-aviso-turno-id="${turno.id}">Recordar por WhatsApp</button>`) : ''}
               <button type="button" class="btn btn-trash" data-borrar-turno-cliente="${cliente.id}" data-borrar-turno-id="${turno.id}" title="Borrar turno" aria-label="Borrar turno">${trashSvg()}</button>
@@ -2499,9 +2512,17 @@ Documentación para realizar la renovación:
   // trámites, desplegable desde la tarjeta sin tener que entrar a editar.
   function clientDetalleExpandido(c) {
     const rows = c.tramites.slice().sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).map(t => tramiteRow(c.id, t)).join('');
+    // Turnos ya confirmados (asistió / no asistió), más recientes primero.
+    const turnosHist = (c.turnos || []).filter(t => t.estado).sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+    const turnosRows = turnosHist.map(t => `
+      <div class="tramite-row"><div>
+        <div class="hist-tipo">${fmtDate(t.fecha)}${t.motivo ? ' — ' + escapeHtml(t.motivo) : ''}</div>
+        <div class="hist-nombre">${t.estado === 'asistio' ? '✅ Asistió' : '❌ No asistió'}</div>
+      </div></div>`).join('');
     return `<div class="client-detalle">
       ${clienteDatosBlock(c)}
       ${c.tramites.length ? `<h4>Historial de trámites</h4><div class="tramites-list">${rows}</div>` : '<p class="scan-sub">Todavía no tiene trámites cargados.</p>'}
+      ${turnosHist.length ? `<h4>Turnos</h4><div class="tramites-list">${turnosRows}</div>` : ''}
     </div>`;
   }
 
@@ -6823,6 +6844,42 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         t.avisoEnviado = true;
         await saveClientes();
         render();
+      });
+    });
+
+    // Confirmar que el cliente asistió al turno → sale de la agenda y queda
+    // en el historial del cliente.
+    root.querySelectorAll('[data-asistio-cliente]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const c = clientes.find(x => x.id === btn.getAttribute('data-asistio-cliente'));
+        if (!c) return;
+        const t = (c.turnos || []).find(x => x.id === btn.getAttribute('data-asistio-id'));
+        if (!t) return;
+        t.estado = 'asistio';
+        await saveClientes();
+        render();
+      });
+    });
+
+    // Marcar que no asistió → queda en el historial y se ofrece mandar un
+    // WhatsApp para reprogramar (el que no vino es trabajo que se escapa).
+    root.querySelectorAll('[data-noasistio-cliente]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const c = clientes.find(x => x.id === btn.getAttribute('data-noasistio-cliente'));
+        if (!c) return;
+        const t = (c.turnos || []).find(x => x.id === btn.getAttribute('data-noasistio-id'));
+        if (!t) return;
+        t.estado = 'no_asistio';
+        await saveClientes();
+        render();
+        if (c.telefono) {
+          const ok = await customConfirm('¿Querés mandarle un WhatsApp para reprogramar el turno?', { titulo: 'No asistió', okLabel: 'Mandar WhatsApp', cancelLabel: 'Ahora no' });
+          if (ok) {
+            const nombre = c.nombre && c.nombre !== c.patente ? c.nombre : '';
+            const msg = `¡Hola${nombre ? ' ' + nombre : ''}! Vimos que no pudiste venir a tu turno del ${fmtDate(t.fecha)}. ¿Reprogramamos? Decinos qué día te queda cómodo y te esperamos. ¡Saludos!`;
+            window.open(`https://wa.me/${cleanPhone(c.telefono)}?text=${encodeURIComponent(msg)}`, '_blank');
+          }
+        }
       });
     });
 
