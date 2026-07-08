@@ -5308,6 +5308,15 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         }
       });
 
+      // Si la IA cargó la localidad, completar el CPA solo (si está vacío). El
+      // "input.value = ..." de arriba no dispara el autocompletado por ciudad,
+      // así que lo hacemos acá a mano.
+      const cpaEl = root.querySelector('#f-cpa');
+      if (parsed.ciudad && cpaEl && !cpaEl.value.trim()) {
+        const cpa = cpaDeCiudad(parsed.ciudad);
+        if (cpa) cpaEl.value = cpa;
+      }
+
       statusEl.className = 'scan-status ok';
       statusEl.textContent = 'Listo — revisá los datos completados y corregí lo que haga falta antes de guardar.';
     } catch (e) {
