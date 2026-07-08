@@ -2280,7 +2280,13 @@ Documentación para realizar la renovación:
   }
 
   function aplicarValoresPorTipoTramite(tipo, eq) {
-    if (tipo === 'revision_anual') {
+    if (tipo === 'conversion') {
+      // Conversión: se instala el equipo de GNC de cero (el auto no tenía).
+      // Todos los elementos van como Montaje.
+      eq.regulador.operacion = 'montaje';
+      eq.cilindros.forEach(c => { c.msdb = 'montaje'; });
+      eq.valvulas.forEach(v => { v.msb = 'montaje'; });
+    } else if (tipo === 'revision_anual') {
       eq.regulador.operacion = 'sigue';
       eq.cilindros.forEach(c => { c.msdb = 'sigue'; });
       eq.valvulas.forEach(v => { v.msb = 'sigue'; });
@@ -2292,6 +2298,15 @@ Documentación para realizar la renovación:
       if (eq.valvulas.length > 0) eq.valvulas[0].msb = 'baja';
       eq.valvulas.push({ codigo: '', serie: '', msb: 'montaje' });
     }
+  }
+
+  // En una Baja o Desmontaje, el titular de la cédula del vehículo debe
+  // coincidir con la persona del DNI: solo el titular está habilitado
+  // legalmente para desmontar o dar de baja el equipo. Se pide confirmar antes
+  // de finalizar. Devuelve true si se puede continuar.
+  async function confirmarTitularBaja(tipo) {
+    if (tipo !== 'baja' && tipo !== 'desmontaje') return true;
+    return await customConfirm('Para una Baja o Desmontaje, el titular de la cédula del vehículo debe coincidir con la persona del DNI (solo el titular está habilitado para desmontar o dar de baja el equipo). ¿El titular de la cédula coincide con el DNI presentado?', { titulo: 'Titular del vehículo', okLabel: 'Sí, coinciden', cancelLabel: 'No', danger: true });
   }
 
   function customAlert(mensaje, titulo) {
@@ -3104,13 +3119,15 @@ Documentación para realizar la renovación:
           <input type="text" id="f-patente" value="${escapeHtml(c.patente)}" placeholder="Ej: AB123CD">
           <span class="formato-hint" id="f-patente-hint" style="display:none;">Formato de patente poco habitual — revisá que esté bien.</span>
         </label>
-        <div style="grid-column: 1/-1; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-          <button type="button" class="btn btn-agent" id="btn-buscar-enargas" data-patente="${escapeHtml(c.patente)}" style="flex:2; min-width:180px; font-size:14px;">🔎 Buscar en ENARGAS ↗</button>
-          <button type="button" class="btn btn-ghost" id="btn-toggle-enargas-paste" style="flex:1; min-width:120px;">${enargasPasteOpen ? 'Cerrar' : '📋 Pegar resultado'}</button>
-        </div>
-        <div id="enargas-copy-hint" class="agent-hint" style="display:none; grid-column: 1/-1;"></div>
-        ${enargasPasteOpen ? enargasPasteBox(enargasEntrando) : ''}
-        ${revisionTecnicoBloque()}
+        ${(tramiteDraftCampos && tramiteDraftCampos.tipo === 'conversion')
+          ? '<div class="agent-hint" style="grid-column: 1/-1;">Conversión: el auto no tenía equipo de GNC, así que no hay consulta al SIC. Cargá a mano los datos del vehículo y del equipo (van todos como Montaje).</div>'
+          : `<div style="grid-column: 1/-1; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <button type="button" class="btn btn-agent" id="btn-buscar-enargas" data-patente="${escapeHtml(c.patente)}" style="flex:2; min-width:180px; font-size:14px;">🔎 Buscar en ENARGAS ↗</button>
+              <button type="button" class="btn btn-ghost" id="btn-toggle-enargas-paste" style="flex:1; min-width:120px;">${enargasPasteOpen ? 'Cerrar' : '📋 Pegar resultado'}</button>
+            </div>
+            <div id="enargas-copy-hint" class="agent-hint" style="display:none; grid-column: 1/-1;"></div>
+            ${enargasPasteOpen ? enargasPasteBox(enargasEntrando) : ''}
+            ${revisionTecnicoBloque()}`}
         <label>Marca
           <input type="text" id="f-marca" value="${escapeHtml(c.marca)}" placeholder="Ej: Chevrolet">
         </label>
@@ -5021,6 +5038,9 @@ Documentación para realizar la renovación:
   // Solo aparece si el taller tiene al menos un técnico vinculado.
   function revisionTecnicoBloque() {
     if (!tecnicosVinculados) return '';
+    // En una conversión no se manda al técnico (el equipo es nuevo, no hay
+    // nada que comparar contra el SIC).
+    if (tramiteDraftCampos && tramiteDraftCampos.tipo === 'conversion') return '';
     const rc = tramiteDraftCampos || {};
     let estadoHtml = '';
     if (rc.revisionId && rc.revisionEstado === 'pendiente') {
@@ -6241,6 +6261,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
         const t = c && (c.tramites || []).find(x => x.id === btn.getAttribute('data-pec-id'));
         if (!c || !t) return;
         if (!t.firma) { await customAlert('Este trámite no tiene la firma del propietario. Tocá "Editar" para agregarla antes de enviarlo al PEC.'); return; }
+        if (!(await confirmarTitularBaja(t.tipo))) return;
         // Si la revisión del técnico no está aprobada (todavía pendiente, o con
         // un problema informado), pedir confirmación antes de enviar.
         if (t.revisionId && t.revisionEstado !== 'aprobada' && !t.revisionOverride) {
@@ -6336,6 +6357,7 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
       if (!t) return;
       const st = root.querySelector('#ut-status');
       if (!t.firma) { await customAlert('Este trámite no tiene la firma del propietario. Tocá "Editar" para agregarla antes de enviarlo al PEC.'); return; }
+      if (!(await confirmarTitularBaja(t.tipo))) return;
       try {
         btnUtPec.disabled = true;
         if (st) { st.className = 'agent-result'; st.innerHTML = '<span class="gnc-loading-row"><span class="gnc-spinner"></span> Generando el PDF...</span>'; }
@@ -7598,6 +7620,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
     const btnSendPecTramite = root.querySelector('#btn-send-pec-tramite');
     if (btnSendPecTramite) btnSendPecTramite.addEventListener('click', async () => {
       if (!currentSignature) { await customAlert('Falta la firma del propietario antes de enviar al PEC.'); return; }
+      if (!(await confirmarTitularBaja(tramiteDraftCampos && tramiteDraftCampos.tipo))) return;
       // Si la revisión del técnico está en camino y no fue aprobada, avisar
       // antes de enviar (se puede destrabar a mano acá mismo).
       const rc = tramiteDraftCampos || {};
