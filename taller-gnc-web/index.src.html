@@ -2780,13 +2780,15 @@ Documentación para realizar la renovación:
   const PORTAPAPELES_AYUDA_BLOQUEADO = 'El permiso del portapapeles está bloqueado para Estelita. Para activarlo: mantené apretado el ícono de Estelita en la pantalla de inicio → "Información de la app" → Permisos → Portapapeles → Permitir. (Si usás Estelita dentro de Chrome, tocá el candado junto a la dirección → Permisos.) Mientras tanto, pegar a mano funciona igual.';
 
   function enargasPasteBox(entrando) {
-    // Un solo botón: lee el portapapeles y carga todo. El recuadro de texto
-    // queda oculto y solo se muestra como plan B cuando el navegador no
-    // deja leer el portapapeles (ahí pegar a mano sigue funcionando).
+    // El recuadro de pegar queda SIEMPRE visible: en el celular, leer el
+    // portapapeles solo casi nunca funciona (Android lo bloquea), así que la
+    // forma segura es pegar a mano acá (dispara la carga automática igual). El
+    // botón de abajo es un atajo para la computadora, donde sí se puede leer.
     return `<div class="agent-box ${entrando ? 'panel-entrando' : ''}" style="grid-column: 1/-1;">
-      <button type="button" class="btn btn-primary" id="btn-pegar-enargas" style="width:100%; font-size:15px; margin-bottom:6px;">PEGAR RESULTADO DE ENARGAS</button>
-      <div id="pegado-rapido-estado" class="agent-hint" style="margin-bottom:6px;"></div>
-      <textarea id="enargas-paste-text" style="display:none;" placeholder="Mantené apretado acá y elegí Pegar — se carga solo"></textarea>
+      <div class="agent-hint" style="margin-top:0; margin-bottom:6px;"><b>Pegá acá el resultado de ENARGAS:</b> tocá el recuadro, mantené apretado y elegí "Pegar". Se carga solo.</div>
+      <textarea id="enargas-paste-text" placeholder="Pegá acá lo que copiaste en ENARGAS..." style="margin-bottom:6px;"></textarea>
+      <button type="button" class="btn btn-ghost btn-sm" id="btn-pegar-enargas" style="width:100%;">O pegar automáticamente (computadora)</button>
+      <div id="pegado-rapido-estado" class="agent-hint" style="margin-top:6px;"></div>
       <div id="enargas-paste-result"></div>
     </div>`;
   }
