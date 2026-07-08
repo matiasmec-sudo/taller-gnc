@@ -5544,10 +5544,10 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     const counts = computeCounts();
     const list = currentQuery.trim() ? sortedFiltered(currentQuery) : [];
     const editing = editingId ? clientes.find(c => c.id === editingId) : null;
-    // Con el asistente abierto, la pantalla se dedica solo al trámite: se
-    // ocultan los chips de resumen, el buscador y las tarjetas de clientes
-    // (quedaban abajo del formulario y recargaban la pantalla).
-    const wizardAbiertoRender = !!(showForm || editing);
+    // Con CUALQUIER panel abierto (el asistente o una opción del menú), la
+    // pantalla se dedica solo a ese panel: se ocultan los chips de resumen, el
+    // buscador y los botones Nuevo/ENARGAS y las tarjetas de clientes, que
+    // abajo del panel no tenían sentido y confundían.
     const pendCount = pendientesItems().length;
     const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo || showTurnos || showHoy || showEstadisticas || !!verUltimoTramiteId;
     const turnosAvisoCount = turnosParaAvisar().length;
@@ -5609,7 +5609,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
           </div>
         </div>
 
-        ${wizardAbiertoRender ? '' : `<div class="resumen-chips" id="resumen-chips" role="button" tabindex="0" title="Ver los vencimientos para avisar">
+        ${algunPanelAbierto ? '' : `<div class="resumen-chips" id="resumen-chips" role="button" tabindex="0" title="Ver los vencimientos para avisar">
           <div class="chip chip-danger"><div class="chip-num">${counts.danger}</div><div class="chip-lbl">Vencidos</div></div>
           <div class="chip chip-warn"><div class="chip-num">${counts.warn}</div><div class="chip-lbl">Por vencer (${WARN_DAYS}d)</div></div>
           <div class="chip chip-ok"><div class="chip-num">${counts.ok}</div><div class="chip-lbl">Al día</div></div>
@@ -5621,7 +5621,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         ${reminderBanner()}
         ${showPendientes ? pendientesPanel(entrando.pendientes) : ''}
 
-        ${wizardAbiertoRender ? '' : `<div class="controls">
+        ${algunPanelAbierto ? '' : `<div class="controls">
           <div class="search-wrap">
             <svg class="search-ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
             <input class="search-input" type="text" id="search-input" placeholder="Buscar por nombre o patente..." value="${escapeHtml(currentQuery)}">
@@ -5641,7 +5641,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         ${showForm || editing ? tramiteWizardPanel(editing, entrando.wizard, entrando.wizardPaso, entrando.enargasPaste) : ''}
         ${showFotosFor ? fotosPanel(clientes.find(c => c.id === showFotosFor), entrando.fotos) : ''}
 
-        ${wizardAbiertoRender ? '' : list.length === 0
+        ${algunPanelAbierto ? '' : list.length === 0
           ? `<div class="empty">${emptyIconSvg()}${
               clientes.length === 0
                 ? 'Todavía no cargaste clientes. Sumá el primero con "+ Nuevo cliente".'
