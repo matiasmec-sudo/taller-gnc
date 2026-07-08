@@ -2696,6 +2696,55 @@ Documentación para realizar la renovación:
       return idx;
     }
 
+    // Formato "pegado" del celular: al copiar el SIC desde el teléfono, la
+    // tabla llega toda en un renglón con la etiqueta pegada a su valor, ej:
+    // "Código HomologaciónTY02Número de SeriePPA1188474OperaciónSin Cambios".
+    // No hay tabs ni columnas, así que se ubican las etiquetas conocidas EN
+    // ORDEN y el valor de cada una es el texto hasta la etiqueta siguiente.
+    // Ojo: "CRPC" va antes que "Fecha CRPC" (y esta lo contiene), por eso el
+    // recorrido es secuencial: la primera "CRPC" que aparece es la suelta.
+    const ETIQUETAS_PEGADO = [
+      ['codigo', 'código homologación'],
+      ['serie', 'número de serie'],
+      ['operacion', 'operación'],
+      ['fechaFab', 'fecha fab.'],
+      ['crpc', 'crpc'],
+      ['fechaCrpc', 'fecha crpc'],
+      ['resultado', 'resultado'],
+      ['certificado', 'nro. certificado'],
+    ];
+    function filaPegada(l) {
+      const low = l.toLowerCase();
+      const hallados = [];
+      let pos = 0;
+      for (const [key, lab] of ETIQUETAS_PEGADO) {
+        const idx = low.indexOf(lab, pos);
+        if (idx === -1) continue;
+        hallados.push({ key, end: idx + lab.length, next: idx });
+        pos = idx + lab.length;
+      }
+      if (hallados.length < 2) return null; // al menos código + serie
+      const out = {};
+      for (let i = 0; i < hallados.length; i++) {
+        const fin = i + 1 < hallados.length ? hallados[i + 1].next : l.length;
+        out[hallados[i].key] = l.substring(hallados[i].end, fin).trim();
+      }
+      return out;
+    }
+    // ¿Es una fila "pegada" del celular? Tiene la etiqueta "Código
+    // Homologación" seguida de contenido (el valor), no de otra etiqueta. En la
+    // compu la fila de títulos también tiene esa etiqueta, pero seguida de un
+    // tab hacia "Número de Serie" (sin valor en el medio), así que no dispara.
+    function esFilaPegada(l) {
+      const low = l.toLowerCase();
+      const iCod = low.indexOf('código homologación');
+      if (iCod === -1) return false;
+      const tras = iCod + 'código homologación'.length;
+      const iSerie = low.indexOf('número de serie', tras);
+      const entre = (iSerie === -1 ? l.slice(tras) : l.slice(tras, iSerie)).trim();
+      return entre !== '';
+    }
+
     const regulador = { codigo: '', serie: '' };
     const cilindros = [];
     const valvulas = [];
@@ -2724,6 +2773,31 @@ Documentación para realizar la renovación:
         continue;
       }
       if (!seccion) continue;
+
+      // Camino del celular: la fila viene "pegada" (etiqueta+valor sin tabs).
+      if (esFilaPegada(l)) {
+        const f = filaPegada(l);
+        if (f) {
+          const codigo = (f.codigo || '').trim();
+          const serie = (f.serie || '').trim();
+          if (esCodigoHom(codigo)) {
+            if (seccion === 'regulador') {
+              if (!regulador.codigo && !regulador.serie) { regulador.codigo = codigo; regulador.serie = serie; }
+            } else if (seccion === 'cilindro') {
+              const cil = { codigo, serie };
+              if (f.crpc && !/^\d/.test(f.crpc)) cil.crpc = f.crpc.trim();
+              const ff = mesAnioDe(f.fechaFab);
+              if (ff) { cil.fabricadoMes = ff.mes; cil.fabricadoAnio = ff.anio; }
+              const fc = mesAnioDe(f.fechaCrpc);
+              if (fc) { cil.revisadoMes = fc.mes; cil.revisadoAnio = fc.anio; }
+              cilindros.push(cil);
+            } else if (seccion === 'valvula') {
+              valvulas.push({ codigo, serie });
+            }
+          }
+        }
+        continue;
+      }
 
       const c = columnas(l);
       if (!c.length) continue;
