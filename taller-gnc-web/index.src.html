@@ -188,8 +188,16 @@
 @media (max-width: 480px) {
   #gnc-app .taller-name-top { font-size: 20px; }
 }
-/* Encabezado con botón "Volver" en cada panel abierto desde el menú */
-#gnc-app .panel-head { margin: -4px 0 10px; }
+/* Encabezado con botón "Volver" en cada panel abierto desde el menú. Queda
+   FIJO arriba (sticky) mientras deslizás, así siempre podés salir con un toque
+   sin tener que volver hasta arriba de todo. */
+#gnc-app .panel-head {
+  position: sticky; top: 0; z-index: 6;
+  background: var(--surface);
+  margin: -20px -20px 10px; padding: 6px 20px;
+  border-bottom: 1px solid var(--line);
+  border-radius: 18px 18px 0 0;
+}
 #gnc-app .btn-volver {
   background: transparent; border: none; color: var(--flame); cursor: pointer;
   font-family: var(--sans); font-weight: 700; font-size: 14px; padding: 6px 2px;
