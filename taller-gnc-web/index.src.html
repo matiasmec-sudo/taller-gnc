@@ -2776,9 +2776,36 @@ Documentación para realizar la renovación:
         </div>`).join('')}
       </div>
       <div class="form-actions">
+        ${(scanFiles.foto1 || scanFiles.foto2) ? '<button type="button" class="btn btn-primary" id="btn-descargar-fotos">Descargar / Compartir</button>' : ''}
         <button type="button" class="btn btn-ghost" id="btn-close-fotos">Cerrar</button>
       </div>
     </div>`;
+  }
+
+  // Descarga (compu) o comparte (celular) las fotos del cliente abierto. En el
+  // celular abre el menú de Android (Google Fotos, Archivos, WhatsApp...); en la
+  // compu las baja a la carpeta Descargas.
+  async function descargarFotosCliente(cliente) {
+    const base = (cliente && (cliente.patente || cliente.nombre) || 'cliente').toString().trim().replace(/\s+/g, '_').replace(/[^\w\-]/g, '') || 'cliente';
+    const items = [];
+    if (scanFiles.foto1) items.push({ nombre: base + '_Frente.jpg', dataUrl: scanFiles.foto1 });
+    if (scanFiles.foto2) items.push({ nombre: base + '_Dorso.jpg', dataUrl: scanFiles.foto2 });
+    if (!items.length) { await customAlert('Este cliente no tiene fotos guardadas.'); return; }
+    const files = [];
+    for (const it of items) {
+      try { const blob = await (await fetch(it.dataUrl)).blob(); files.push(new File([blob], it.nombre, { type: blob.type || 'image/jpeg' })); } catch (e) { /* se saltea */ }
+    }
+    if (!files.length) { await customAlert('No se pudieron preparar las fotos.'); return; }
+    if (navigator.canShare && navigator.canShare({ files })) {
+      try { await navigator.share({ files, title: 'Fotos ' + (cliente.patente || cliente.nombre || '') }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; /* si no se pudo compartir, cae a descarga */ }
+    }
+    for (const f of files) {
+      const url = URL.createObjectURL(f);
+      const a = document.createElement('a');
+      a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
   }
 
   function scanBox() {
@@ -6628,6 +6655,10 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       showFotosFor = null;
       Object.keys(scanFiles).forEach(k => scanFiles[k] = null);
       render();
+    });
+    const btnDescargarFotos = root.querySelector('#btn-descargar-fotos');
+    if (btnDescargarFotos) btnDescargarFotos.addEventListener('click', () => {
+      descargarFotosCliente(clientes.find(c => c.id === showFotosFor) || {});
     });
 
     // "Actualizar datos": abre solo el paso 1 (datos + ENARGAS) y guarda
