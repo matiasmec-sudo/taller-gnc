@@ -710,6 +710,8 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
   let showTallerConfig = false;
   // Sección de la configuración abierta (acordeón): null = todas cerradas.
   let tallerConfigSeccion = null;
+  // Desplegable del registro de autos revisados por el técnico.
+  let registroTecnicoAbierto = false;
   // Id del cliente para el que está abierto el asistente "Inicio de trámite"
   // (null = todavía no se abrió ninguno, o se está dando de alta uno nuevo
   // vía showForm).
@@ -2786,12 +2788,6 @@ Documentación para realizar la renovación:
         <label>Horario de atención (para los avisos de WhatsApp)
           <input type="text" id="tc-horario" value="${escapeHtml(t.horario || '')}" placeholder="Ej: lunes a viernes de 9 a 17 hs">
         </label>
-        <label>Técnico responsable
-          <input type="text" id="tc-tecnico-nombre" value="${escapeHtml(t.tecnicoNombre)}" placeholder="Ej: Leandro Di Lenarda">
-        </label>
-        <label>Matrícula del técnico
-          <input type="text" id="tc-tecnico-matricula" value="${escapeHtml(t.tecnicoMatricula)}" placeholder="Ej: T 16-30238">
-        </label>
         <label>Código Taller
           <input type="text" id="tc-codigo-taller" value="${escapeHtml(t.codigoTaller)}" placeholder="Ej: LET0238">
         </label>
@@ -2831,24 +2827,38 @@ Documentación para realizar la renovación:
       <div class="form-actions" style="margin-top:4px;">
         <button type="button" class="btn btn-ghost btn-sm" id="btn-add-pec">+ Agregar PEC</button>
       </div>`;
+    const revsTecnico = revisionesDelTecnico();
     const secTecnico = `
       <div class="agent-hint" style="margin-top:0;">El técnico instala la app "Estelita Técnico" en su celular (taller-gnc.vercel.app/tecnico.html) y la vincula con un código de 6 números que generás acá — de un solo uso y con 15 minutos de validez. El técnico nunca ve tu código de licencia y su app solo sirve para responder revisiones. Cuando le envíes una revisión desde el paso 1 de un trámite, le llega una notificación al celular aunque tenga la app cerrada.</div>
+      <div class="form-grid">
+        <label>Nombre del técnico
+          <input type="text" id="tc-tecnico-nombre" value="${escapeHtml(t.tecnicoNombre)}" placeholder="Ej: Leandro Di Lenarda">
+        </label>
+        <label>Matrícula del técnico
+          <input type="text" id="tc-tecnico-matricula" value="${escapeHtml(t.tecnicoMatricula)}" placeholder="Ej: T 16-30238">
+        </label>
+      </div>
       <div class="agent-hint" id="tecnico-estado">${tecnicosVinculados === null ? 'Consultando...' : tecnicosVinculados ? tecnicosVinculados + ' celular(es) de técnico vinculado(s).' : 'Ningún técnico vinculado todavía.'}</div>
       <div class="form-actions" style="margin-top:6px;">
         <button type="button" class="btn btn-agent btn-sm" id="btn-vincular-tecnico">Vincular un técnico</button>
         ${tecnicosVinculados ? '<button type="button" class="btn btn-danger-outline btn-sm" id="btn-desvincular-tecnicos">Desvincular todos</button>' : ''}
       </div>
       <div id="vinculo-codigo"></div>
-      <div style="font-size:13px; font-weight:700; margin:16px 0 6px; color:var(--text);">Registro de autos revisados${t.tecnicoNombre ? ' — ' + escapeHtml(t.tecnicoNombre) : ''}</div>
-      ${(() => { const revs = revisionesDelTecnico(); return revs.length
-        ? `<div class="tramites-list">${revs.slice(0, 80).map(r => `
-            <div class="tramite-row">
-              <div class="tramite-row-info">
-                <div class="doc-label">${escapeHtml(r.patente)}${r.cliente ? ' · ' + escapeHtml(r.cliente) : ''}</div>
-                <div class="doc-sub">${fmtDate(r.fecha)} · ${estadoRevTexto(r.estado)}</div>
-              </div>
-            </div>`).join('')}</div>`
-        : '<p class="scan-sub">Todavía no hay autos revisados por el técnico.</p>'; })()}`;
+      <div class="config-item ${registroTecnicoAbierto ? 'abierta' : ''}" style="margin-top:14px;">
+        <button type="button" class="config-item-head" id="btn-registro-tecnico">
+          <span class="config-item-titulo">Autos revisados por el técnico${t.tecnicoNombre ? ' — ' + escapeHtml(t.tecnicoNombre) : ''} (${revsTecnico.length})</span>
+          <span class="config-item-caret">${registroTecnicoAbierto ? '▾' : '▸'}</span>
+        </button>
+        ${registroTecnicoAbierto ? `<div class="config-item-body">${revsTecnico.length
+          ? `<div class="tramites-list">${revsTecnico.slice(0, 100).map(r => `
+              <div class="tramite-row">
+                <div class="tramite-row-info">
+                  <div class="doc-label">${escapeHtml(r.patente)}${r.cliente ? ' · ' + escapeHtml(r.cliente) : ''}</div>
+                  <div class="doc-sub">${fmtDate(r.fecha)} · ${estadoRevTexto(r.estado)}</div>
+                </div>
+              </div>`).join('')}</div>`
+          : '<p class="scan-sub">Todavía no hay autos revisados por el técnico.</p>'}</div>` : ''}
+      </div>`;
     const secMensajes = `
       <div class="agent-hint" style="margin-top:0;">Editá el texto de los mensajes que se mandan a los clientes para ponerle la impronta de tu taller. Las palabras entre llaves como {nombre} o {patente} se reemplazan solas al enviar — dejalas tal cual donde quieras que aparezca ese dato.</div>
       ${Object.entries(MENSAJES_DEFAULT).map(([key, def]) => `
@@ -5527,6 +5537,14 @@ El domicilio del DNI suele venir junto con ciudad y provincia separados por guio
           render();
         });
       });
+    });
+
+    // Desplegable del registro de autos revisados (dentro de "App del técnico").
+    const btnRegistroTecnico = root.querySelector('#btn-registro-tecnico');
+    if (btnRegistroTecnico) btnRegistroTecnico.addEventListener('click', () => {
+      syncTallerConfigFromDOM();
+      registroTecnicoAbierto = !registroTecnicoAbierto;
+      render();
     });
 
     const btnGrillaCalibracion = root.querySelector('#btn-grilla-calibracion');
