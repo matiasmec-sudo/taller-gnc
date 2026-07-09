@@ -657,6 +657,9 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
   width: 100%; height: 160px; touch-action: none; display: block;
   background: var(--surface-alt); border: 1px solid var(--line); border-radius: 8px;
 }
+#gnc-app .firma-details { margin-top: 12px; }
+#gnc-app .firma-details > summary { cursor: pointer; font-family: var(--mono); font-size: 11px; color: var(--text-muted); padding: 6px 0; }
+#gnc-app .firma-details > summary:hover { color: var(--flame); }
 
 /* IMPORTACION MASIVA */
 #gnc-app .import-preview { max-height: 320px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; margin: 12px 0; }
@@ -2157,9 +2160,6 @@ Documentación para realizar la renovación:
         <label>Nombre (opcional)
           <input type="text" id="qa-nombre" placeholder="Ej: Juan Pérez">
         </label>
-        <label>Vencimiento de oblea (si lo sabés)
-          <input type="date" id="qa-fecha-oblea">
-        </label>
       </div>
       <h3>Turno (opcional)</h3>
       <p class="scan-sub">Si vino por una reparación o quedó en volver, agendale el turno acá: un día antes vas a poder mandarle el recordatorio por WhatsApp con un toque, y Estelita te avisa a vos.</p>
@@ -3326,15 +3326,16 @@ Documentación para realizar la renovación:
           <input type="text" id="f-patente" value="${escapeHtml(c.patente)}" placeholder="Ej: AB123CD">
           <span class="formato-hint" id="f-patente-hint" style="display:none;">Formato de patente poco habitual — revisá que esté bien.</span>
         </label>
-        ${(tramiteDraftCampos && tramiteDraftCampos.tipo === 'conversion')
+        ${(!modoSoloDatos && tramiteDraftCampos && tramiteDraftCampos.tipo === 'conversion')
           ? '<div class="agent-hint" style="grid-column: 1/-1;">Conversión: el auto no tenía equipo de GNC, así que no hay consulta al SIC. Cargá a mano los datos del vehículo y del equipo (van todos como Montaje).</div>'
-          : `<div style="grid-column: 1/-1; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          : `${modoSoloDatos ? '<div class="agent-hint" style="grid-column: 1/-1; margin-top:0;">Consultá el SIC y pegá el resultado para actualizar el equipo y el vencimiento de la oblea de este cliente.</div>' : ''}
+            <div style="grid-column: 1/-1; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
               <button type="button" class="btn btn-agent" id="btn-buscar-enargas" data-patente="${escapeHtml(c.patente)}" style="flex:2; min-width:180px; font-size:14px;">🔎 Buscar en ENARGAS ↗</button>
               <button type="button" class="btn btn-ghost" id="btn-toggle-enargas-paste" style="flex:1; min-width:120px;">${enargasPasteOpen ? 'Cerrar' : '📋 Pegar resultado'}</button>
             </div>
             <div id="enargas-copy-hint" class="agent-hint" style="display:none; grid-column: 1/-1;"></div>
             ${enargasPasteOpen ? enargasPasteBox(enargasEntrando) : ''}
-            ${revisionTecnicoBloque()}`}
+            ${modoSoloDatos ? '' : revisionTecnicoBloque()}`}
         <label>Marca
           <input type="text" id="f-marca" value="${escapeHtml(c.marca)}" placeholder="Ej: Chevrolet">
         </label>
@@ -3388,13 +3389,15 @@ Documentación para realizar la renovación:
       </div>
       <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Observaciones adicionales</label>
       <textarea id="t-detalle" placeholder="Cualquier detalle que no entre en los campos de arriba...">${escapeHtml(d.detalle)}</textarea>
-      <label style="display:block; margin-top:10px; font-family: var(--mono); font-size: 11px; color: var(--text-muted);">Firma del propietario</label>
-      <div class="signature-box">
-        <canvas id="sig-canvas" width="600" height="200"></canvas>
-        <div class="form-actions">
-          <button type="button" class="btn btn-ghost btn-sm" id="btn-sig-clear">Limpiar firma</button>
+      <details class="firma-details">
+        <summary>Firma del propietario</summary>
+        <div class="signature-box" style="margin-top:8px;">
+          <canvas id="sig-canvas" width="600" height="200"></canvas>
+          <div class="form-actions">
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-sig-clear">Limpiar firma</button>
+          </div>
         </div>
-      </div>
+      </details>
       <div class="form-actions">
         <button class="btn btn-ghost" id="btn-wizard-back-3">← Atrás</button>
         <button class="btn btn-ghost" id="btn-imprimir-datos">Imprimir</button>
@@ -6193,7 +6196,6 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       const telefonoRaw = root.querySelector('#qa-telefono').value.trim();
       const telefono = extractPhoneDigits(telefonoRaw);
       const nombre = root.querySelector('#qa-nombre').value.trim();
-      const fechaOblea = root.querySelector('#qa-fecha-oblea').value || '';
       if (!patente) { await customAlert('La patente es obligatoria.'); return; }
       if (!telefono) { await customAlert('El teléfono es obligatorio (es lo que hace funcionar los avisos de vencimiento).'); return; }
       const yaExiste = clientes.find(c => (c.patente || '').toUpperCase() === patente);
@@ -6219,7 +6221,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         id: 'c' + Date.now() + Math.random().toString(36).slice(2, 7),
         nombre: nombre || patente, dni: '', domicilio: '', provincia: '', ciudad: '',
         telefono, patente, marca: '', modelo: '',
-        tipo_vehiculo: '', uso: '', fecha_oblea: fechaOblea, fecha_crpc: '',
+        tipo_vehiculo: '', uso: '', fecha_oblea: '', fecha_crpc: '',
         tipo_cilindro: '5', notas: '', tramites: [], ultimoAvisoMes: {}, turnos
       });
       await saveClientes();
@@ -6605,7 +6607,6 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         const c = clientes.find(x => x.id === btn.getAttribute('data-pec-cliente'));
         const t = c && (c.tramites || []).find(x => x.id === btn.getAttribute('data-pec-id'));
         if (!c || !t) return;
-        if (!t.firma) { await customAlert('Este trámite no tiene la firma del propietario. Tocá "Editar" para agregarla antes de enviarlo al PEC.'); return; }
         if (!(await confirmarTitularBaja(t.tipo))) return;
         // Si la revisión del técnico no está aprobada (todavía pendiente, o con
         // un problema informado), pedir confirmación antes de enviar.
@@ -6702,7 +6703,6 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       const t = c && latestTramite(c);
       if (!t) return;
       const st = root.querySelector('#ut-status');
-      if (!t.firma) { await customAlert('Este trámite no tiene la firma del propietario. Tocá "Editar" para agregarla antes de enviarlo al PEC.'); return; }
       if (!(await confirmarTitularBaja(t.tipo))) return;
       try {
         btnUtPec.disabled = true;
