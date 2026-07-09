@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Estelita — Todo lo que hace</title>
+<style>
+  :root{ --azul:#1D5BD8; --azul-osc:#123C8F; --fondo:#EAF1FE; --surface:#fff; --linea:#E3E8F0; --tinta:#16233B; --suave:#5A6B85; --verde:#1E9E5A; --wapp:#25D366; --naranja:#DF8B00; --rojo:#D93B2B; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; }
+  body{
+    font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif; color:var(--tinta);
+    background:linear-gradient(160deg,#DCEAFE,#F4F6FA 60%);
+    min-height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:16px 12px 24px; gap:12px;
+  }
+  .titulo{ text-align:center; }
+  .titulo b{ letter-spacing:2.5px; color:var(--azul-osc); font-size:19px; }
+  .titulo span{ display:block; color:var(--suave); font-size:13px; margin-top:2px; }
+  .barritas{ display:flex; align-items:center; gap:10px; }
+  .mute{ width:38px; height:38px; border-radius:50%; border:1px solid var(--linea); background:var(--surface); font-size:16px; cursor:pointer; box-shadow:0 4px 12px rgba(18,60,143,.08); }
+
+  .phone{ position:relative; width:330px; max-width:92vw; aspect-ratio:330/620; background:#0d1b3a; border-radius:34px; padding:12px; box-shadow:0 26px 60px rgba(18,60,143,.34), 0 0 0 2px rgba(255,255,255,.06) inset; }
+  .screen{ position:relative; width:100%; height:100%; background:var(--fondo); border-radius:24px; overflow:hidden; }
+  .top{ background:var(--azul); color:#fff; padding:14px 16px 26px; border-radius:0 0 22px 22px; }
+  .top .row{ display:flex; align-items:center; gap:10px; }
+  .top .burger{ font-size:17px; opacity:.9; }
+  .top .brand{ font-weight:800; letter-spacing:2px; font-size:15px; }
+  .top .taller{ font-size:11px; opacity:.85; margin-top:3px; }
+  .body{ padding:12px 14px; }
+
+  .card{ background:var(--surface); border:1px solid var(--linea); border-radius:14px; padding:11px 12px; box-shadow:0 4px 12px rgba(18,60,143,.06); }
+  .lbl{ font-size:9.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--suave); }
+  .val{ font-size:13px; font-weight:700; margin-top:2px; }
+  .pill{ display:inline-block; font-size:10px; font-weight:800; color:var(--azul); background:#E7F0FF; border-radius:999px; padding:3px 9px; }
+  .btn{ display:flex; align-items:center; justify-content:center; gap:7px; background:var(--azul); color:#fff; font-weight:700; font-size:12.5px; border-radius:11px; padding:10px; text-align:center; }
+  .btn.ghost{ background:#fff; color:var(--azul); border:1.5px solid #C7D8F6; }
+  .btn.wapp{ background:var(--wapp); }
+  .h{ font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.8px; color:var(--suave); margin:2px 0 8px; }
+  .badge{ font-size:10px; font-weight:800; padding:3px 9px; border-radius:999px; }
+  .badge.ok{ background:#E3F6EC; color:var(--verde); }
+  .badge.warn{ background:#FDF0E1; color:var(--naranja); }
+  .row-item{ display:flex; align-items:center; justify-content:space-between; gap:8px; background:var(--surface); border:1px solid var(--linea); border-radius:12px; padding:10px 12px; margin-bottom:8px; }
+  .dia{ display:flex; align-items:center; justify-content:space-between; background:#eef2fb; border:1px solid var(--linea); border-radius:10px; padding:9px 11px; font-size:12px; font-weight:800; color:var(--azul-osc); margin-bottom:8px; }
+  .patente{ font-size:19px; font-weight:800; letter-spacing:1px; }
+  .verde{ color:var(--verde); font-weight:800; }
+
+  .tap{ position:absolute; width:34px; height:34px; margin:-17px 0 0 -17px; border-radius:50%; background:rgba(29,91,216,.28); border:2px solid var(--azul); opacity:0; z-index:50; pointer-events:none; }
+  @keyframes tapping{ 0%{opacity:0; transform:scale(1.6);} 30%{opacity:1; transform:scale(.7);} 60%{opacity:1; transform:scale(1);} 100%{opacity:0; transform:scale(1.4);} }
+  .tap.go{ animation:tapping 1s ease forwards; }
+  .finger{ position:absolute; z-index:60; opacity:0; pointer-events:none; transition:left .55s cubic-bezier(.4,0,.2,1), top .55s cubic-bezier(.4,0,.2,1); filter:drop-shadow(0 3px 4px rgba(0,0,0,.35)); }
+  @keyframes presiona{ 0%,100%{transform:scale(1) translateY(0);} 45%{transform:scale(.8) translateY(-3px);} }
+  .finger.press{ animation:presiona .45s ease; }
+
+  @keyframes fadeUp{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+  @keyframes pop{ 0%{opacity:0; transform:scale(.9);} 100%{opacity:1; transform:scale(1);} }
+  .fadeUp{ opacity:0; animation:fadeUp .5s ease forwards; }
+  .pop{ opacity:0; animation:pop .45s ease forwards; }
+
+  .caption{ width:330px; max-width:92vw; min-height:56px; background:var(--surface); border:1px solid var(--linea); border-left:5px solid var(--azul); border-radius:14px; padding:12px 15px; font-size:15px; line-height:1.4; box-shadow:0 8px 22px rgba(18,60,143,.10); }
+  .caption b{ color:var(--azul-osc); }
+  .barra{ width:330px; max-width:92vw; height:5px; background:#d7e2f5; border-radius:999px; overflow:hidden; }
+  .barra i{ display:block; height:100%; width:0; background:var(--azul); }
+  .overlay{ position:absolute; inset:0; background:rgba(13,27,58,.55); border-radius:24px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; z-index:80; color:#fff; }
+  .play{ width:74px; height:74px; border-radius:50%; background:#fff; color:var(--azul); font-size:30px; display:flex; align-items:center; justify-content:center; box-shadow:0 10px 26px rgba(0,0,0,.3); cursor:pointer; padding-left:5px; }
+  .overlay p{ margin:0; font-size:13px; opacity:.95; }
+</style>
+</head>
+<body>
+  <div class="titulo"><b>ESTELITA</b><span>Todo lo que hace por tu taller</span></div>
+  <div class="barritas"><button class="mute" id="mute" title="Silenciar música">🔊</button></div>
+  <div class="barra"><i id="barra"></i></div>
+
+  <div class="phone">
+    <div class="screen" id="screen"></div>
+    <div class="tap" id="tap"></div>
+    <div class="finger" id="finger"><svg viewBox="0 0 40 48" width="36" height="44" aria-hidden="true"><path d="M16 26 V10 a4 4 0 0 1 8 0 v10 a3 3 0 0 1 6 0 v3 a3 3 0 0 1 5.5 1.6 v6.4 a10 10 0 0 1 -10 10 h-3.5 a10 10 0 0 1 -7.4 -3.3 l-6.2 -6.8 a3.1 3.1 0 0 1 4.6 -4.2 L16 27.5 Z" fill="#ffffff" stroke="#2b3652" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></div>
+    <div class="overlay" id="overlay"><div class="play" id="play">▶</div><p>Tocá para ver todo lo que hace</p></div>
+  </div>
+
+  <div class="caption" id="caption">Estelita: todo tu taller de GNC, en un solo lugar.</div>
+
+<script>
+  const screen = document.getElementById('screen');
+  const caption = document.getElementById('caption');
+  const barra = document.getElementById('barra');
+  const tap = document.getElementById('tap');
+  const finger = document.getElementById('finger');
+  const overlay = document.getElementById('overlay');
+
+  function shell(bodyHtml) {
+    return `<div class="top"><div class="row"><span class="burger">☰</span><span class="brand">ESTELITA</span></div><div class="taller">Taller GNC (demo)</div></div><div class="body">${bodyHtml}</div>`;
+  }
+  function tapAt(x, y) {
+    const ph = document.querySelector('.phone').getBoundingClientRect();
+    const sc = screen.getBoundingClientRect();
+    const px = sc.left - ph.left + x, py = sc.top - ph.top + y;
+    tap.style.left = px + 'px'; tap.style.top = py + 'px';
+    tap.classList.remove('go'); void tap.offsetWidth; tap.classList.add('go');
+    finger.style.opacity = '1'; finger.style.left = (px - 18) + 'px'; finger.style.top = (py - 6) + 'px';
+    setTimeout(() => { finger.classList.remove('press'); void finger.offsetWidth; finger.classList.add('press'); }, 480);
+  }
+
+  /* música de fondo original (libre de derechos) */
+  let audioCtx = null, musicTimer = null, musicMaster = null, musicMuted = false;
+  function startMusic() {
+    if (audioCtx || musicMuted) return;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const master = audioCtx.createGain();
+      master.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+      master.gain.exponentialRampToValueAtTime(0.14, audioCtx.currentTime + 2);
+      master.connect(audioCtx.destination); musicMaster = master;
+      const base = 261.63, f = s => base * Math.pow(2, s / 12);
+      const prog = [[-12, -5, 0], [-5, -1, 2], [-3, 0, 4], [-7, -3, 0]]; const bar = 2.0; let i = 0;
+      const tocar = () => {
+        if (!audioCtx) return; const t = audioCtx.currentTime; const ch = prog[i % 4];
+        const g = audioCtx.createGain(); g.gain.setValueAtTime(0.0001, t); g.connect(master);
+        g.gain.linearRampToValueAtTime(0.5, t + 0.12); g.gain.linearRampToValueAtTime(0.16, t + bar / 2 - 0.1);
+        g.gain.linearRampToValueAtTime(0.5, t + bar / 2 + 0.1); g.gain.linearRampToValueAtTime(0.0001, t + bar);
+        ch.forEach(s => { const o = audioCtx.createOscillator(); o.type = 'sine'; o.frequency.value = f(s); o.connect(g); o.start(t); o.stop(t + bar + 0.05); });
+        [0, bar / 2].forEach(off => { const o = audioCtx.createOscillator(); o.type = 'triangle'; o.frequency.value = f(ch[0] - 12); const bg = audioCtx.createGain(); bg.gain.setValueAtTime(0.0001, t + off); bg.connect(master); bg.gain.linearRampToValueAtTime(0.5, t + off + 0.03); bg.gain.exponentialRampToValueAtTime(0.001, t + off + 0.4); o.connect(bg); o.start(t + off); o.stop(t + off + 0.45); });
+        [ch[0] + 12, ch[1] + 12, ch[2] + 12, ch[1] + 12].forEach((s, k) => { const o = audioCtx.createOscillator(); o.type = 'triangle'; o.frequency.value = f(s); const ag = audioCtx.createGain(); const st = t + k * (bar / 4); ag.gain.setValueAtTime(0.0001, st); ag.connect(master); ag.gain.linearRampToValueAtTime(0.16, st + 0.02); ag.gain.exponentialRampToValueAtTime(0.001, st + 0.28); o.connect(ag); o.start(st); o.stop(st + 0.3); });
+        i++;
+      };
+      tocar(); musicTimer = setInterval(tocar, bar * 1000);
+    } catch (e) {}
+  }
+  function stopMusic() { if (musicTimer) { clearInterval(musicTimer); musicTimer = null; } if (audioCtx) { try { musicMaster.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.8); } catch (e) {} const c = audioCtx; audioCtx = null; setTimeout(() => { try { c.close(); } catch (e) {} }, 1000); } }
+  document.getElementById('mute').addEventListener('click', () => { musicMuted = !musicMuted; document.getElementById('mute').textContent = musicMuted ? '🔇' : '🔊'; if (musicMuted) stopMusic(); else if (running) startMusic(); });
+
+  // ---- Escenas del tour ----
+  const scenes = [
+    { dur: 4500, cap: 'Estelita no es solo trámites. Mirá <b>todo lo que hace</b> por tu taller.',
+      render() { screen.innerHTML = shell(`
+        <div style="text-align:center; margin-top:60px;" class="fadeUp">
+          <div style="font-size:40px; letter-spacing:5px; font-weight:800; color:var(--azul-osc);">ESTELITA</div>
+          <div style="color:var(--suave); margin-top:10px; font-size:13px;">Todo tu taller de GNC, ordenado</div>
+          <div class="pill" style="margin-top:20px;">Historial · Vencimientos · Turnos · Técnico</div>
+        </div>`); } },
+
+    { dur: 8500, cap: '<b>Historial:</b> todos tus trámites, ordenados por día y hora. Encontrás cualquiera al toque.',
+      render() { screen.innerHTML = shell(`
+        <div class="h">Historial de trámites</div>
+        <div class="dia fadeUp"><span>Hoy · 09/07 (2)</span><span>▾</span></div>
+        <div class="row-item pop"><div><div class="patente">AD456BX</div><div class="lbl">Revisión · Enviado 14:40</div></div><span class="badge ok">Enviado</span></div>
+        <div class="row-item pop" style="animation-delay:.15s"><div><div class="patente">GHI456</div><div class="lbl">Revisión · Enviado 09:15</div></div><span class="badge ok">Enviado</span></div>
+        <div class="dia fadeUp" style="animation-delay:.3s"><span>Ayer · 08/07 (1)</span><span>▸</span></div>`);
+        setTimeout(() => tapAt(165, 118), 1800); } },
+
+    { dur: 10000, cap: '<b>Avisos de vencimiento:</b> te marca a quién se le vence la oblea. Le avisás por WhatsApp con un toque… y vuelve a tu taller.',
+      render() { screen.innerHTML = shell(`
+        <div class="card fadeUp" style="border-left:4px solid var(--naranja);">
+          <div style="font-weight:800; font-size:13px;">📅 3 clientes para avisar</div>
+        </div>
+        <div class="row-item pop" style="margin-top:10px;"><div><div class="val">Marta López · JKL789</div><div class="lbl">Oblea vence este mes</div></div></div>
+        <div class="row-item pop" style="animation-delay:.15s; flex-direction:column; align-items:stretch; gap:8px;">
+          <div><div class="val">Juan Gómez · AD456BX</div><div class="lbl">Oblea vence en 12 días</div></div>
+          <div class="btn wapp" id="avz">Avisar por WhatsApp</div>
+        </div>`);
+        setTimeout(() => tapAt(165, 300), 3200); } },
+
+    { dur: 8800, cap: '<b>Tarjeta del cliente:</b> su ficha completa — vehículo, equipo, documentación e historial, siempre a mano.',
+      render() { screen.innerHTML = shell(`
+        <div class="card pop">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div><div class="patente" style="font-size:22px;">AD456BX</div><div class="lbl">Ford · Juan Gómez</div></div>
+            <span class="badge ok">Oblea al día</span>
+          </div>
+          <div style="display:flex; gap:6px; margin-top:12px; flex-wrap:wrap;">
+            <div class="btn wapp" style="flex:1; min-width:90px;">WhatsApp</div>
+            <div class="btn ghost" style="flex:1; min-width:90px;">Documentación</div>
+          </div>
+          <div class="btn" style="margin-top:8px;">+ Nuevo trámite</div>
+        </div>
+        <div class="lbl fadeUp" style="animation-delay:.4s; text-align:center; margin-top:12px; text-transform:none; letter-spacing:.2px;">Vehículo · Equipo · Fotos · Historial</div>`);
+        setTimeout(() => tapAt(230, 250), 2600); } },
+
+    { dur: 8800, cap: '<b>Turnos:</b> los agendás y Estelita te recuerda avisarle al cliente. No se te pierde ninguno.',
+      render() { screen.innerHTML = shell(`
+        <div class="h">Turnos</div>
+        <div class="row-item pop" style="flex-direction:column; align-items:stretch; gap:8px;">
+          <div style="display:flex; justify-content:space-between;"><div class="val">Mañana · 10:00 hs</div><span class="badge warn">Recordar</span></div>
+          <div class="lbl" style="text-transform:none;">Juan Gómez · AD456BX · Revisión</div>
+          <div class="btn wapp" id="rec">Recordar por WhatsApp</div>
+        </div>
+        <div class="row-item pop" style="animation-delay:.15s;"><div><div class="val">Jueves · 15:30 hs</div><div class="lbl" style="text-transform:none;">Marta López · JKL789</div></div></div>`);
+        setTimeout(() => tapAt(165, 205), 3000); } },
+
+    { dur: 10000, cap: '<b>App del técnico:</b> revisa los autos desde su celular antes de enviar al PEC. Todo el equipo, coordinado.',
+      render() { screen.innerHTML = `<div style="height:100%; background:#0e1b34; color:#fff;">
+        <div style="padding:16px 16px 10px; font-weight:800; letter-spacing:1px;">ESTELITA · Técnico</div>
+        <div style="padding:0 16px;">
+          <div class="fadeUp" style="background:#16305f; border-radius:12px; padding:12px; font-size:12.5px;">🔔 Nueva revisión: <b>AD456BX</b></div>
+          <div style="margin-top:12px; display:flex; flex-direction:column; gap:8px;">
+            <div class="pop" style="background:#16305f; border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; font-size:12.5px;">Regulador <span class="verde">✓</span></div>
+            <div class="pop" style="animation-delay:.12s; background:#16305f; border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; font-size:12.5px;">Cilindro <span class="verde">✓</span></div>
+            <div class="pop" style="animation-delay:.24s; background:#16305f; border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; font-size:12.5px;">Válvulas <span class="verde">✓</span></div>
+          </div>
+          <div class="btn" id="apr" style="margin-top:14px; background:var(--verde);">Aprobar revisión</div>
+        </div></div>`;
+        setTimeout(() => tapAt(165, 340), 3400); } },
+
+    { dur: 5200, cap: '<b>Estelita:</b> todo tu taller de GNC, ordenado en un solo lugar. Probala gratis, catorce días.',
+      render() { screen.innerHTML = shell(`
+        <div style="text-align:center; margin-top:44px;" class="fadeUp">
+          <div style="font-size:38px; letter-spacing:5px; font-weight:800; color:var(--azul-osc);">ESTELITA</div>
+          <div style="color:var(--tinta); margin-top:14px; font-size:14px; font-weight:600;">Más tiempo, mejor atención,<br>más clientes.</div>
+          <div class="pill pop" style="margin-top:18px; font-size:12px; padding:6px 14px; animation-delay:.3s; background:#E3F6EC; color:var(--verde);">🎁 Probala gratis 14 días</div>
+        </div>`); } },
+  ];
+
+  const total = scenes.reduce((a, s) => a + s.dur, 0);
+  let timer = null, running = false;
+  function playScene(i) {
+    const s = scenes[i];
+    finger.style.opacity = '0';
+    s.render();
+    caption.innerHTML = s.cap;
+    let acc = 0; for (let k = 0; k < i; k++) acc += scenes[k].dur;
+    barra.style.transition = 'none'; barra.style.width = (acc / total * 100) + '%'; void barra.offsetWidth;
+    barra.style.transition = 'width ' + s.dur + 'ms linear'; barra.style.width = ((acc + s.dur) / total * 100) + '%';
+    timer = setTimeout(() => { if (i + 1 < scenes.length) playScene(i + 1); else finalizar(); }, s.dur);
+  }
+  function empezar() { overlay.style.display = 'none'; running = true; startMusic(); playScene(0); }
+  function finalizar() { running = false; stopMusic(); finger.style.opacity = '0'; barra.style.width = '100%'; overlay.querySelector('p').textContent = 'Ver de nuevo'; overlay.querySelector('.play').textContent = '⟳'; overlay.style.display = 'flex'; }
+  document.getElementById('play').addEventListener('click', () => { clearTimeout(timer); stopMusic(); empezar(); });
+</script>
+</body>
+</html>
