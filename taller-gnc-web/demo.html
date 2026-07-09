@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Estelita — Demo animada</title>
+<title>Estelita — Cómo funciona</title>
 <style>
   :root{ --azul:#1D5BD8; --azul-osc:#123C8F; --fondo:#EAF1FE; --surface:#fff; --linea:#E3E8F0; --tinta:#16233B; --suave:#5A6B85; --verde:#1E9E5A; --wapp:#25D366; }
   *{ box-sizing:border-box; }
@@ -19,8 +19,10 @@
   .titulo b{ letter-spacing:2.5px; color:var(--azul-osc); font-size:19px; }
   .titulo span{ display:block; color:var(--suave); font-size:13px; margin-top:2px; }
 
+  .barritas{ display:flex; align-items:center; gap:10px; }
   .crono{ display:inline-flex; align-items:center; gap:7px; background:var(--surface); border:1px solid var(--linea); border-radius:999px; padding:6px 14px; font-weight:800; color:var(--azul-osc); box-shadow:0 4px 12px rgba(18,60,143,.08); }
   .crono .pt{ width:9px; height:9px; border-radius:50%; background:var(--verde); }
+  .mute{ width:38px; height:38px; border-radius:50%; border:1px solid var(--linea); background:var(--surface); font-size:16px; cursor:pointer; box-shadow:0 4px 12px rgba(18,60,143,.08); }
 
   .phone{
     position:relative; width:330px; max-width:92vw; aspect-ratio:330/620;
@@ -47,9 +49,16 @@
 
   .fab{ position:absolute; right:16px; bottom:18px; padding:13px 18px; border-radius:999px; background:var(--azul); color:#fff; font-size:13px; font-weight:800; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 20px rgba(29,91,216,.45); }
 
+  /* onda del toque */
   .tap{ position:absolute; width:34px; height:34px; margin:-17px 0 0 -17px; border-radius:50%; background:rgba(29,91,216,.28); border:2px solid var(--azul); opacity:0; z-index:50; pointer-events:none; }
   @keyframes tapping{ 0%{opacity:0; transform:scale(1.6);} 30%{opacity:1; transform:scale(.7);} 60%{opacity:1; transform:scale(1);} 100%{opacity:0; transform:scale(1.4);} }
   .tap.go{ animation:tapping 1s ease forwards; }
+  /* dedito que se mueve y aprieta */
+  .finger{ position:absolute; font-size:30px; z-index:60; opacity:0; pointer-events:none;
+    transition:left .55s cubic-bezier(.4,0,.2,1), top .55s cubic-bezier(.4,0,.2,1);
+    filter:drop-shadow(0 3px 4px rgba(0,0,0,.35)); }
+  @keyframes presiona{ 0%,100%{transform:scale(1) translateY(0);} 45%{transform:scale(.8) translateY(-3px);} }
+  .finger.press{ animation:presiona .45s ease; }
 
   @keyframes fadeUp{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
   @keyframes pop{ 0%{opacity:0; transform:scale(.9);} 100%{opacity:1; transform:scale(1);} }
@@ -66,7 +75,6 @@
   .docimg b{ font-size:10px; letter-spacing:.5px; }
   .chk{ color:var(--verde); font-weight:800; }
 
-  /* ENARGAS mock */
   .enargas{ background:#fff; height:100%; }
   .enargas .eg-top{ background:var(--azul); color:#fff; padding:12px 16px; font-weight:700; font-size:13px; }
   .enargas .eg-body{ padding:16px; }
@@ -75,7 +83,6 @@
   .enargas input{ width:100%; padding:10px; border:1px solid #cfd3da; border-radius:8px; font-size:13px; }
   .enargas .eg-btn{ margin-top:12px; background:#111c2e; color:#fff; border-radius:999px; padding:9px 18px; display:inline-block; font-weight:700; font-size:12px; }
 
-  /* WhatsApp mock */
   .wa{ height:100%; background:#efe7dd; display:flex; flex-direction:column; }
   .wa-top{ background:#075E54; color:#fff; padding:12px 14px; display:flex; align-items:center; gap:10px; font-weight:700; font-size:14px; }
   .wa-top .av{ width:30px; height:30px; border-radius:50%; background:#cfd8d5; }
@@ -96,44 +103,97 @@
   .overlay{ position:absolute; inset:0; background:rgba(13,27,58,.55); border-radius:24px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; z-index:80; color:#fff; }
   .play{ width:74px; height:74px; border-radius:50%; background:#fff; color:var(--azul); font-size:30px; display:flex; align-items:center; justify-content:center; box-shadow:0 10px 26px rgba(0,0,0,.3); cursor:pointer; padding-left:5px; }
   .overlay p{ margin:0; font-size:13px; opacity:.95; }
-  .hint{ color:var(--suave); font-size:12px; text-align:center; max-width:330px; }
 </style>
 </head>
 <body>
   <div class="titulo"><b>ESTELITA</b><span>Un trámite de GNC completo, de principio a fin</span></div>
-  <div class="crono"><span class="pt"></span>Tiempo del trámite: <span id="crono">0:00</span></div>
+  <div class="barritas">
+    <div class="crono"><span class="pt"></span>Tiempo del trámite: <span id="crono">0:00</span></div>
+    <button class="mute" id="mute" title="Silenciar / activar música">🔊</button>
+  </div>
   <div class="barra"><i id="barra"></i></div>
 
   <div class="phone">
     <div class="screen" id="screen"></div>
     <div class="tap" id="tap"></div>
+    <div class="finger" id="finger">👆</div>
     <div class="overlay" id="overlay">
       <div class="play" id="play">▶</div>
-      <p>Tocá para reproducir</p>
+      <p>Tocá para ver cómo funciona</p>
     </div>
   </div>
 
   <div class="caption" id="caption">Estelita: menos tiempo con los papeles, más autos.</div>
-  <p class="hint">Consejo: poné a grabar la pantalla del celular y después tocá ▶.</p>
 
 <script>
   const screen = document.getElementById('screen');
   const caption = document.getElementById('caption');
   const barra = document.getElementById('barra');
   const tap = document.getElementById('tap');
+  const finger = document.getElementById('finger');
   const overlay = document.getElementById('overlay');
   const cronoEl = document.getElementById('crono');
 
   function shell(bodyHtml) {
     return `<div class="top"><div class="row"><span class="burger">☰</span><span class="brand">ESTELITA</span></div><div class="taller">Taller GNC (demo)</div></div><div class="body">${bodyHtml}</div>`;
   }
+  // Mueve el dedito hasta (x,y) dentro de la pantalla y hace el "toque".
   function tapAt(x, y) {
     const ph = document.querySelector('.phone').getBoundingClientRect();
     const sc = screen.getBoundingClientRect();
-    tap.style.left = (sc.left - ph.left + x) + 'px';
-    tap.style.top = (sc.top - ph.top + y) + 'px';
+    const px = sc.left - ph.left + x;
+    const py = sc.top - ph.top + y;
+    tap.style.left = px + 'px'; tap.style.top = py + 'px';
     tap.classList.remove('go'); void tap.offsetWidth; tap.classList.add('go');
+    finger.style.opacity = '1';
+    finger.style.left = (px - 5) + 'px';
+    finger.style.top = (py + 2) + 'px';
+    setTimeout(() => { finger.classList.remove('press'); void finger.offsetWidth; finger.classList.add('press'); }, 480);
   }
+
+  /* ===== Música de fondo original (generada, libre de derechos) ===== */
+  let audioCtx = null, musicTimer = null, musicMaster = null, musicMuted = false;
+  function startMusic() {
+    if (audioCtx || musicMuted) return;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const master = audioCtx.createGain();
+      master.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+      master.gain.exponentialRampToValueAtTime(0.13, audioCtx.currentTime + 2);
+      master.connect(audioCtx.destination);
+      musicMaster = master;
+      const base = 261.63; // Do
+      const f = s => base * Math.pow(2, s / 12);
+      const prog = [[-12, -5, 0], [-5, -1, 2], [-3, 0, 4], [-7, -3, 0]]; // I-V-vi-IV
+      const bar = 3.0; let i = 0;
+      const tocar = () => {
+        if (!audioCtx) return;
+        const t = audioCtx.currentTime;
+        const g = audioCtx.createGain(); g.gain.setValueAtTime(0.0001, t); g.connect(master);
+        g.gain.linearRampToValueAtTime(0.9, t + 0.7);
+        g.gain.linearRampToValueAtTime(0.0001, t + bar);
+        prog[i % 4].forEach(s => { const o = audioCtx.createOscillator(); o.type = 'sine'; o.frequency.value = f(s); o.connect(g); o.start(t); o.stop(t + bar + 0.1); });
+        prog[i % 4].forEach((s, k) => {
+          const o = audioCtx.createOscillator(); o.type = 'triangle'; o.frequency.value = f(s + 12);
+          const ag = audioCtx.createGain(); ag.gain.setValueAtTime(0.0001, t); ag.connect(master);
+          const st = t + 0.25 + k * 0.5;
+          ag.gain.linearRampToValueAtTime(0.13, st + 0.05); ag.gain.linearRampToValueAtTime(0.0001, st + 0.55);
+          o.connect(ag); o.start(st); o.stop(st + 0.7);
+        });
+        i++;
+      };
+      tocar(); musicTimer = setInterval(tocar, bar * 1000);
+    } catch (e) { /* sin audio, la demo anda igual */ }
+  }
+  function stopMusic() {
+    if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+    if (audioCtx) { try { musicMaster.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.8); } catch (e) {} const c = audioCtx; audioCtx = null; setTimeout(() => { try { c.close(); } catch (e) {} }, 1000); }
+  }
+  document.getElementById('mute').addEventListener('click', () => {
+    musicMuted = !musicMuted;
+    document.getElementById('mute').textContent = musicMuted ? '🔇' : '🔊';
+    if (musicMuted) stopMusic(); else if (running) startMusic();
+  });
 
   // ---- Escenas (datos INVENTADOS) ----
   const scenes = [
@@ -172,7 +232,7 @@
           </div>
           <div class="btn gris" id="leer" style="margin-top:10px;">Leer datos</div>`);
         setTimeout(() => tapAt(90, 250), 1400);
-        setTimeout(() => tapAt(240, 250), 2200);
+        setTimeout(() => tapAt(240, 250), 2500);
       }},
 
     { dur: 5200, cap: 'Toco <b>Leer datos</b>: la inteligencia artificial lee la documentación.',
@@ -281,19 +341,13 @@
 
   const total = scenes.reduce((a, s) => a + s.dur, 0);
   let timer = null, running = false, cronoInt = null, t0 = 0;
-
-  // El cronómetro representa el "tiempo del trámite": 0:00 al inicio y ~1:30 al
-  // final, mapeado sobre la duración de la animación.
-  const CRONO_FINAL = 90; // segundos que se muestran al final (1:30)
+  const CRONO_FINAL = 90;
   function fmt(seg) { const m = Math.floor(seg / 60); const s = Math.floor(seg % 60); return m + ':' + String(s).padStart(2, '0'); }
-  function tickCrono() {
-    if (!running) return;
-    const prog = Math.min(1, (performance.now() - t0) / total);
-    cronoEl.textContent = fmt(prog * CRONO_FINAL);
-  }
+  function tickCrono() { if (!running) return; const prog = Math.min(1, (performance.now() - t0) / total); cronoEl.textContent = fmt(prog * CRONO_FINAL); }
 
   function playScene(i) {
     const s = scenes[i];
+    finger.style.opacity = '0';
     s.render();
     caption.innerHTML = s.cap;
     let acc = 0; for (let k = 0; k < i; k++) acc += scenes[k].dur;
@@ -302,10 +356,7 @@
     void barra.offsetWidth;
     barra.style.transition = 'width ' + s.dur + 'ms linear';
     barra.style.width = ((acc + s.dur) / total * 100) + '%';
-    timer = setTimeout(() => {
-      if (i + 1 < scenes.length) playScene(i + 1);
-      else finalizar();
-    }, s.dur);
+    timer = setTimeout(() => { if (i + 1 < scenes.length) playScene(i + 1); else finalizar(); }, s.dur);
   }
 
   function empezar() {
@@ -313,20 +364,23 @@
     running = true;
     t0 = performance.now();
     cronoInt = setInterval(tickCrono, 200);
+    startMusic();
     playScene(0);
   }
   function finalizar() {
     running = false;
     clearInterval(cronoInt);
+    stopMusic();
+    finger.style.opacity = '0';
     barra.style.width = '100%';
     cronoEl.textContent = fmt(CRONO_FINAL);
-    overlay.querySelector('p').textContent = 'Reproducir de nuevo';
+    overlay.querySelector('p').textContent = 'Ver de nuevo';
     overlay.querySelector('.play').textContent = '⟳';
     overlay.style.display = 'flex';
   }
 
   document.getElementById('play').addEventListener('click', () => {
-    clearTimeout(timer); clearInterval(cronoInt);
+    clearTimeout(timer); clearInterval(cronoInt); stopMusic();
     cronoEl.textContent = '0:00';
     empezar();
   });
