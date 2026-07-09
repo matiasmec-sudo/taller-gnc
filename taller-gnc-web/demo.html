@@ -159,7 +159,7 @@
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const master = audioCtx.createGain();
       master.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-      master.gain.exponentialRampToValueAtTime(0.13, audioCtx.currentTime + 2);
+      master.gain.exponentialRampToValueAtTime(0.055, audioCtx.currentTime + 2);
       master.connect(audioCtx.destination);
       musicMaster = master;
       const base = 261.63; // Do
@@ -204,7 +204,7 @@
   document.getElementById('mute').addEventListener('click', () => {
     musicMuted = !musicMuted;
     document.getElementById('mute').textContent = musicMuted ? '🔇' : '🔊';
-    if (musicMuted) stopMusic(); else if (running) startMusic();
+    if (musicMuted) { stopMusic(); stopVoz(); } else if (running) startMusic();
   });
 
   // ---- Escenas (datos INVENTADOS) ----
@@ -351,6 +351,18 @@
       }},
   ];
 
+  // Cada escena dura lo que dura su frase de voz (+ un respiro), para que la
+  // locutora quede sincronizada con lo que se ve.
+  const VOZ_DUR = [9000, 6400, 4200, 4200, 8400, 4000, 8000, 5200, 8000, 9200];
+  scenes.forEach((s, i) => { s.dur = VOZ_DUR[i]; });
+  const vozAudios = VOZ_DUR.map((_, i) => { const a = new Audio('voz/e' + (i + 1) + '.mp3'); a.preload = 'auto'; return a; });
+  let vozActual = null;
+  function playVoz(i) {
+    if (musicMuted) return;
+    try { if (vozActual) vozActual.pause(); vozActual = vozAudios[i]; vozActual.currentTime = 0; vozActual.play().catch(() => {}); } catch (e) {}
+  }
+  function stopVoz() { if (vozActual) { try { vozActual.pause(); vozActual.currentTime = 0; } catch (e) {} } }
+
   const total = scenes.reduce((a, s) => a + s.dur, 0);
   let timer = null, running = false, cronoInt = null, t0 = 0;
   const CRONO_FINAL = 90;
@@ -362,6 +374,7 @@
     finger.style.opacity = '0';
     s.render();
     caption.innerHTML = s.cap;
+    playVoz(i);
     let acc = 0; for (let k = 0; k < i; k++) acc += scenes[k].dur;
     barra.style.transition = 'none';
     barra.style.width = (acc / total * 100) + '%';
@@ -383,6 +396,7 @@
     running = false;
     clearInterval(cronoInt);
     stopMusic();
+    stopVoz();
     finger.style.opacity = '0';
     barra.style.width = '100%';
     cronoEl.textContent = fmt(CRONO_FINAL);
@@ -392,7 +406,7 @@
   }
 
   document.getElementById('play').addEventListener('click', () => {
-    clearTimeout(timer); clearInterval(cronoInt); stopMusic();
+    clearTimeout(timer); clearInterval(cronoInt); stopMusic(); stopVoz();
     cronoEl.textContent = '0:00';
     empezar();
   });
