@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Estelita — Elegí la voz</title>
+<style>
+  :root{ --azul:#1D5BD8; --azul-osc:#123C8F; --fondo:#F4F6FA; --surface:#fff; --linea:#E3E8F0; --tinta:#16233B; --suave:#5A6B85; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif; background:var(--fondo); color:var(--tinta); }
+  .wrap{ max-width:560px; margin:0 auto; padding:26px 18px 60px; }
+  h1{ text-align:center; font-size:22px; color:var(--azul-osc); letter-spacing:.5px; margin-bottom:4px; }
+  .sub{ text-align:center; color:var(--suave); font-size:14px; margin-bottom:22px; }
+  .card{ display:flex; align-items:center; gap:14px; background:var(--surface); border:1px solid var(--linea); border-radius:14px; padding:14px 16px; margin-bottom:12px; box-shadow:0 6px 16px rgba(18,60,143,.06); }
+  .card .info{ flex:1; }
+  .card .nom{ font-weight:800; font-size:16px; }
+  .card .pais{ font-size:12.5px; color:var(--suave); }
+  .play{ width:52px; height:52px; border-radius:50%; border:none; background:var(--azul); color:#fff; font-size:22px; cursor:pointer; flex:0 0 auto; display:flex; align-items:center; justify-content:center; padding-left:3px; box-shadow:0 6px 16px rgba(29,91,216,.35); }
+  .play.son{ background:var(--azul-osc); }
+  .nota{ text-align:center; color:var(--suave); font-size:13px; margin-top:20px; line-height:1.5; }
+  .marca{ text-align:center; letter-spacing:2.5px; font-weight:800; color:var(--azul-osc); font-size:16px; margin-bottom:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="marca">ESTELITA</div>
+  <h1>Elegí la voz del video</h1>
+  <p class="sub">Tocá el ▶ de cada una para escucharla. Después decime cuál te gusta (o si preferís sin voz).</p>
+
+  <div id="lista"></div>
+
+  <p class="nota">Todas son voces de inteligencia artificial en español.<br>Decime el nombre de la que más te guste y la pongo en el video. 🎙️</p>
+</div>
+
+<script>
+  const VOCES = [
+    { archivo: 'es-AR-ElenaNeural', nom: 'Elena', pais: 'Argentina' },
+    { archivo: 'es-MX-DaliaNeural', nom: 'Dalia', pais: 'México' },
+    { archivo: 'es-CO-SalomeNeural', nom: 'Salomé', pais: 'Colombia' },
+    { archivo: 'es-ES-ElviraNeural', nom: 'Elvira', pais: 'España' },
+    { archivo: 'es-US-PalomaNeural', nom: 'Paloma', pais: 'Latina' },
+  ];
+  const lista = document.getElementById('lista');
+  let sonando = null;
+  VOCES.forEach(v => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<div class="info"><div class="nom">${v.nom}</div><div class="pais">${v.pais}</div></div>
+      <button class="play" aria-label="Escuchar ${v.nom}">▶</button>`;
+    const audio = new Audio('voz-muestras/' + v.archivo + '.mp3');
+    const btn = card.querySelector('.play');
+    audio.addEventListener('ended', () => { btn.textContent = '▶'; btn.classList.remove('son'); });
+    btn.addEventListener('click', () => {
+      if (sonando && sonando.audio !== audio) { sonando.audio.pause(); sonando.audio.currentTime = 0; sonando.btn.textContent = '▶'; sonando.btn.classList.remove('son'); }
+      if (audio.paused) { audio.currentTime = 0; audio.play(); btn.textContent = '⏸'; btn.classList.add('son'); sonando = { audio, btn }; }
+      else { audio.pause(); btn.textContent = '▶'; btn.classList.remove('son'); }
+    });
+    lista.appendChild(card);
+  });
+</script>
+</body>
+</html>
