@@ -116,7 +116,7 @@
   <div class="phone">
     <div class="screen" id="screen"></div>
     <div class="tap" id="tap"></div>
-    <div class="finger" id="finger">👆</div>
+    <div class="finger" id="finger"><svg viewBox="0 0 40 48" width="36" height="44" aria-hidden="true"><path d="M16 26 V10 a4 4 0 0 1 8 0 v10 a3 3 0 0 1 6 0 v3 a3 3 0 0 1 5.5 1.6 v6.4 a10 10 0 0 1 -10 10 h-3.5 a10 10 0 0 1 -7.4 -3.3 l-6.2 -6.8 a3.1 3.1 0 0 1 4.6 -4.2 L16 27.5 Z" fill="#ffffff" stroke="#2b3652" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></div>
     <div class="overlay" id="overlay">
       <div class="play" id="play">▶</div>
       <p>Tocá para ver cómo funciona</p>
@@ -146,8 +146,8 @@
     tap.style.left = px + 'px'; tap.style.top = py + 'px';
     tap.classList.remove('go'); void tap.offsetWidth; tap.classList.add('go');
     finger.style.opacity = '1';
-    finger.style.left = (px - 5) + 'px';
-    finger.style.top = (py + 2) + 'px';
+    finger.style.left = (px - 18) + 'px';
+    finger.style.top = (py - 6) + 'px';
     setTimeout(() => { finger.classList.remove('press'); void finger.offsetWidth; finger.classList.add('press'); }, 480);
   }
 
@@ -165,20 +165,32 @@
       const base = 261.63; // Do
       const f = s => base * Math.pow(2, s / 12);
       const prog = [[-12, -5, 0], [-5, -1, 2], [-3, 0, 4], [-7, -3, 0]]; // I-V-vi-IV
-      const bar = 3.0; let i = 0;
+      const bar = 2.0; let i = 0; // más rápido = más movido
       const tocar = () => {
         if (!audioCtx) return;
         const t = audioCtx.currentTime;
+        const ch = prog[i % 4];
+        // pad pulsante (dos pulsos por compás)
         const g = audioCtx.createGain(); g.gain.setValueAtTime(0.0001, t); g.connect(master);
-        g.gain.linearRampToValueAtTime(0.9, t + 0.7);
+        g.gain.linearRampToValueAtTime(0.5, t + 0.12);
+        g.gain.linearRampToValueAtTime(0.16, t + bar / 2 - 0.1);
+        g.gain.linearRampToValueAtTime(0.5, t + bar / 2 + 0.1);
         g.gain.linearRampToValueAtTime(0.0001, t + bar);
-        prog[i % 4].forEach(s => { const o = audioCtx.createOscillator(); o.type = 'sine'; o.frequency.value = f(s); o.connect(g); o.start(t); o.stop(t + bar + 0.1); });
-        prog[i % 4].forEach((s, k) => {
-          const o = audioCtx.createOscillator(); o.type = 'triangle'; o.frequency.value = f(s + 12);
-          const ag = audioCtx.createGain(); ag.gain.setValueAtTime(0.0001, t); ag.connect(master);
-          const st = t + 0.25 + k * 0.5;
-          ag.gain.linearRampToValueAtTime(0.13, st + 0.05); ag.gain.linearRampToValueAtTime(0.0001, st + 0.55);
-          o.connect(ag); o.start(st); o.stop(st + 0.7);
+        ch.forEach(s => { const o = audioCtx.createOscillator(); o.type = 'sine'; o.frequency.value = f(s); o.connect(g); o.start(t); o.stop(t + bar + 0.05); });
+        // bajo con pluck, dos por compás (le da ritmo)
+        [0, bar / 2].forEach(off => {
+          const o = audioCtx.createOscillator(); o.type = 'triangle'; o.frequency.value = f(ch[0] - 12);
+          const bg = audioCtx.createGain(); bg.gain.setValueAtTime(0.0001, t + off); bg.connect(master);
+          bg.gain.linearRampToValueAtTime(0.5, t + off + 0.03); bg.gain.exponentialRampToValueAtTime(0.001, t + off + 0.4);
+          o.connect(bg); o.start(t + off); o.stop(t + off + 0.45);
+        });
+        // arpegio movido: 4 notas por compás
+        [ch[0] + 12, ch[1] + 12, ch[2] + 12, ch[1] + 12].forEach((s, k) => {
+          const o = audioCtx.createOscillator(); o.type = 'triangle'; o.frequency.value = f(s);
+          const ag = audioCtx.createGain(); const st = t + k * (bar / 4);
+          ag.gain.setValueAtTime(0.0001, st); ag.connect(master);
+          ag.gain.linearRampToValueAtTime(0.16, st + 0.02); ag.gain.exponentialRampToValueAtTime(0.001, st + 0.28);
+          o.connect(ag); o.start(st); o.stop(st + 0.3);
         });
         i++;
       };
