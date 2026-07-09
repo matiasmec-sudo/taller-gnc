@@ -3233,6 +3233,16 @@ Documentación para realizar la renovación:
            <button type="button" class="btn btn-ghost btn-sm" id="btn-usar-doc-guardada">Usar documentación guardada de este cliente</button>
          </div>`
       : '';
+    // El resto del Paso 1 se despliega recién al leer con IA o "cargar a mano"
+    // (o si el cliente ya tiene datos, ej. al editar).
+    const desplegado = paso1Desplegado || !!(c.nombre && String(c.nombre).trim()) || !!(c.patente && String(c.patente).trim());
+    if (!desplegado) {
+      return `${scanBox()}
+        <div class="agent-hint" style="margin-top:8px;">Sacá las fotos y tocá <b>"Leer datos"</b> para que se complete todo solo, o <button type="button" class="license-link" id="btn-cargar-mano">cargar a mano</button>.</div>
+        <div class="form-actions">
+          <button class="btn btn-ghost" id="btn-wizard-cancel">Cancelar</button>
+        </div>`;
+    }
     return `${scanBox()}
       ${botonDocGuardada}
       <h3 style="margin-top:0;">Datos personales</h3>
@@ -4407,6 +4417,11 @@ Documentación para realizar la renovación:
   let bulkImportRows = [];
   let bulkImportSkip = new Set();
   let enargasPasteOpen = false;
+  // Paso 1: al arrancar un trámite nuevo se muestran solo las fotos + "Leer
+  // datos". El resto (datos personales, domicilio, vehículo/SIC) se despliega
+  // recién al leer con IA o al tocar "cargar a mano". Editando un cliente que
+  // ya tiene datos, se muestra todo directo (por eso se chequea también c.nombre).
+  let paso1Desplegado = false;
   // Alta rápida de cliente (patente + teléfono + nombre, sin documentación)
   // — para registrar cualquier auto que pasa por el taller aunque hoy no
   // haga un trámite de GNC.
@@ -5434,6 +5449,12 @@ Documentación para realizar la renovación:
     });
     const btnScan = root.querySelector('#btn-scan');
     if (btnScan) btnScan.addEventListener('click', runScan);
+    // "cargar a mano": despliega el resto del Paso 1 sin usar la IA.
+    const btnCargarMano = root.querySelector('#btn-cargar-mano');
+    if (btnCargarMano) btnCargarMano.addEventListener('click', () => {
+      paso1Desplegado = true;
+      render();
+    });
     root.querySelectorAll('[data-remove-photo]').forEach(btn => {
       btn.addEventListener('click', () => {
         scanFiles[btn.getAttribute('data-remove-photo')] = null;
@@ -5510,42 +5531,41 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         throw new Error('No pude interpretar la respuesta como JSON: ' + clean.slice(0, 200));
       }
 
-      const fieldMap = {
-        nombre: '#f-nombre', dni: '#f-dni', domicilio: '#f-domicilio',
-        provincia: '#f-provincia', ciudad: '#f-ciudad', patente: '#f-patente',
-      };
-      Object.entries(fieldMap).forEach(([key, sel]) => {
-        if (parsed[key]) {
-          const el = root.querySelector(sel);
-          if (el) el.value = key === 'patente' ? String(parsed[key]).toUpperCase() : parsed[key];
+      // La IA escribe en el BORRADOR, no en los inputs: en este momento los
+      // campos del Paso 1 todavía están ocultos, así que escribir en el DOM se
+      // perdería. Antes se sincroniza lo que ya hubiera cargado (ej. teléfono).
+      syncClienteDraftFromDOM();
+      if (clienteDraft) {
+        ['nombre', 'dni', 'domicilio', 'provincia', 'ciudad', 'patente'].forEach(key => {
+          if (parsed[key]) clienteDraft[key] = key === 'patente' ? String(parsed[key]).toUpperCase() : parsed[key];
+        });
+        // Completar el CPA solo según la localidad, si está vacío.
+        if (parsed.ciudad && !String(clienteDraft.cpa || '').trim()) {
+          const cpa = cpaDeCiudad(parsed.ciudad);
+          if (cpa) clienteDraft.cpa = cpa;
         }
-      });
-
-      // Si la IA cargó la localidad, completar el CPA solo (si está vacío). El
-      // "input.value = ..." de arriba no dispara el autocompletado por ciudad,
-      // así que lo hacemos acá a mano.
-      const cpaEl = root.querySelector('#f-cpa');
-      if (parsed.ciudad && cpaEl && !cpaEl.value.trim()) {
-        const cpa = cpaDeCiudad(parsed.ciudad);
-        if (cpa) cpaEl.value = cpa;
       }
 
-      // Dejar abierto el recuadro de ENARGAS: así el paso siguiente (consultar
-      // y pegar el equipo) queda a la vista apenas se leen los datos y no se
-      // saltea. Se vuelca lo leído al borrador antes de re-render para no
-      // perderlo. En conversión no hay consulta al SIC, así que no se abre.
-      syncClienteDraftFromDOM();
-      if (tramiteDraftCampos && tramiteDraftCampos.tipo !== 'conversion') enargasPasteOpen = true;
+      // Desplegar el resto del Paso 1 (datos, domicilio, vehículo/SIC) ya
+      // completado, para revisarlo y seguir con la consulta a ENARGAS.
+      paso1Desplegado = true;
       render();
       const stOk = root.querySelector('#scan-status');
       if (stOk) {
         stOk.className = 'scan-status ok';
-        stOk.textContent = 'Listo — revisá los datos y consultá ENARGAS (recuadro abierto abajo).';
+        stOk.textContent = 'Listo — revisá los datos y seguí con la consulta a ENARGAS.';
       }
     } catch (e) {
       console.error(e);
-      statusEl.className = 'scan-status err';
-      statusEl.textContent = 'Error: ' + (e.message || 'no se pudo leer los datos') + ' — cargalos a mano.';
+      // Aunque falle la lectura, se despliega el formulario para cargar a mano.
+      syncClienteDraftFromDOM();
+      paso1Desplegado = true;
+      render();
+      const stErr = root.querySelector('#scan-status');
+      if (stErr) {
+        stErr.className = 'scan-status err';
+        stErr.textContent = 'No se pudo leer con IA — cargá los datos a mano.';
+      }
     } finally {
       btnScan.disabled = false;
     }
@@ -6076,6 +6096,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       editingId = null; showForm = true;
       showBulkImport = false;
       enargasPasteOpen = false;
+      paso1Desplegado = false; // arranca despejado: solo fotos + "Leer datos"
       autosaveClienteId = null; autosaveTramiteId = null; autosaveClienteCreado = false; autosaveHash = null;
       clienteDraft = blankClienteBase();
       tramiteDraftEquipo = blankEquipo(null);
