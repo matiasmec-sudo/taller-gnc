@@ -561,6 +561,11 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 #gnc-app .search-lupa svg { display: block; }
 /* Historial: patente protagonista, tipo de trámite segundo, nombre chico. */
 #gnc-app .hist-dia { font-size: 12.5px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin: 16px 0 6px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+#gnc-app .hist-dia-toggle { display: flex; align-items: center; justify-content: space-between; cursor: pointer; padding: 9px 10px; margin: 14px 0 8px; background: var(--surface-alt); border: 1px solid var(--line); border-radius: 10px; }
+#gnc-app .hist-dia-toggle.abierto { color: var(--flame); border-color: var(--flame-dim); }
+#gnc-app .hist-dia-count { font-weight: 700; opacity: .7; letter-spacing: normal; }
+#gnc-app .hist-dia-caret { color: var(--flame); font-size: 12px; }
+#gnc-app .hist-hora { color: var(--flame); font-weight: 700; }
 #gnc-app .hist-patente { font-family: var(--display); font-weight: 800; font-size: 18px; letter-spacing: 1px; }
 #gnc-app .hist-tipo { font-size: 13.5px; font-weight: 700; margin-top: 1px; }
 #gnc-app .hist-nombre { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
@@ -1739,13 +1744,26 @@ Documentación para realizar la renovación:
       return true;
     });
     const filtrando = !!(q || histTipo || histEstado);
-    // Agrupados por día (ya vienen ordenados del más nuevo al más viejo).
-    const grupos = [];
+    // El día en curso arranca desplegado; el resto, cerrado.
+    if (histDiasAbiertos === null) histDiasAbiertos = new Set([fechaLocalISO()]);
+    // Agrupados por día: los días, del más nuevo al más viejo ("sin fecha" al
+    // final); dentro de cada día, cronológico de arriba hacia abajo (por hora
+    // de envío al PEC / de carga).
+    const mapa = new Map();
     items.forEach(it => {
       const dia = it.tramite.fecha || 'sin fecha';
-      const ultimo = grupos[grupos.length - 1];
-      if (ultimo && ultimo.dia === dia) ultimo.items.push(it);
-      else grupos.push({ dia, items: [it] });
+      if (!mapa.has(dia)) mapa.set(dia, []);
+      mapa.get(dia).push(it);
+    });
+    const dias = [...mapa.keys()].sort((a, b) => {
+      if (a === 'sin fecha') return 1;
+      if (b === 'sin fecha') return -1;
+      return b.localeCompare(a);
+    });
+    const grupos = dias.map(dia => {
+      const arr = mapa.get(dia);
+      arr.sort((x, y) => tiempoTramite(x.tramite).localeCompare(tiempoTramite(y.tramite)));
+      return { dia, items: arr };
     });
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="historial-panel">
       ${panelVolver()}
@@ -1763,17 +1781,23 @@ Documentación para realizar la renovación:
         </select>
       </div>
       ${filtrando ? `<p class="scan-sub">${items.length} de ${todos.length} trámite(s) · <button type="button" class="license-link" id="hist-limpiar">limpiar filtros</button></p>` : ''}
-      ${items.length ? grupos.map(g => `
-        <div class="hist-dia">${g.dia === 'sin fecha' ? 'Sin fecha' : fmtDate(g.dia)}</div>
-        <div class="tramites-list">
+      ${items.length ? grupos.map(g => {
+        const diaAbierto = histDiasAbiertos.has(g.dia);
+        return `
+        <div class="hist-dia hist-dia-toggle ${diaAbierto ? 'abierto' : ''}" data-hist-dia="${escapeHtml(g.dia)}">
+          <span>${g.dia === 'sin fecha' ? 'Sin fecha' : fmtDate(g.dia)} <span class="hist-dia-count">(${g.items.length})</span></span>
+          <span class="hist-dia-caret">${diaAbierto ? '▾' : '▸'}</span>
+        </div>
+        ${diaAbierto ? `<div class="tramites-list">
         ${g.items.map(({ cliente, tramite }) => {
           const abierto = historialAbierto === tramite.id;
           const modelo = [cliente.marca, cliente.modelo].filter(Boolean).join(' ');
+          const hora = tramite.enviadoEn ? 'Enviado ' + fmtHora(tramite.enviadoEn) : (tramite.creadoEn ? 'Cargado ' + fmtHora(tramite.creadoEn) : '');
           return `
           <div class="tramite-row hist-row ${abierto ? 'hist-row-abierto' : ''}">
             <div class="hist-tocable" data-hist-toggle="${tramite.id}">
               <div class="hist-patente">${escapeHtml(cliente.patente || 'SIN PATENTE')}${modelo ? ` <span class="hist-modelo">${escapeHtml(modelo)}</span>` : ''}</div>
-              <div class="hist-tipo">${tramiteTipoLabel(tramite.tipo)}</div>
+              <div class="hist-tipo">${tramiteTipoLabel(tramite.tipo)}${hora ? ` · <span class="hist-hora">${hora}</span>` : ''}</div>
               <div class="hist-nombre">${escapeHtml(cliente.nombre)}${cliente.telefono ? ` · Tel: ${escapeHtml(cliente.telefono)}` : ''}</div>
             </div>
             <span class="badge ${tramite.estadoPec === 'enviado' ? 'badge-ok' : 'badge-warn'}">${ESTADO_PEC_LABELS[tramite.estadoPec]}</span>
@@ -1793,7 +1817,8 @@ Documentación para realizar la renovación:
               <button type="button" class="btn btn-danger-outline btn-sm" data-borrar-tramite-cliente="${cliente.id}" data-borrar-tramite-id="${tramite.id}">Eliminar trámite</button>
             </div></div>` : ''}`;
         }).join('')}
-        </div>`).join('') : `<div class="empty">${emptyIconSvg()}${filtrando ? 'No hay trámites que coincidan con el filtro.' : 'Todavía no hay trámites cargados.'}</div>`}
+        </div>` : ''}`;
+      }).join('') : `<div class="empty">${emptyIconSvg()}${filtrando ? 'No hay trámites que coincidan con el filtro.' : 'Todavía no hay trámites cargados.'}</div>`}
     </div>`;
   }
 
@@ -4397,6 +4422,9 @@ Documentación para realizar la renovación:
   let showEstadisticas = false;
   // Id del trámite cuyo detalle de cliente está desplegado en el historial.
   let historialAbierto = null;
+  // Días del historial que están desplegados (abiertos). Arranca en null y se
+  // inicializa con el día en curso, así ese queda abierto y el resto cerrado.
+  let histDiasAbiertos = null;
   // Filtros del historial (buscador + tipo + estado).
   let histQuery = '';
   let histTipo = '';
@@ -4706,6 +4734,19 @@ Documentación para realizar la renovación:
     if (isNaN(d.getTime())) return '';
     const p = (n) => String(n).padStart(2, '0');
     return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  // Solo la hora (HH:MM) de una marca de tiempo ISO.
+  function fmtHora(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return '';
+    const p = (n) => String(n).padStart(2, '0');
+    return `${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  // Marca de tiempo de un trámite para ordenar cronológicamente y mostrar la
+  // hora: prioriza el envío al PEC, luego la carga; si no hay, cae a la fecha.
+  function tiempoTramite(t) {
+    return (t && (t.enviadoEn || t.creadoEn)) || ((t && t.fecha) ? t.fecha + 'T00:00:00' : '');
   }
   // Bloque HTML de la bitácora, reutilizado en "Último trámite" y en el Historial.
   function revisionBitacoraHtml(t) {
@@ -6403,6 +6444,17 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       });
     });
 
+    // Desplegar/plegar un día del historial.
+    root.querySelectorAll('[data-hist-dia]').forEach(el => {
+      el.addEventListener('click', () => {
+        const dia = el.getAttribute('data-hist-dia');
+        if (histDiasAbiertos === null) histDiasAbiertos = new Set();
+        if (histDiasAbiertos.has(dia)) histDiasAbiertos.delete(dia);
+        else histDiasAbiertos.add(dia);
+        render();
+      });
+    });
+
     // Entra a editar un trámite existente (paso 3 con todo pre-cargado).
     // Editar permite corregir todo: desde el paso 3 se puede volver con
     // "Atrás" a los datos y al equipo.
@@ -6491,6 +6543,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         try {
           btn.disabled = true;
           t.estadoPec = 'enviado';
+          if (!t.enviadoEn) t.enviadoEn = new Date().toISOString();
           await saveClientes();
           const blob = await generarPecPdfSoloDatos(c, t, { conFotos: true });
           const filename = `PEC_${(c.patente || c.nombre || 'tramite').replace(/\s+/g, '_')}_${t.fecha || ''}.pdf`;
@@ -6579,6 +6632,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         if (st) { st.className = 'agent-result'; st.innerHTML = '<span class="gnc-loading-row"><span class="gnc-spinner"></span> Generando el PDF...</span>'; }
         // Marcar como enviado y persistir.
         t.estadoPec = 'enviado';
+        if (!t.enviadoEn) t.enviadoEn = new Date().toISOString();
         await saveClientes();
         // Al PEC se manda el "solo datos" (para su planilla preimpresa) con
         // las fotos de documentación adjuntas; la firma va aparte, en papel.
@@ -7912,6 +7966,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         const t = c.tramites.find(x => x.id === tramiteId);
         if (!t) return;
         t.estadoPec = sel.value;
+        if (sel.value === 'enviado' && !t.enviadoEn) t.enviadoEn = new Date().toISOString();
         t.motivoIncompleto = '';
         await saveClientes();
         render();
