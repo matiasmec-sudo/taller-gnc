@@ -374,6 +374,10 @@
 #gnc-app .scan-sub { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; }
 #gnc-app .scan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 @media (max-width: 640px) { #gnc-app .scan-grid { grid-template-columns: 1fr; } }
+/* Variante de 2 columnas (Frente/Dorso): en el celular se apilan (1 columna)
+   para que los botones Cámara/Fotos entren cómodos y alineados. */
+#gnc-app .scan-grid-2 { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 640px) { #gnc-app .scan-grid-2 { grid-template-columns: 1fr; } }
 #gnc-app .scan-slot { display: flex; flex-direction: column; gap: 6px; }
 #gnc-app .scan-slot label { font-family: var(--mono); font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
 #gnc-app .scan-slot input[type="file"] {
@@ -2932,7 +2936,7 @@ Documentación para realizar la renovación:
     ];
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="fotos-panel">
       <h2 class="panel-h2-sticky">Documentación — ${escapeHtml(cliente.nombre)}</h2>
-      <div class="scan-grid" style="grid-template-columns: repeat(2, 1fr);">
+      <div class="scan-grid scan-grid-2">
         ${slots.map(s => `
         <div class="scan-slot">
           <label>${s.label}</label>
@@ -2982,7 +2986,7 @@ Documentación para realizar la renovación:
     return `<div class="scan-box" id="scan-box">
       <h3 style="margin-top:0; border-top:none; padding-top:0;">Fotos del cliente ${infoAyuda('ayuda-fotos-cliente')}</h3>
       ${ayudaBloque('ayuda-fotos-cliente', 'Colocá el DNI, la Cédula Verde y la Tarjeta de GNC juntos sobre una mesa y tomá una sola foto con todo (Frente). Luego dalos vuelta y tomá otra (Dorso). Las dos fotos quedan guardadas junto con el cliente. Al tocar "Leer datos", los datos personales se toman del titular de la Cédula Verde (nombre, documento y domicilio) y de ahí también la patente; el resto de los datos del vehículo y del equipo se completan con la consulta a ENARGAS. El DNI y la Tarjeta de GNC quedan solo de respaldo, no se leen sus datos. Si el cliente te mandó la documentación en fotos separadas, en "Galería" podés elegir varias a la vez y Estelita las une en una sola imagen.')}
-      <div class="scan-grid" style="grid-template-columns: repeat(2, 1fr);">
+      <div class="scan-grid scan-grid-2">
         ${slots.map(s => `
         <div class="scan-slot">
           <label>${s.label}</label>
