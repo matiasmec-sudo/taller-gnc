@@ -756,6 +756,10 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
     // Centros de reprueba (CRPC) que trabaja el taller, siglas separadas por
     // coma. Alimentan el desplegable del cilindro y la prueba hidráulica.
     centrosReprueba: 'GNSE, MMDP',
+    // Con cuántos meses de anticipación se avisan los vencimientos (oblea /
+    // prueba hidráulica). 1 = solo el mes en curso; 2 = este mes y el próximo
+    // (por defecto); 3 = hasta 3 meses adelante.
+    avisoAnticipacionMeses: 2,
     // Lista de PECs del taller (algunos talleres trabajan con más de uno).
     // Los campos pec* planos de arriba quedan como espejo del primer PEC
     // por compatibilidad con datos ya guardados.
@@ -1445,15 +1449,33 @@ Documentación para realizar la renovación:
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   }
 
+  // Meses de anticipación configurados para avisar los vencimientos (mín. 1).
+  function mesesAviso() {
+    const n = Number(tallerConfig.avisoAnticipacionMeses);
+    return n >= 1 ? Math.min(n, 12) : 2;
+  }
+  // Meses (YYYY-MM) dentro de la ventana de aviso: el mes en curso y los
+  // (mesesAviso - 1) siguientes. Con esto se decide qué vencimientos entran.
+  function ventanaAvisoYMs() {
+    const out = [];
+    const d = new Date(); d.setDate(1);
+    for (let i = 0; i < mesesAviso(); i++) {
+      out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      d.setMonth(d.getMonth() + 1);
+    }
+    return out;
+  }
+
   function reminderCandidates() {
     const ym = currentYM();
+    const ventana = ventanaAvisoYMs();
     const out = [];
     clientes.forEach(c => {
-      if (c.fecha_oblea && c.fecha_oblea.slice(0, 7) === ym && c.ultimoAvisoMes.oblea !== ym) {
+      if (c.fecha_oblea && ventana.includes(c.fecha_oblea.slice(0, 7)) && c.ultimoAvisoMes.oblea !== ym) {
         out.push({ cliente: c, tipo: 'oblea' });
       }
       const phIso = phVencimientoISO(c.fecha_crpc, c.tipo_cilindro);
-      if (phIso && phIso.slice(0, 7) === ym && c.ultimoAvisoMes.prueba !== ym) {
+      if (phIso && ventana.includes(phIso.slice(0, 7)) && c.ultimoAvisoMes.prueba !== ym) {
         out.push({ cliente: c, tipo: 'prueba' });
       }
     });
@@ -1465,11 +1487,11 @@ Documentación para realizar la renovación:
     if (!items.length) return '';
     return `<div class="panel reminder-banner">
       <div class="reminder-header">
-        <h2 style="margin:0;">📅 ${items.length} cliente(s) para avisar este mes</h2>
+        <h2 style="margin:0;">📅 ${items.length} cliente(s) para avisar</h2>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-reminder">${reminderBannerOpen ? 'Ocultar' : 'Ver'}</button>
       </div>
       ${reminderBannerOpen ? `
-        <p class="scan-sub">Venc. de Oblea o Prueba Hidráulica este mes. Tocá "Avisar por WhatsApp" para cada uno.</p>
+        <p class="scan-sub">Vencimientos de Oblea o Prueba Hidráulica ${mesesAviso() > 1 ? 'próximos' : 'de este mes'}. Tocá "Avisar por WhatsApp" para cada uno.</p>
         <div class="docs">
           ${items.map(({ cliente, tipo }) => `
             <div class="doc-row">
@@ -1520,8 +1542,9 @@ Documentación para realizar la renovación:
   // Vencimientos (oblea + prueba hidráulica) agrupados para avisar: los que
   // vencen este mes, el mes que viene, y los vencidos de los últimos 90 días.
   function vencimientosAgenda() {
-    const ym = currentYM(), nym = nextYM();
-    const buckets = { vencidos: [], esteMes: [], proximoMes: [] };
+    const ym = currentYM();
+    const ventana = ventanaAvisoYMs();
+    const buckets = { vencidos: [], esteMes: [], proximos: [] };
     clientes.forEach(c => {
       const considerar = (tipo, iso) => {
         if (!iso) return;
@@ -1531,21 +1554,21 @@ Documentación para realizar la renovación:
         const item = { cliente: c, tipo, status: s, avisado };
         const mo = iso.slice(0, 7);
         if (mo === ym) buckets.esteMes.push(item);
-        else if (mo === nym) buckets.proximoMes.push(item);
+        else if (ventana.includes(mo)) buckets.proximos.push(item);
         else if (s.days < 0 && s.days >= -90) buckets.vencidos.push(item);
       };
       considerar('oblea', c.fecha_oblea || null);
       considerar('prueba', phVencimientoISO(c.fecha_crpc, c.tipo_cilindro));
     });
     const ordenar = arr => arr.sort((a, b) => (a.status.days || 0) - (b.status.days || 0));
-    ordenar(buckets.vencidos); ordenar(buckets.esteMes); ordenar(buckets.proximoMes);
+    ordenar(buckets.vencidos); ordenar(buckets.esteMes); ordenar(buckets.proximos);
     return buckets;
   }
-  // Cantidad de vencimientos "para avisar ya" (vencidos + este mes) que
-  // todavía no se avisaron este mes — alimenta el badge del botón "Hoy".
+  // Cantidad de vencimientos "para avisar" (vencidos + dentro de la ventana de
+  // anticipación) que todavía no se avisaron este mes — alimenta el badge "Hoy".
   function vencimientosParaAvisarCount() {
     const b = vencimientosAgenda();
-    return [...b.vencidos, ...b.esteMes].filter(i => !i.avisado).length;
+    return [...b.vencidos, ...b.esteMes, ...b.proximos].filter(i => !i.avisado).length;
   }
 
   // Arma la agenda del día para enviar a los técnicos: turnos de hoy y autos
@@ -1605,8 +1628,8 @@ Documentación para realizar la renovación:
         </div>`).join('')}</div>` : '<p class="scan-sub">No hay turnos para hoy.</p>'}
 
       <h3>Vencimientos para avisar</h3>
-      ${(v.vencidos.length || v.esteMes.length || v.proximoMes.length)
-        ? `${seccionVenc('Vencidos (últimos 90 días)', v.vencidos)}${seccionVenc('Vencen este mes', v.esteMes)}${seccionVenc('Vencen el mes que viene', v.proximoMes)}`
+      ${(v.vencidos.length || v.esteMes.length || v.proximos.length)
+        ? `${seccionVenc('Vencidos (últimos 90 días)', v.vencidos)}${seccionVenc('Vencen este mes', v.esteMes)}${seccionVenc('Próximos vencimientos', v.proximos)}`
         : '<p class="scan-sub">No hay vencimientos próximos para avisar. ¡Todo al día!</p>'}
 
       <h3>Pendientes</h3>
@@ -3044,6 +3067,14 @@ Documentación para realizar la renovación:
         <label>Centros de reprueba (CRPC) — siglas separadas por coma
           <input type="text" id="tc-centros-reprueba" value="${escapeHtml(t.centrosReprueba || '')}" placeholder="Ej: GNSE, MMDP">
         </label>
+        <label>Anticipación del aviso de vencimiento
+          <select id="tc-aviso-anticipacion">
+            <option value="1" ${mesesAviso() === 1 ? 'selected' : ''}>Solo el mes en curso</option>
+            <option value="2" ${mesesAviso() === 2 ? 'selected' : ''}>Este mes y el próximo (recomendado)</option>
+            <option value="3" ${mesesAviso() === 3 ? 'selected' : ''}>Hasta 3 meses antes</option>
+          </select>
+          <span class="formato-hint" style="display:block;">Con cuánta anticipación aparecen los clientes por vencer para avisarles.</span>
+        </label>
       </div>`;
     const secPec = `
       <div class="agent-hint" style="margin-top:0;">Si tu taller trabaja con más de un PEC, agregalos acá. Al iniciar cada trámite vas a poder elegir a cuál se envía la ficha técnica, y el WhatsApp va a salir directo al teléfono de ese PEC.</div>
@@ -3189,6 +3220,7 @@ Documentación para realizar la renovación:
     setStr('tc-tecnico-matricula', 'tecnicoMatricula');
     setStr('tc-codigo-taller', 'codigoTaller');
     setStr('tc-centros-reprueba', 'centrosReprueba');
+    setNum('tc-aviso-anticipacion', 'avisoAnticipacionMeses');
     setNum('tc-ajuste-x', 'impresionAjusteX');
     setNum('tc-ajuste-y', 'impresionAjusteY');
     if (el('tc-precio-' + TRAMITE_TIPOS[0].value)) {
@@ -5951,6 +5983,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         tecnicoMatricula: (tallerConfig.tecnicoMatricula || '').trim(),
         codigoTaller: (tallerConfig.codigoTaller || '').trim(),
         centrosReprueba: (tallerConfig.centrosReprueba || '').trim(),
+        avisoAnticipacionMeses: mesesAviso(),
         impresionAjusteX: Number(tallerConfig.impresionAjusteX) || 0,
         impresionAjusteY: Number(tallerConfig.impresionAjusteY) || 0,
         mensajes,
