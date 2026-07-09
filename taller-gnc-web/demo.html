@@ -159,7 +159,7 @@
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const master = audioCtx.createGain();
       master.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-      master.gain.exponentialRampToValueAtTime(0.055, audioCtx.currentTime + 2);
+      master.gain.exponentialRampToValueAtTime(0.14, audioCtx.currentTime + 2);
       master.connect(audioCtx.destination);
       musicMaster = master;
       const base = 261.63; // Do
@@ -357,8 +357,11 @@
   scenes.forEach((s, i) => { s.dur = VOZ_DUR[i]; });
   const vozAudios = VOZ_DUR.map((_, i) => { const a = new Audio('voz/e' + (i + 1) + '.mp3'); a.preload = 'auto'; return a; });
   let vozActual = null;
+  // Voz apagada hasta elegir una que guste (ver voz-muestras.html). Cuando se
+  // defina, poner VOZ_ON = true y regenerar los clips voz/e1..e10.mp3.
+  const VOZ_ON = false;
   function playVoz(i) {
-    if (musicMuted) return;
+    if (!VOZ_ON || musicMuted) return;
     try { if (vozActual) vozActual.pause(); vozActual = vozAudios[i]; vozActual.currentTime = 0; vozActual.play().catch(() => {}); } catch (e) {}
   }
   function stopVoz() { if (vozActual) { try { vozActual.pause(); vozActual.currentTime = 0; } catch (e) {} } }
