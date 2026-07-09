@@ -2162,9 +2162,9 @@ Documentación para realizar la renovación:
       <h2>Importar clientes ${infoAyuda('ayuda-importar')}</h2>
       ${ayudaBloque('ayuda-importar', 'Importación inicial de la cartera de clientes del taller. Se aceptan planillas de Excel (.xlsx o .csv) o fotografías de las páginas del cuaderno del taller (hasta 6 por tanda, bien iluminadas; se leen incluso los renglones manuscritos). Solo se requieren la patente y el teléfono de cada cliente: los demás datos pueden completarse más adelante. Las columnas de la planilla se reconocen automáticamente, en cualquier orden. Antes de confirmar, se muestra una vista previa para revisar las filas detectadas y destildar las que no correspondan.')}
       <div class="scan-slot-buttons" style="margin-top:4px;">
-        <label class="btn btn-primary">Subir excel<input type="file" accept=".csv,.tsv,.xlsx,.xls,text/csv,text/tab-separated-values,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" id="bulk-import-file" style="display:none;"></label>
-        <label class="btn btn-primary">Tomar foto<input type="file" id="cuaderno-foto-camara" accept="image/*" capture="environment" style="display:none;"></label>
-        <label class="btn btn-ghost">Galería<input type="file" id="cuaderno-fotos-input" accept="image/*" multiple style="display:none;"></label>
+        <label class="btn btn-primary">${btnIco('upload')}Subir excel<input type="file" accept=".csv,.tsv,.xlsx,.xls,text/csv,text/tab-separated-values,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" id="bulk-import-file" style="display:none;"></label>
+        <label class="btn btn-primary">${btnIco('camera')}Tomar foto<input type="file" id="cuaderno-foto-camara" accept="image/*" capture="environment" style="display:none;"></label>
+        <label class="btn btn-ghost">${btnIco('image')}Galería<input type="file" id="cuaderno-fotos-input" accept="image/*" multiple style="display:none;"></label>
       </div>
       <div id="cuaderno-ia-status"></div>
       ${rows.length ? `
@@ -2412,9 +2412,15 @@ Documentación para realizar la renovación:
     moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.93 4.93l1.41 1.41"/><path d="M17.66 17.66l1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M6.34 17.66l-1.41 1.41"/><path d="M19.07 4.93l-1.41 1.41"/>',
     smartphone: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>',
+    camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/>',
+    image: '<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
   };
   function menuIco(name) {
     return `<svg class="menu-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MENU_ICONS[name] || ''}</svg>`;
+  }
+  // Ícono de línea chico para meter dentro de un botón (cámara, galería, etc.).
+  function btnIco(name) {
+    return `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:0 0 auto;">${MENU_ICONS[name] || ''}</svg>`;
   }
 
   // Escapa un valor para CSV: neutraliza caracteres que Excel/Sheets podría
@@ -2980,8 +2986,8 @@ Documentación para realizar la renovación:
         <div class="scan-slot">
           <label>${s.label}</label>
           <div class="scan-slot-buttons">
-            <label class="btn btn-primary btn-sm">📷 Tomar foto<input type="file" accept="image/*" capture="environment" id="scan-${s.key}" style="display:none;"></label>
-            <label class="btn btn-ghost btn-sm">🖼 Galería<input type="file" accept="image/*" multiple id="scan-${s.key}-galeria" style="display:none;"></label>
+            <label class="btn btn-primary btn-sm">${btnIco('camera')}Tomar foto<input type="file" accept="image/*" capture="environment" id="scan-${s.key}" style="display:none;"></label>
+            <label class="btn btn-ghost btn-sm">${btnIco('image')}Galería<input type="file" accept="image/*" multiple id="scan-${s.key}-galeria" style="display:none;"></label>
           </div>
           <img class="scan-thumb" id="thumb-${s.key}" style="display:${scanFiles[s.key] ? 'block' : 'none'}; height:130px;" src="${scanFiles[s.key] || ''}">
           ${scanFiles[s.key] ? `<button type="button" class="btn btn-ghost btn-sm" data-remove-photo="${s.key}">Quitar foto</button>` : ''}
