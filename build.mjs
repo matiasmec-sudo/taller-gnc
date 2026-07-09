@@ -16,7 +16,7 @@ const origen = join(raiz, 'taller-gnc-web', 'index.src.html');
 const destino = join(raiz, 'taller-gnc-web', 'index.html');
 
 // Aviso legal que se conserva arriba de todo, incluso en el archivo publicado.
-const BANNER = '<!-- (c) Estelita - Cintia Noemi Ponce. Software propietario. Todos los derechos reservados. Prohibida su reproduccion o distribucion total o parcial. -->\n';
+const BANNER = '<!-- (c) Estelita - Matias Agustin Casimir. Software propietario. Todos los derechos reservados. Prohibida su reproduccion o distribucion total o parcial. -->\n';
 
 const fuente = (await readFile(origen, 'utf8')).replace(/^﻿/, '');
 
