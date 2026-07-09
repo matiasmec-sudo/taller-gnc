@@ -1762,7 +1762,9 @@ Documentación para realizar la renovación:
     });
     const grupos = dias.map(dia => {
       const arr = mapa.get(dia);
-      arr.sort((x, y) => tiempoTramite(x.tramite).localeCompare(tiempoTramite(y.tramite)));
+      // Más nuevo primero: el último trámite del día queda arriba y de ahí para
+      // abajo los anteriores.
+      arr.sort((x, y) => tiempoTramite(y.tramite).localeCompare(tiempoTramite(x.tramite)));
       return { dia, items: arr };
     });
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="historial-panel">
