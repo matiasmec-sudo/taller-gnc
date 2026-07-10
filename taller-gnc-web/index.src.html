@@ -5213,15 +5213,26 @@ Documentación para realizar la renovación:
       let cambioLocal = false;
       let cambioRemoto = !remoto;
       Object.entries(porId).forEach(([id, par]) => {
-        const mejor = !par.remoto ? par.local : (!par.local ? par.remoto : (ts(par.remoto) > ts(par.local) ? par.remoto : par.local));
+        // Elegir la versión más nueva y marcar cambios SOLO por diferencia real
+        // de fecha (no por identidad de objeto). En un empate (misma fecha) las
+        // dos versiones son iguales: no hay nada que subir ni bajar. Antes el
+        // empate marcaba "cambioRemoto", así que se re-subía a la nube en CADA
+        // sincronización aunque no hubiera cambiado nada — eso gastaba miles de
+        // operaciones de más.
+        let mejor, remotoMasNuevo = false, localMasNuevo = false;
+        if (!par.remoto) { mejor = par.local; localMasNuevo = true; }
+        else if (!par.local) { mejor = par.remoto; remotoMasNuevo = true; }
+        else if (ts(par.remoto) > ts(par.local)) { mejor = par.remoto; remotoMasNuevo = true; }
+        else if (ts(par.local) > ts(par.remoto)) { mejor = par.local; localMasNuevo = true; }
+        else { mejor = par.local; } // empate: misma versión, sin cambios
         if (tumbas[id] && tumbas[id] >= ts(mejor)) {
           if (par.local) cambioLocal = true;
           if (par.remoto) cambioRemoto = true;
           return;
         }
         fusionados.push(mejor);
-        if (mejor !== par.local) cambioLocal = true;
-        if (mejor !== par.remoto) cambioRemoto = true;
+        if (remotoMasNuevo) cambioLocal = true;
+        if (localMasNuevo) cambioRemoto = true;
         const fL = (par.local && par.local.fotosTs) || '';
         const fR = (par.remoto && par.remoto.fotosTs) || '';
         if (fR > fL) bajarFotosDe.push(id);
