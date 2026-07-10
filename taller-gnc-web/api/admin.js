@@ -61,7 +61,7 @@ export default async function handler(req, res) {
       // de operaciones de nube (Blob) por la IA — cada lectura hace ~2 escrituras
       // (registro de uso + de costo). La sincronización suma más, pero eso no se
       // mide acá; el total exacto está en el panel de Vercel.
-      const vercel = { plan: process.env.VERCEL_PLAN || 'Gratis (Hobby)', costoUSD: Number(process.env.VERCEL_COSTO_USD) || 0 };
+      const vercel = { plan: process.env.VERCEL_PLAN || 'Pro', costoUSD: Number.isFinite(Number(process.env.VERCEL_COSTO_USD)) && process.env.VERCEL_COSTO_USD !== undefined ? Number(process.env.VERCEL_COSTO_USD) : 20 };
       const opsIaMes = readsTotalMes * 2;
       return res.status(200).json({
         ok: true, licencias: conAct, costoTotalMes, readsTotalMes,
