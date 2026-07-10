@@ -1264,6 +1264,9 @@ Documentación para realizar la renovación:
             <label style="grid-column: 1/-1;">Motivo
               <input type="text" id="modal-turno-motivo" value="${escapeHtml(valores.motivo || '')}" placeholder="Ej: reparación de frenos">
             </label>
+            <label style="grid-column: 1/-1;">Presupuesto estimado (opcional, solo para el taller)
+              <input type="text" id="modal-turno-presupuesto" value="${escapeHtml(valores.presupuesto || '')}" placeholder="Ej: $15.000 o a confirmar">
+            </label>
           </div>
           <div class="gnc-modal-actions">
             ${valores.fecha ? '<button type="button" class="btn btn-sm btn-danger-outline" id="modal-turno-borrar">Borrar turno</button>' : ''}
@@ -1285,6 +1288,7 @@ Documentación para realizar la renovación:
           fecha,
           hora: overlay.querySelector('#modal-turno-hora').value || '',
           motivo: overlay.querySelector('#modal-turno-motivo').value.trim(),
+          presupuesto: overlay.querySelector('#modal-turno-presupuesto').value.trim(),
         });
       });
       overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(null); });
@@ -2092,6 +2096,7 @@ Documentación para realizar la renovación:
               <div>
                 <div class="hist-patente">${escapeHtml(cliente.patente || 'SIN PATENTE')}</div>
                 <div class="hist-tipo">${fmtDate(turno.fecha)}${turno.hora ? ' · ' + escapeHtml(turno.hora) + ' hs' : ''}${turno.motivo ? ' — ' + escapeHtml(turno.motivo) : ''}</div>
+                ${turno.presupuesto ? `<div class="doc-sub" style="color:var(--flame);">Presupuesto: ${escapeHtml(turno.presupuesto)}</div>` : ''}
                 <div class="hist-nombre">${escapeHtml(cliente.nombre)}${cliente.telefono ? ' · ' + escapeHtml(cliente.telefono) : ''}</div>
                 ${g.confirmar ? `<div class="turno-confirmar">
                   <button type="button" class="btn btn-primary btn-sm" data-asistio-cliente="${cliente.id}" data-asistio-id="${turno.id}">Asistió</button>
@@ -2172,6 +2177,9 @@ Documentación para realizar la renovación:
         </label>
         <label style="grid-column: 1/-1;">Motivo
           <input type="text" id="qa-turno-motivo" placeholder="Ej: reparación de frenos">
+        </label>
+        <label style="grid-column: 1/-1;">Presupuesto estimado (opcional, solo para el taller)
+          <input type="text" id="qa-turno-presupuesto" placeholder="Ej: $15.000 o a confirmar">
         </label>
       </div>
       <div class="form-actions">
@@ -2564,7 +2572,7 @@ Documentación para realizar la renovación:
             const t = proximoTurnoDe(c);
             if (!t) return '';
             const cuando = t.fecha === fechaLocalISO() ? 'HOY' : t.fecha === mananaISO() ? 'Mañana' : fmtDate(t.fecha);
-            return `<div class="doc-row"><span class="doc-label">Turno</span><span class="badge ${t.fecha === fechaLocalISO() ? 'badge-danger' : 'badge-warn'}">${cuando}${t.hora ? ' ' + escapeHtml(t.hora) : ''}${t.motivo ? ' — ' + escapeHtml(t.motivo) : ''}</span></div>`;
+            return `<div class="doc-row"><span class="doc-label">Turno</span><span class="badge ${t.fecha === fechaLocalISO() ? 'badge-danger' : 'badge-warn'}">${cuando}${t.hora ? ' ' + escapeHtml(t.hora) : ''}${t.motivo ? ' — ' + escapeHtml(t.motivo) : ''}</span></div>${t.presupuesto ? `<div class="doc-row"><span class="doc-label">Presupuesto</span><span>${escapeHtml(t.presupuesto)}</span></div>` : ''}`;
           })()}
         </div>
         <div class="form-actions" style="margin-top:10px;">
@@ -2597,7 +2605,7 @@ Documentación para realizar la renovación:
     const turnosHist = (c.turnos || []).filter(t => t.estado).sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
     const turnosRows = turnosHist.map(t => `
       <div class="tramite-row"><div>
-        <div class="hist-tipo">${fmtDate(t.fecha)}${t.motivo ? ' — ' + escapeHtml(t.motivo) : ''}</div>
+        <div class="hist-tipo">${fmtDate(t.fecha)}${t.motivo ? ' — ' + escapeHtml(t.motivo) : ''}${t.presupuesto ? ' · Presup.: ' + escapeHtml(t.presupuesto) : ''}</div>
         <div class="hist-nombre">${t.estado === 'asistio' ? '✅ Asistió' : '❌ No asistió'}</div>
       </div></div>`).join('');
     return `<div class="client-detalle">
@@ -6263,6 +6271,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
           fecha: turnoFecha,
           hora: root.querySelector('#qa-turno-hora').value || '',
           motivo: root.querySelector('#qa-turno-motivo').value.trim(),
+          presupuesto: root.querySelector('#qa-turno-presupuesto').value.trim(),
           avisoEnviado: false,
         });
       }
@@ -7187,11 +7196,11 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
           const t = c.turnos.find(t => t.id === actual.id);
           // Si cambió la fecha, el recordatorio se puede volver a mandar.
           if (t.fecha !== r.fecha || t.hora !== r.hora) t.avisoEnviado = false;
-          t.fecha = r.fecha; t.hora = r.hora; t.motivo = r.motivo;
+          t.fecha = r.fecha; t.hora = r.hora; t.motivo = r.motivo; t.presupuesto = r.presupuesto;
         } else {
           c.turnos.push({
             id: 't' + Date.now() + Math.random().toString(36).slice(2, 7),
-            fecha: r.fecha, hora: r.hora, motivo: r.motivo, avisoEnviado: false,
+            fecha: r.fecha, hora: r.hora, motivo: r.motivo, presupuesto: r.presupuesto, avisoEnviado: false,
           });
         }
         await saveClientes();
