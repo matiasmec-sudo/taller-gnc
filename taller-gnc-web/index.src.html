@@ -2762,7 +2762,9 @@ Documentación para realizar la renovación:
     // cargan los que están puestos (Montaje o Sin Cambios).
     const esDesmontado = (op) => /desmontaje|baja/i.test((op || '').trim());
     function mesAnioDe(v) {
-      const m = (v || '').match(/(\d{1,2})\s*\/\s*(\d{2,4})/);
+      // El año puede venir con 1 dígito ("8 / 4" = agosto 2004, el SIC le saca
+      // el cero) o con 2-4. Por eso se acepta \d{1,4} y se completa a 20xx.
+      const m = (v || '').match(/(\d{1,2})\s*\/\s*(\d{1,4})/);
       if (!m) return null;
       return { mes: m[1].padStart(2, '0'), anio: m[2].length <= 2 ? '20' + m[2].padStart(2, '0') : m[2] };
     }
