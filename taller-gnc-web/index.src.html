@@ -2757,6 +2757,10 @@ Documentación para realizar la renovación:
       return partes;
     }
     const esCodigoHom = (v) => /^[A-Za-z]{1,3}\d{1,4}[A-Za-z]?$/.test((v || '').trim());
+    // Un componente cuya "Operación" es Desmontaje o Baja ya NO está en el
+    // vehículo (se lo sacaron en el trámite anterior): no se carga. Solo se
+    // cargan los que están puestos (Montaje o Sin Cambios).
+    const esDesmontado = (op) => /desmontaje|baja/i.test((op || '').trim());
     function mesAnioDe(v) {
       const m = (v || '').match(/(\d{1,2})\s*\/\s*(\d{2,4})/);
       if (!m) return null;
@@ -2861,7 +2865,7 @@ Documentación para realizar la renovación:
         if (f) {
           const codigo = (f.codigo || '').trim();
           const serie = (f.serie || '').trim();
-          if (esCodigoHom(codigo)) {
+          if (esCodigoHom(codigo) && !esDesmontado(f.operacion)) {
             if (seccion === 'regulador') {
               if (!regulador.codigo && !regulador.serie) { regulador.codigo = codigo; regulador.serie = serie; }
             } else if (seccion === 'cilindro') {
@@ -2898,6 +2902,8 @@ Documentación para realizar la renovación:
       }
       codigo = (codigo || '').trim();
       serie = (serie || '').trim();
+      // Saltear los componentes desmontados / dados de baja (ya no están).
+      if (esDesmontado(col('operacion', ''))) continue;
 
       if (seccion === 'regulador') {
         if (!regulador.codigo && !regulador.serie) { regulador.codigo = codigo; regulador.serie = serie; }
