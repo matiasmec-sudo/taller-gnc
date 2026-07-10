@@ -1837,7 +1837,7 @@ Documentación para realizar la renovación:
             ${tramite.estadoPec !== 'enviado' ? `<button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${cliente.id}" data-editar-tramite-id="${tramite.id}">Editar</button>` : ''}
             ${tramite.estadoPec === 'enviado' && cliente.telefono ? (
               tramite.avisoObleaEnviado
-                ? `<button type="button" class="btn btn-ghost btn-sm" disabled>Aviso enviado</button>`
+                ? `<a class="btn btn-wa btn-sm" target="_blank" rel="noopener" href="${waLinkGeneral(cliente)}" title="Aviso de oblea ya enviado — contactar por WhatsApp">WhatsApp</a>`
                 : `<button type="button" class="btn btn-wa btn-sm" data-aviso-oblea-cliente="${cliente.id}" data-aviso-oblea-tramite="${tramite.id}">Avisar: llegó tu oblea</button>`
             ) : ''}
           </div>
