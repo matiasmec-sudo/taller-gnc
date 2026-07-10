@@ -59,9 +59,9 @@
 
 <script>
   const PLANES = [
-    { id:'basico', nombre:'Básico', precio:'$18.000', desc:'Fichas al PEC, WhatsApp, vencimientos e historial.' },
-    { id:'profesional', nombre:'Profesional', precio:'$32.000', desc:'Todo + app del técnico, turnos, estadísticas y nube.', reco:true },
-    { id:'full', nombre:'Full', precio:'$58.000', desc:'Todo + varios PEC, multiusuario y soporte prioritario.' },
+    { id:'basico', nombre:'Básico', precio:'$15.000', desc:'Fichas al PEC, WhatsApp, vencimientos e historial.' },
+    { id:'profesional', nombre:'Profesional', precio:'$22.000', desc:'Todo + app del técnico, turnos, estadísticas y nube.', reco:true },
+    { id:'full', nombre:'Full', precio:'$35.000', desc:'Todo + varios PEC, multiusuario y soporte prioritario.' },
   ];
   const params = new URLSearchParams(location.search);
   let sel = PLANES.find(p => p.id === (params.get('plan')||'').toLowerCase()) ? params.get('plan').toLowerCase() : 'profesional';
