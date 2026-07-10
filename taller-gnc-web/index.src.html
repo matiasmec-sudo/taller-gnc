@@ -8049,7 +8049,6 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
 
     const btnSendPecTramite = root.querySelector('#btn-send-pec-tramite');
     if (btnSendPecTramite) btnSendPecTramite.addEventListener('click', async () => {
-      if (!currentSignature) { await customAlert('Falta la firma del propietario antes de enviar al PEC.'); return; }
       if (!(await confirmarTitularBaja(tramiteDraftCampos && tramiteDraftCampos.tipo))) return;
       // Si la revisión del técnico está en camino y no fue aprobada, avisar
       // antes de enviar (se puede destrabar a mano acá mismo).
