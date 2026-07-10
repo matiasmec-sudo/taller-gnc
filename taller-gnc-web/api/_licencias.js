@@ -18,7 +18,7 @@ const USO_PREFIX = 'sistema/uso-';
 const CONSUMO_PREFIX = 'sistema/consumo-';
 
 // Planes y precios (ARS/mes). Fuente única, usada por el checkout de MP y el panel.
-export const PLAN_PRECIOS = { basico: 18000, profesional: 32000, full: 58000 };
+export const PLAN_PRECIOS = { basico: 15000, profesional: 22000, full: 35000 };
 export const PLAN_NOMBRES = { basico: 'Básico', profesional: 'Profesional', full: 'Full' };
 
 // Genera un código de licencia único (sin O/0/I/1/L, fácil de dictar).
