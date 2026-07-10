@@ -4595,6 +4595,24 @@ Documentación para realizar la renovación:
   // cargado. Reusa el mismo cliente/trámite en cada pasada (no duplica) y
   // NO toca los datos de un cliente ya existente hasta que se guarde a
   // propósito.
+  // Fusiona datos nuevos sobre un cliente que ya existe, sin borrar lo que ya
+  // tenía: solo pisa un campo si el valor nuevo no está vacío. Conserva
+  // trámites, turnos, fecha_oblea, etc. (que no vienen en `data`).
+  function fusionarClienteData(existing, data) {
+    const merged = { ...existing };
+    Object.entries(data).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') merged[k] = v;
+    });
+    return merged;
+  }
+  // Busca un cliente ya cargado con la misma patente (ignorando mayúsculas,
+  // espacios y guiones). Sirve para no duplicar cuando el cliente ya existía
+  // (por ejemplo, creado al agendar un turno).
+  function clientePorPatente(patente) {
+    const n = (patente || '').toUpperCase().replace(/[\s-]/g, '');
+    if (!n) return null;
+    return clientes.find(c => (c.patente || '').toUpperCase().replace(/[\s-]/g, '') === n) || null;
+  }
   async function autoguardarBorradorTramite() {
     if (!clienteDraft || !tramiteDraftEquipo || !tramiteDraftCampos) return;
     if (modoSoloDatos) return;    // "Actualizar datos" no genera trámite
@@ -4651,9 +4669,21 @@ Documentación para realizar la renovación:
       const i0 = clientes.findIndex(c => c.id === clientId);
       clientes[i0] = { ...clientes[i0], ...data };
     } else {
-      clientId = 'c' + Date.now() + Math.random().toString(36).slice(2, 7);
-      clientes.push({ id: clientId, ...blankClienteBase(), ...data, tramites: [], ultimoAvisoMes: {}, notas: '' });
-      autosaveClienteCreado = true;
+      // Anti-duplicado: si ya hay un cliente con esta patente (ej. creado al
+      // agendar un turno), se le suma el trámite en vez de crear uno repetido.
+      // autosaveClienteCreado queda en false para que, si se cancela, NO se
+      // borre ese cliente que ya existía.
+      const existente = clientePorPatente(data.patente);
+      if (existente) {
+        clientId = existente.id;
+        const i0 = clientes.findIndex(c => c.id === clientId);
+        clientes[i0] = fusionarClienteData(clientes[i0], data);
+        autosaveClienteCreado = false;
+      } else {
+        clientId = 'c' + Date.now() + Math.random().toString(36).slice(2, 7);
+        clientes.push({ id: clientId, ...blankClienteBase(), ...data, tramites: [], ultimoAvisoMes: {}, notas: '' });
+        autosaveClienteCreado = true;
+      }
     }
     autosaveClienteId = clientId;
 
@@ -7795,8 +7825,17 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         clientId = efectivoClienteId;
         clientes[idxEf] = { ...clientes[idxEf], ...data };
       } else {
-        clientId = 'c' + Date.now() + Math.random().toString(36).slice(2, 7);
-        clientes.push({ id: clientId, ...blankClienteBase(), ...data, tramites: [], ultimoAvisoMes: {}, notas: '' });
+        // Anti-duplicado: si ya existe un cliente con esta patente, se le suma
+        // el trámite en vez de crear uno repetido (conserva sus turnos/datos).
+        const existente = clientePorPatente(data.patente);
+        if (existente) {
+          clientId = existente.id;
+          const iEx = clientes.findIndex(c => c.id === clientId);
+          clientes[iEx] = fusionarClienteData(clientes[iEx], data);
+        } else {
+          clientId = 'c' + Date.now() + Math.random().toString(36).slice(2, 7);
+          clientes.push({ id: clientId, ...blankClienteBase(), ...data, tramites: [], ultimoAvisoMes: {}, notas: '' });
+        }
       }
 
       try {
