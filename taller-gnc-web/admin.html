@@ -79,6 +79,7 @@
       </div>
     </div>
     <div class="resumen" id="resumen"></div>
+    <div id="infra"></div>
     <div id="tabla-msg"></div>
     <table>
       <thead><tr>
@@ -116,6 +117,28 @@
   }
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
+
+  // Mini-sección "Infraestructura": costo de Vercel (plano) + estimado de
+  // operaciones de nube por la IA, con semáforo. El total exacto vive en Vercel.
+  function renderInfra(inf, costoIaUSD, readsMes) {
+    const v = inf.vercel || { plan: '—', costoUSD: 0 };
+    const ops = inf.opsIaMes || 0;
+    const lim = inf.limiteOpsGratis || 2000;
+    const semaforo = ops < 700 ? '🟢' : ops < 1400 ? '🟡' : '🔴';
+    const vercelCosto = v.costoUSD ? 'US$' + v.costoUSD + '/mes' : 'US$0 (gratis)';
+    const el = $('#infra');
+    if (!el) return;
+    el.innerHTML = `
+      <div class="card" style="text-align:left; padding:14px 16px; margin-bottom:14px;">
+        <div style="font-weight:800; margin-bottom:8px;">Infraestructura (costos del mes)</div>
+        <div style="font-size:14px; line-height:1.9;">
+          <b>Vercel:</b> ${esc(v.plan)} — ${vercelCosto}<br>
+          <b>IA (Anthropic):</b> ${fmtUSD(costoIaUSD)} este mes · ${readsMes} lectura(s)<br>
+          <b>Nube (operaciones):</b> ${semaforo} ~${ops} por IA este mes · límite gratis ${lim}
+        </div>
+        <div class="muted" style="font-size:12px; margin-top:8px;">La sincronización suma más operaciones que no se cuentan acá. El número EXACTO está en Vercel → Almacenamiento → Blob → Uso.</div>
+      </div>`;
+  }
 
   const HOY = new Date().toISOString().slice(0, 10);
   function diasDesde(iso) { return Math.round((new Date(HOY) - new Date(iso)) / 86400000); }
@@ -166,6 +189,7 @@
        <div class="card"><b>${porVencer}</b><span>Por vencer</span></div>
        <div class="card"><b>${activasHoy}</b><span>Usaron hoy</span></div>
        <div class="card"><b>${fmtUSD(costoTotal)}</b><span>Costo IA (mes)</span></div>`;
+    renderInfra(data.infra || {}, costoTotal, data.readsTotalMes || 0);
     $('#filas').innerHTML = orden.map(l => {
       const reciente = l.ultimoUso && diasDesde(l.ultimoUso) <= 7;
       const e = estadoSub(l);

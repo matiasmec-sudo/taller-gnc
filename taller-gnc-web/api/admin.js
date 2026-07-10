@@ -45,17 +45,29 @@ export default async function handler(req, res) {
     if (accion === 'listar') {
       const [act, consumo] = await Promise.all([leerActividad(30), leerConsumoMes()]);
       let costoTotalMes = 0;
+      let readsTotalMes = 0;
       const conAct = lics.map(l => {
         const a = act[l.codigo] || {};
         const c = consumo[l.codigo] || {};
         costoTotalMes += Number(c.costoUSD) || 0;
+        readsTotalMes += Number(c.reads) || 0;
         return {
           ...l,
           usoTotal: a.total || 0, usoHoy: a.hoy || 0, ultimoUso: a.ultimo || null,
           costoMesUSD: Number(c.costoUSD) || 0, readsMes: Number(c.reads) || 0,
         };
       });
-      return res.status(200).json({ ok: true, licencias: conAct, costoTotalMes, mes: new Date().toISOString().slice(0, 7) });
+      // "Infraestructura": costo de Vercel (plano, según el plan) y un ESTIMADO
+      // de operaciones de nube (Blob) por la IA — cada lectura hace ~2 escrituras
+      // (registro de uso + de costo). La sincronización suma más, pero eso no se
+      // mide acá; el total exacto está en el panel de Vercel.
+      const vercel = { plan: process.env.VERCEL_PLAN || 'Gratis (Hobby)', costoUSD: Number(process.env.VERCEL_COSTO_USD) || 0 };
+      const opsIaMes = readsTotalMes * 2;
+      return res.status(200).json({
+        ok: true, licencias: conAct, costoTotalMes, readsTotalMes,
+        mes: new Date().toISOString().slice(0, 7),
+        infra: { vercel, opsIaMes, limiteOpsGratis: 2000 },
+      });
     }
 
     if (accion === 'agregar') {
