@@ -519,6 +519,25 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
   #gnc-app .wrap { padding-bottom: 120px; }
   #gnc-app .fab-nuevo-tramite { bottom: 86px; }
 }
+/* BARRA DE NAVEGACION SUPERIOR — solo en la compu (>720px). Los mismos destinos
+   que la barra de abajo del celular, pero como pestañas dentro del banner azul. */
+#gnc-app .top-nav { display: none; }
+@media (min-width: 721px) {
+  #gnc-app .top-nav {
+    display: flex; align-items: center; gap: 4px; flex-wrap: wrap; flex-shrink: 0;
+  }
+  #gnc-app .top-nav .tn-item {
+    display: flex; align-items: center; gap: 6px; background: transparent; border: none;
+    cursor: pointer; font-family: var(--sans); font-size: 14px; font-weight: 600;
+    color: rgba(255,255,255,0.82); padding: 8px 14px; border-radius: 999px; line-height: 1;
+  }
+  #gnc-app .top-nav .tn-item:hover { background: rgba(255,255,255,0.14); color: #fff; }
+  #gnc-app .top-nav .tn-item.activo { background: rgba(255,255,255,0.24); color: #fff; }
+  #gnc-app .top-nav .tn-badge {
+    background: var(--danger); color: #fff; font-size: 10px; font-weight: 800;
+    border-radius: 999px; padding: 1px 6px; margin-left: 2px;
+  }
+}
 #gnc-app .client-card-wrap { position: relative; margin-bottom: 14px; border-radius: 18px; overflow: hidden; }
 #gnc-app .client-card {
   background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--line);
@@ -2437,6 +2456,7 @@ Documentación para realizar la renovación:
   // Íconos de línea (estilo Lucide) para el menú lateral. Todos con el mismo
   // trazo y color gris (via la clase .menu-ico). Se devuelven como SVG inline.
   const MENU_ICONS = {
+    home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
     clipboard: '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>',
     calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
     history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
@@ -2457,6 +2477,12 @@ Documentación para realizar la renovación:
   // Ícono de línea chico para meter dentro de un botón (cámara, galería, etc.).
   function btnIco(name) {
     return `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:0 0 auto;">${MENU_ICONS[name] || ''}</svg>`;
+  }
+  // Ícono de línea para la barra de navegación (abajo en el celular, arriba en la
+  // compu). Hereda el color del botón (currentColor), así se pinta solo cuando
+  // la sección está activa.
+  function navIco(name) {
+    return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:0 0 auto;">${MENU_ICONS[name] || ''}</svg>`;
   }
 
   // Escapa un valor para CSV: neutraliza caracteres que Excel/Sheets podría
@@ -5764,21 +5790,18 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         <div class="topbar">
           <div class="brand">
             <div class="menu-wrap">
-              <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-menu" style="position:relative;">☰${(pendCount + turnosAvisoCount) ? `<span class="menu-badge">${pendCount + turnosAvisoCount}</span>` : ''}</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-menu" style="position:relative;">☰${turnosAvisoCount ? `<span class="menu-badge">${turnosAvisoCount}</span>` : ''}</button>
               ${menuOpen ? `<div class="menu-dropdown">
-                <div class="menu-group-label">Gestión diaria</div>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-pendientes">${menuIco('clipboard')}Trámites pendientes${pendCount ? ` <span class="menu-badge-inline">${pendCount}</span>` : ''}</button>
+                <div class="menu-group-label">Gestión</div>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-turnos">${menuIco('calendar')}Turnos${turnosAvisoCount ? ` <span class="menu-badge-inline">${turnosAvisoCount}</span>` : ''}</button>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-historial">${menuIco('history')}Historial de trámites</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-estadisticas">${menuIco('chart')}Estadísticas</button>
                 <div class="menu-sep"></div>
                 <div class="menu-group-label">Datos</div>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-estadisticas">${menuIco('chart')}Estadísticas</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-import">${menuIco('download')}Importar clientes (Excel / cuaderno)</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-export-csv">${menuIco('upload')}Exportar CSV</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-respaldo">${menuIco('cloud')}Copia de seguridad en la nube</button>
                 <div class="menu-sep"></div>
                 <div class="menu-group-label">Ajustes</div>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-taller-config">${menuIco('settings')}Configuración del taller</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-tema">${temaOscuroActivo() ? menuIco('sun') + 'Modo claro' : menuIco('moon') + 'Modo oscuro'}</button>
                 ${showInstallButton ? `<button type="button" class="btn btn-ghost btn-sm" id="btn-install-app">${menuIco('smartphone')}Instalar app</button>` : ''}
               </div>` : ''}
@@ -5786,6 +5809,13 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
             <span class="tag">ESTELITA</span>
             <span class="taller-name-top">${escapeHtml(tallerNombre)}</span>
           </div>
+          <nav class="top-nav" aria-label="Navegación">
+            <button type="button" class="tn-item ${!showPendientes && !showHistorial && !showTallerConfig && !showHoy ? 'activo' : ''}" data-nav="inicio">${navIco('home')}Inicio</button>
+            <button type="button" class="tn-item ${showHoy ? 'activo' : ''}" data-nav="hoy">${navIco('calendar')}Hoy${(turnosHoy().length + vencimientosParaAvisarCount()) ? `<span class="tn-badge">${turnosHoy().length + vencimientosParaAvisarCount()}</span>` : ''}</button>
+            <button type="button" class="tn-item ${showPendientes ? 'activo' : ''}" data-nav="pendientes">${navIco('clipboard')}Pendientes${pendCount ? `<span class="tn-badge">${pendCount}</span>` : ''}</button>
+            <button type="button" class="tn-item ${showHistorial ? 'activo' : ''}" data-nav="historial">${navIco('history')}Historial</button>
+            <button type="button" class="tn-item ${showTallerConfig ? 'activo' : ''}" data-nav="config">${navIco('settings')}Mi taller</button>
+          </nav>
         </div>
 
         ${algunPanelAbierto ? '' : `<div class="resumen-chips" id="resumen-chips" role="button" tabindex="0" title="Ver los vencimientos para avisar">
@@ -5832,11 +5862,11 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       </div>
       ${algunPanelAbierto ? '' : '<button type="button" class="fab-nuevo-tramite" id="btn-fab-nuevo" aria-label="Nuevo trámite">+ Nuevo trámite</button>'}
       <div class="bottom-nav">
-        <button type="button" class="bn-item ${!showPendientes && !showHistorial && !showTallerConfig && !showHoy ? 'activo' : ''}" data-nav="inicio"><span class="bn-ico">🏠</span>Inicio</button>
-        <button type="button" class="bn-item ${showHoy ? 'activo' : ''}" data-nav="hoy">${(turnosHoy().length + vencimientosParaAvisarCount()) ? `<span class="bn-badge">${turnosHoy().length + vencimientosParaAvisarCount()}</span>` : ''}<span class="bn-ico">📅</span>Hoy</button>
-        <button type="button" class="bn-item ${showPendientes ? 'activo' : ''}" data-nav="pendientes">${pendCount ? `<span class="bn-badge">${pendCount}</span>` : ''}<span class="bn-ico">📋</span>Pendientes</button>
-        <button type="button" class="bn-item ${showHistorial ? 'activo' : ''}" data-nav="historial"><span class="bn-ico">🕓</span>Historial</button>
-        <button type="button" class="bn-item ${showTallerConfig ? 'activo' : ''}" data-nav="config"><span class="bn-ico">⚙️</span>Mi taller</button>
+        <button type="button" class="bn-item ${!showPendientes && !showHistorial && !showTallerConfig && !showHoy ? 'activo' : ''}" data-nav="inicio"><span class="bn-ico">${navIco('home')}</span>Inicio</button>
+        <button type="button" class="bn-item ${showHoy ? 'activo' : ''}" data-nav="hoy">${(turnosHoy().length + vencimientosParaAvisarCount()) ? `<span class="bn-badge">${turnosHoy().length + vencimientosParaAvisarCount()}</span>` : ''}<span class="bn-ico">${navIco('calendar')}</span>Hoy</button>
+        <button type="button" class="bn-item ${showPendientes ? 'activo' : ''}" data-nav="pendientes">${pendCount ? `<span class="bn-badge">${pendCount}</span>` : ''}<span class="bn-ico">${navIco('clipboard')}</span>Pendientes</button>
+        <button type="button" class="bn-item ${showHistorial ? 'activo' : ''}" data-nav="historial"><span class="bn-ico">${navIco('history')}</span>Historial</button>
+        <button type="button" class="bn-item ${showTallerConfig ? 'activo' : ''}" data-nav="config"><span class="bn-ico">${navIco('settings')}</span>Mi taller</button>
       </div>
     `;
 
