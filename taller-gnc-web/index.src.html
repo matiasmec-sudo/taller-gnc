@@ -4510,6 +4510,9 @@ Documentación para realizar la renovación:
   let histEstado = '';
   // Id del cliente cuyo último trámite se ve en modo solo lectura.
   let verUltimoTramiteId = null;
+  // Si se abrió el último trámite desde el Historial, al cerrar hay que volver
+  // ahí (no al inicio).
+  let verUltimoTramiteVolverHistorial = false;
   // El asistente en modo "Actualizar datos": muestra solo el paso 1 y
   // guarda los datos del cliente sin crear un trámite (ej. para refrescar
   // el vencimiento de la oblea desde ENARGAS y que el aviso de WhatsApp
@@ -6720,6 +6723,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     root.querySelectorAll('[data-ultimo-tramite]').forEach(btn => {
       btn.addEventListener('click', () => {
         verUltimoTramiteId = btn.getAttribute('data-ultimo-tramite');
+        verUltimoTramiteVolverHistorial = showHistorial;
         showHistorial = false; showTurnos = false; showRespaldo = false;
         render();
         const p = root.querySelector('#ultimo-tramite-panel');
@@ -6727,7 +6731,11 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       });
     });
     const btnUtCerrar = root.querySelector('#btn-ut-cerrar');
-    if (btnUtCerrar) btnUtCerrar.addEventListener('click', () => { verUltimoTramiteId = null; render(); });
+    if (btnUtCerrar) btnUtCerrar.addEventListener('click', () => {
+      verUltimoTramiteId = null;
+      if (verUltimoTramiteVolverHistorial) { showHistorial = true; verUltimoTramiteVolverHistorial = false; }
+      render();
+    });
     const btnUtEditar = root.querySelector('#btn-ut-editar');
     if (btnUtEditar) btnUtEditar.addEventListener('click', () => {
       const c = clientes.find(x => x.id === verUltimoTramiteId);
