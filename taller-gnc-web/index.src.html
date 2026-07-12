@@ -1149,6 +1149,10 @@ Documentación para realizar la renovación:
     // En segundo plano: saber si hay técnicos vinculados (muestra u oculta
     // el botón "Enviar al técnico" del paso 1).
     consultarTecnicosVinculados().then(() => { if (showForm || editingId) render(); });
+    // Precargar jsPDF en segundo plano (con un respiro para no competir con el
+    // arranque): así "Enviar al PEC" e "Imprimir" no esperan la descarga la
+    // primera vez de la sesión.
+    setTimeout(() => cargarJsPdf().catch(() => {}), 2500);
     // Revalidar la licencia guardada sin bloquear el arranque: solo un 403
     // explícito del servidor expulsa (código trucho o suscripción dada de
     // baja) — los errores de red no molestan, la app sigue offline.
@@ -3510,22 +3514,31 @@ Documentación para realizar la renovación:
   // Carga jsPDF y html2canvas desde un CDN solo la primera vez que hacen
   // falta (al tocar "Enviar al PEC"), para no pesar el arranque de la app
   // con estas dos librerías si nunca se llega a usar esa función.
-  let pecLibsPromise = null;
+  let pecLibsPromise = null, jsPdfPromise = null, html2canvasPromise = null;
+  function cargarScriptCdn(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('No se pudo cargar ' + src));
+      document.head.appendChild(s);
+    });
+  }
+  // jsPDF solo: alcanza para TODOS los PDF de "solo datos" (PEC, CRPC,
+  // comprobante, grilla). Es liviano y se puede precargar apenas se abre un
+  // trámite, para que "Enviar al PEC" no tenga que esperar la descarga.
+  function cargarJsPdf() {
+    if (!jsPdfPromise) jsPdfPromise = cargarScriptCdn('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    return jsPdfPromise;
+  }
+  // html2canvas: SOLO lo necesita la ficha completa "dibujada" (generarPecPdf),
+  // que no es lo que se manda al PEC. No se baja en el envío al PEC.
+  function cargarHtml2Canvas() {
+    if (!html2canvasPromise) html2canvasPromise = cargarScriptCdn('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+    return html2canvasPromise;
+  }
   function cargarLibreriasPec() {
-    if (pecLibsPromise) return pecLibsPromise;
-    function cargarScript(src) {
-      return new Promise((resolve, reject) => {
-        const s = document.createElement('script');
-        s.src = src;
-        s.onload = resolve;
-        s.onerror = () => reject(new Error('No se pudo cargar ' + src));
-        document.head.appendChild(s);
-      });
-    }
-    pecLibsPromise = Promise.all([
-      cargarScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'),
-      cargarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'),
-    ]);
+    if (!pecLibsPromise) pecLibsPromise = Promise.all([cargarJsPdf(), cargarHtml2Canvas()]);
     return pecLibsPromise;
   }
 
@@ -3935,7 +3948,7 @@ Documentación para realizar la renovación:
   // la coordenada exacta de cada campo directamente de la foto, sin importar
   // el ángulo — así se calibra el mapa en una sola pasada.
   async function generarGrillaCalibracion() {
-    await cargarLibreriasPec();
+    await cargarJsPdf();
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const ajX = Number(tallerConfig.impresionAjusteX) || 0;
@@ -3978,7 +3991,7 @@ Documentación para realizar la renovación:
   // oficial del PEC), con los datos del trámite para que el cliente se lo
   // lleve. Es un PDF autocontenido (no va sobre planilla preimpresa).
   async function generarComprobante(cliente, tramite) {
-    await cargarLibreriasPec();
+    await cargarJsPdf();
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const tc = tallerConfig;
@@ -4032,7 +4045,7 @@ Documentación para realizar la renovación:
   }
 
   async function generarPecPdfSoloDatos(cliente, tramite, opts = {}) {
-    await cargarLibreriasPec();
+    await cargarJsPdf();
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const ajX = Number(tallerConfig.impresionAjusteX) || 0;
@@ -4193,7 +4206,7 @@ Documentación para realizar la renovación:
   };
 
   async function generarCrpcPdfSoloDatos(cliente, tramite) {
-    await cargarLibreriasPec();
+    await cargarJsPdf();
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const ajX = Number(tallerConfig.crpcAjusteX) || 0;
@@ -4266,7 +4279,7 @@ Documentación para realizar la renovación:
   // Después de la ficha, agrega una página por cada foto de documentación
   // guardada del cliente — el PEC recibe todo en un solo archivo.
   async function generarPecPdf(cliente, tramite, firmaDataUrl) {
-    await cargarLibreriasPec();
+    await Promise.all([cargarJsPdf(), cargarHtml2Canvas()]);
     const cont = document.createElement('div');
     cont.style.position = 'fixed';
     cont.style.left = '-99999px';
@@ -6244,6 +6257,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       });
     });
     async function iniciarNuevoTramite() {
+      cargarJsPdf().catch(() => {}); // precarga: el PDF ya va a estar listo al enviar al PEC
       const elegido = await mostrarModalTipoFecha({ tipo: TRAMITE_TIPOS[0].value, fecha: new Date().toISOString().slice(0, 10) });
       if (!elegido) return;
       editingId = null; showForm = true;
