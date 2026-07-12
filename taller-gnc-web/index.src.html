@@ -1105,7 +1105,7 @@ Documentación para realizar la renovación:
     const vencida = status.days !== null && status.days < 0;
     const msg = renderMensaje('vencimiento', {
       ...varsTaller(),
-      nombre: cliente.nombre || '',
+      nombre: nombreFicha(cliente),
       patente: cliente.patente || '',
       estado: vencida ? 'venció' : 'este mes vence',
       que: queVence,
@@ -1117,7 +1117,7 @@ Documentación para realizar la renovación:
   // cliente por cualquier motivo desde su tarjeta.
   function waLinkGeneral(cliente) {
     const phone = cleanPhone(cliente.telefono);
-    const msg = renderMensaje('saludo', { ...varsTaller(), nombre: cliente.nombre || '', patente: cliente.patente || '' });
+    const msg = renderMensaje('saludo', { ...varsTaller(), nombre: nombreFicha(cliente), patente: cliente.patente || '' });
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   }
 
@@ -1255,7 +1255,7 @@ Documentación para realizar la renovación:
       : 'el ' + fmtDate(turno.fecha);
     const msg = renderMensaje('turno', {
       ...varsTaller(),
-      nombre: cliente.nombre && cliente.nombre !== cliente.patente ? cliente.nombre : '',
+      nombre: nombreFicha(cliente) && nombreFicha(cliente) !== cliente.patente ? nombreFicha(cliente) : '',
       patente: cliente.patente || '',
       fecha: cuando,
       hora: turno.hora ? ' a las ' + turno.hora + ' hs' : '',
@@ -1522,7 +1522,7 @@ Documentación para realizar la renovación:
           ${items.map(({ cliente, tipo }) => `
             <div class="doc-row">
               <div>
-                <div class="doc-label">${escapeHtml(cliente.nombre)} · ${escapeHtml(cliente.patente || 's/d')}</div>
+                <div class="doc-label">${escapeHtml(nombreFicha(cliente))} · ${escapeHtml(cliente.patente || 's/d')}</div>
                 <div class="doc-sub">${tipo === 'oblea' ? 'Oblea' : 'Prueba Hidráulica'}</div>
               </div>
               ${cleanPhone(cliente.telefono)
@@ -1628,7 +1628,7 @@ Documentación para realizar la renovación:
       const tipoTxt = it.tipo === 'oblea' ? 'Oblea' : 'Prueba Hidráulica';
       return `<div class="doc-row">
         <div>
-          <div class="doc-label">${escapeHtml(c.nombre)} · ${escapeHtml(c.patente || 's/d')}</div>
+          <div class="doc-label">${escapeHtml(nombreFicha(c))} · ${escapeHtml(c.patente || 's/d')}</div>
           <div class="doc-sub">${tipoTxt} · ${it.status.label}${it.avisado ? ' · ya avisado' : ''}</div>
         </div>
         ${cleanPhone(c.telefono)
@@ -1781,7 +1781,7 @@ Documentación para realizar la renovación:
   // dirección y horario del taller cargados en la configuración.
   function waLinkObleaLista(cliente) {
     const phone = cleanPhone(cliente.telefono);
-    const msg = renderMensaje('obleaLista', { ...varsTaller(), nombre: cliente.nombre || '', patente: cliente.patente || '' });
+    const msg = renderMensaje('obleaLista', { ...varsTaller(), nombre: nombreFicha(cliente), patente: cliente.patente || '' });
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
   }
 
@@ -1792,7 +1792,7 @@ Documentación para realizar la renovación:
       if (histTipo && tramite.tipo !== histTipo) return false;
       if (histEstado && (tramite.estadoPec || 'pendiente') !== histEstado) return false;
       if (q) {
-        const hay = `${cliente.nombre || ''} ${cliente.patente || ''} ${cliente.marca || ''} ${cliente.modelo || ''}`.toLowerCase();
+        const hay = `${cliente.nombre || ''} ${cliente.titular || ''} ${cliente.patente || ''} ${cliente.marca || ''} ${cliente.modelo || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -1854,7 +1854,7 @@ Documentación para realizar la renovación:
             <div class="hist-tocable" data-hist-toggle="${tramite.id}">
               <div class="hist-patente">${escapeHtml(cliente.patente || 'SIN PATENTE')}${modelo ? ` <span class="hist-modelo">${escapeHtml(modelo)}</span>` : ''}</div>
               <div class="hist-tipo">${tramiteTipoLabel(tramite.tipo)}${hora ? ` · <span class="hist-hora">${hora}</span>` : ''}</div>
-              <div class="hist-nombre">${escapeHtml(cliente.nombre)}${cliente.telefono ? ` · Tel: ${escapeHtml(cliente.telefono)}` : ''}</div>
+              <div class="hist-nombre">${escapeHtml(nombreFicha(cliente))}${cliente.telefono ? ` · Tel: ${escapeHtml(cliente.telefono)}` : ''}</div>
             </div>
             <span class="badge ${tramite.estadoPec === 'enviado' ? 'badge-ok' : 'badge-warn'}">${ESTADO_PEC_LABELS[tramite.estadoPec]}</span>
             ${tramite.estadoPec !== 'enviado' ? `<button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${cliente.id}" data-editar-tramite-id="${tramite.id}">Editar</button>` : ''}
@@ -2116,7 +2116,7 @@ Documentación para realizar la renovación:
                 <div class="hist-patente">${escapeHtml(cliente.patente || 'SIN PATENTE')}</div>
                 <div class="hist-tipo">${fmtDate(turno.fecha)}${turno.hora ? ' · ' + escapeHtml(turno.hora) + ' hs' : ''}${turno.motivo ? ' — ' + escapeHtml(turno.motivo) : ''}</div>
                 ${turno.presupuesto ? `<div class="doc-sub" style="color:var(--flame);">Presupuesto: ${escapeHtml(turno.presupuesto)}</div>` : ''}
-                <div class="hist-nombre">${escapeHtml(cliente.nombre)}${cliente.telefono ? ' · ' + escapeHtml(cliente.telefono) : ''}</div>
+                <div class="hist-nombre">${escapeHtml(nombreFicha(cliente))}${cliente.telefono ? ' · ' + escapeHtml(cliente.telefono) : ''}</div>
                 ${g.confirmar ? `<div class="turno-confirmar">
                   <button type="button" class="btn btn-primary btn-sm" data-asistio-cliente="${cliente.id}" data-asistio-id="${turno.id}">Asistió</button>
                   <button type="button" class="btn btn-ghost btn-sm" data-noasistio-cliente="${cliente.id}" data-noasistio-id="${turno.id}">No asistió</button>
@@ -2148,7 +2148,7 @@ Documentación para realizar la renovación:
         <div><span class="doc-label">Fecha</span><div>${fmtDate(t.fecha)}</div></div>
         <div><span class="doc-label">Estado</span><div><span class="badge ${t.estadoPec === 'enviado' ? 'badge-ok' : 'badge-warn'}">${ESTADO_PEC_LABELS[t.estadoPec]}</span></div></div>
         <div><span class="doc-label">PEC</span><div>${escapeHtml(pec.razonSocial || '—')}</div></div>
-        <div><span class="doc-label">Cliente</span><div>${escapeHtml(c.nombre)}${c.telefono ? ' · ' + escapeHtml(c.telefono) : ''}</div></div>
+        <div><span class="doc-label">Cliente</span><div>${escapeHtml(nombreFicha(c))}${c.telefono ? ' · ' + escapeHtml(c.telefono) : ''}</div></div>
         <div><span class="doc-label">Vehículo</span><div>${escapeHtml([c.marca, c.modelo, c.anio].filter(Boolean).join(' ')) || '—'}</div></div>
       </div>
       <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">Equipo</div>
@@ -2257,6 +2257,7 @@ Documentación para realizar la renovación:
       const q = query.toLowerCase();
       list = list.filter(c =>
         (c.nombre || '').toLowerCase().includes(q) ||
+        (c.titular || '').toLowerCase().includes(q) ||
         (c.patente || '').toLowerCase().includes(q)
       );
     }
@@ -2580,7 +2581,8 @@ Documentación para realizar la renovación:
           <div>
             <div class="client-patente">${escapeHtml(c.patente || 'SIN PATENTE')}</div>
             <div class="client-modelo">${escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) || 'Sin marca/modelo'}${c.anio ? ' · ' + escapeHtml(c.anio) : ''}</div>
-            <div class="client-name">${escapeHtml(c.nombre)}${c.telefono ? ' · ' + escapeHtml(c.telefono) : ''}</div>
+            <div class="client-name">${escapeHtml(nombreFicha(c))}${c.telefono ? ' · ' + escapeHtml(c.telefono) : ''}</div>
+            ${(c.titular || '').trim() && (c.titular || '').trim() !== (c.nombre || '').trim() ? `<div class="doc-sub" style="font-size:11px; color:var(--text-muted);">Titular s/ cédula: ${escapeHtml(c.nombre)}</div>` : ''}
           </div>
           <div class="client-actions">
             ${c.telefono ? `<a class="btn btn-wa" target="_blank" rel="noopener" href="${waLinkGeneral(c)}">WhatsApp</a>` : ''}
@@ -3000,7 +3002,7 @@ Documentación para realizar la renovación:
       { key: 'foto2', label: 'Dorso' },
     ];
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="fotos-panel">
-      <h2 class="panel-h2-sticky">Documentación — ${escapeHtml(cliente.nombre)}</h2>
+      <h2 class="panel-h2-sticky">Documentación — ${escapeHtml(nombreFicha(cliente))}</h2>
       <div class="scan-grid scan-grid-2">
         ${slots.map(s => `
         <div class="scan-slot">
@@ -3296,9 +3298,18 @@ Documentación para realizar la renovación:
     }
   }
 
+  // Nombre para la FICHA DEL TALLER (tarjeta, búsqueda, historial, WhatsApp).
+  // Si se cargó "Titular" (quien vino con el DNI), se usa ese; si no, el nombre
+  // de la cédula verde (cliente.nombre). OJO: el PEC SIEMPRE usa cliente.nombre
+  // (titular de la cédula, exigencia ENARGAS), nunca cliente.titular.
+  function nombreFicha(c) {
+    const t = ((c && c.titular) || '').trim();
+    return t || (c && c.nombre) || '';
+  }
+
   function blankClienteBase() {
     return {
-      nombre:'', dni:'', tipo_documento:'DNI', domicilio:'', numero:'', piso:'', cpa:'', provincia:'', ciudad:'', telefono:'',
+      nombre:'', titular:'', dni:'', tipo_documento:'DNI', domicilio:'', numero:'', piso:'', cpa:'', provincia:'', ciudad:'', telefono:'',
       patente:'', marca:'', modelo:'', anio:'', inyeccion:'no', tipo_vehiculo:'', uso:'',
       fecha_oblea:'', fecha_crpc:'', tipo_cilindro:'5'
     };
@@ -3334,6 +3345,10 @@ Documentación para realizar la renovación:
       <div class="form-grid">
         <label>Nombre y apellido
           <input type="text" id="f-nombre" value="${escapeHtml(c.nombre)}" placeholder="Ej: Juan Pérez">
+        </label>
+        <label>Titular
+          <input type="text" id="f-titular" value="${escapeHtml(c.titular || '')}" placeholder="Quien vino con el DNI">
+          <span style="display:block; margin-top:3px; font-size:11px; color:var(--text-muted);">Solo para la ficha del taller. Dejalo vacío si es el mismo de la cédula.</span>
         </label>
         <label>Tipo de documento
           <select id="f-tipo-documento">
@@ -4672,6 +4687,7 @@ Documentación para realizar la renovación:
 
     const data = {
       nombre, telefono, patente,
+      titular: (clienteDraft.titular || '').trim(),
       dni: (clienteDraft.dni || '').trim(),
       tipo_documento: clienteDraft.tipo_documento,
       domicilio: (clienteDraft.domicilio || '').trim(),
@@ -4932,7 +4948,7 @@ Documentación para realizar la renovación:
   // y lo tipeado todavía no guardado (nombre, DNI, domicilio...) desaparecía.
   let clienteDraft = null;
   const CLIENTE_DRAFT_CAMPOS = {
-    nombre: 'f-nombre', dni: 'f-dni', tipo_documento: 'f-tipo-documento', telefono: 'f-telefono',
+    nombre: 'f-nombre', titular: 'f-titular', dni: 'f-dni', tipo_documento: 'f-tipo-documento', telefono: 'f-telefono',
     domicilio: 'f-domicilio', cpa: 'f-cpa',
     provincia: 'f-provincia', ciudad: 'f-ciudad', patente: 'f-patente',
     marca: 'f-marca', modelo: 'f-modelo', anio: 'f-anio', inyeccion: 'f-inyeccion', uso: 'f-uso',
@@ -7868,6 +7884,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
 
       const data = {
         nombre, telefono, patente,
+        titular: (clienteDraft.titular || '').trim(),
         dni: (clienteDraft.dni || '').trim(),
         tipo_documento: clienteDraft.tipo_documento,
         domicilio: (clienteDraft.domicilio || '').trim(),
