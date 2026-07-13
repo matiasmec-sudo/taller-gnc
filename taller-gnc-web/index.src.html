@@ -4190,8 +4190,7 @@ Documentación para realizar la renovación:
   // cliente NO se imprime (queda solo en Estelita).
   // Calibrado con la impresión del usuario (07/07/2026). arriba=-y, izq=-x.
   const SEGURGAS_MAPA = {
-    lugarFecha: { x: 78, y: 52 },   // sin calibrar todavía
-    tallerEncab: { x: 92, y: 62 },  // sin calibrar todavía
+    lugarFecha: { x: 38, y: 36 },   // ciudad+fecha: 40 mm a la izq. y 16 mm arriba (era x:78 y:52)
     cil: {
       ys: [131, 143, 155, 167],
       dy: -15, // toda la fila sube 15 mm
@@ -4232,7 +4231,7 @@ Documentación para realizar la renovación:
     const eq = tramite.equipo || blankEquipo(null);
 
     T(`Mar del Plata, ${fmtDate(tramite.fecha)}`, M.lugarFecha.x, M.lugarFecha.y, 9);
-    T(tc.razonSocial || tallerNombre, M.tallerEncab.x, M.tallerEncab.y, 9);
+    // Razón social del encabezado quitada a pedido (ya venía impresa en la planilla).
 
     // Cilindros (todos los que entren en la tabla). Marca, Capacidad y
     // Observación no se cargan en la app: van a mano.
