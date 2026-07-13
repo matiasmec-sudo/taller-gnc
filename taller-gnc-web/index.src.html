@@ -287,6 +287,15 @@
   display: flex; align-items: center; justify-content: center; font-size: 15px; line-height: 1;
 }
 #gnc-app .search-wrap .search-clear:hover { color: var(--flame); background: var(--line); }
+/* Accesos directos (Nuevo cliente + ENARGAS). En la compu van al lado del
+   buscador; en el celular el buscador queda solo a lo ancho y estos dos
+   caen en una fila pareja debajo. */
+#gnc-app .controls-actions { display: flex; gap: 10px; }
+@media (max-width: 720px) {
+  #gnc-app .controls .search-wrap { flex-basis: 100%; }
+  #gnc-app .controls-actions { flex-basis: 100%; }
+  #gnc-app .controls-actions .btn { flex: 1; }
+}
 #gnc-app .btn {
   font-family: var(--sans); font-weight: 700; font-size: 13px; letter-spacing: 0.2px;
   border-radius: 12px; padding: 10px 16px; border: 1px solid transparent; cursor: pointer;
@@ -5865,8 +5874,10 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
             <input class="search-input" type="text" id="search-input" placeholder="Buscar por nombre o patente..." value="${escapeHtml(currentQuery)}">
             ${currentQuery ? '<button type="button" class="search-clear" id="btn-clear-search" title="Limpiar búsqueda" aria-label="Limpiar búsqueda">✕</button>' : ''}
           </div>
-          <button class="btn btn-outline" id="btn-new">+ Nuevo cliente</button>
-          <button type="button" class="btn btn-outline" id="btn-enargas-directo" title="Abrir la consulta por dominio de ENARGAS">ENARGAS ↗</button>
+          <div class="controls-actions">
+            <button class="btn btn-outline" id="btn-new">+ Nuevo cliente</button>
+            <button type="button" class="btn btn-outline" id="btn-enargas-directo" title="Abrir la consulta por dominio de ENARGAS">ENARGAS ↗</button>
+          </div>
         </div>`}
 
         ${showQuickAdd ? quickAddPanel(entrando.quickAdd) : ''}
