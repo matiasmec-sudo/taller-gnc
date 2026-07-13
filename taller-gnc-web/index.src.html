@@ -798,7 +798,7 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
   };
 
   function blankPec() {
-    return { codigoPec: '', razonSocial: '', direccion: '', telefono: '', ingeniero: '', matriculaCipba: '' };
+    return { codigoPec: '', razonSocial: '', direccion: '', telefono: '', ingeniero: '', matriculaCipba: '', formato: 'pecmar' };
   }
 
   // Migra la config vieja (un solo PEC en campos planos) a la lista pecs.
@@ -3160,6 +3160,13 @@ Documentación para realizar la renovación:
           <label>Matrícula CIPBA del ingeniero
             <input type="text" id="tc-pec-matricula-${i}" value="${escapeHtml(p.matriculaCipba)}" placeholder="Ej: 54.526">
           </label>
+          <label>Formato de planilla (para imprimir)
+            <select id="tc-pec-formato-${i}">
+              <option value="pecmar" ${(p.formato || 'pecmar') === 'pecmar' ? 'selected' : ''}>PECMAR</option>
+              <option value="dvd" ${p.formato === 'dvd' ? 'selected' : ''}>Industrias DVD</option>
+            </select>
+            <span class="formato-hint" style="display:block;">Cada PEC usa su propia planilla. Al imprimir, la app la ubica según este formato.</span>
+          </label>
         </div>
       </div>`).join('')}
       <div class="form-actions" style="margin-top:4px;">
@@ -3297,6 +3304,8 @@ Documentación para realizar la renovación:
       p.telefono = el(`tc-pec-telefono-${i}`).value;
       p.ingeniero = el(`tc-pec-ingeniero-${i}`).value;
       p.matriculaCipba = el(`tc-pec-matricula-${i}`).value;
+      const fmt = el(`tc-pec-formato-${i}`);
+      if (fmt) p.formato = fmt.value;
     });
     // Mensajes editables: se guarda el texto solo si difiere del original.
     if (el('tc-msg-vencimiento')) {
@@ -3952,6 +3961,65 @@ Documentación para realizar la renovación:
     aclDocumento: { x: 135, y: 273 },
   };
 
+  // Planilla de INDUSTRIAS DVD. Mismos campos que PECMAR pero corridos según la
+  // calibración del taller (en mm respecto de PECMAR). Los campos marcados
+  // "s/ corrimiento" quedaron en la posición de PECMAR porque no se pasó su
+  // medida — se afinan en la impresión de prueba.
+  const DVD_MAPA = {
+    tallerRazonSocial: { x: 44, y: 41 },     // +3 abajo
+    tallerDireccion: { x: 33, y: 48 },       // +3 der, +2 abajo
+    tallerCuit: { x: 47, y: 56 },            // sin cambio
+    codigoTaller: { x: 168, y: 57, size: 11 }, // -3 izq, +7 abajo
+    fechaHab: { xs: [123, 136, 149], y: 21 },  // +5 der, -5 arriba
+    fechaVenc: { xs: [122, 135, 148], y: 37 }, // +4 der, +1 abajo
+    obleaAnterior: { x: 168, y: 23 },        // -11 izq, -2 arriba
+    obleaNueva: { x: 168, y: 37 },           // -11 izq, -2 arriba
+    marca: { x: 38, y: 70 },                 // +15 der
+    modelo: { x: 74, y: 75 },                // +5 abajo
+    anio: { x: 97, y: 72 },                  // -17 izq, +2 abajo
+    dominio: { x: 16, y: 85 },               // -6 izq, +6 abajo
+    inyeccionSi: { x: 64, y: 86 },           // +7 der, +7 abajo
+    inyeccionNo: { x: 72, y: 86 },
+    tipoVehiculo: { xs: { moto: 64, taxi: 73, 'pick up': 81, bus: 93, oficial: 100, otros: 107 }, y: 87 }, // -18 izq, +8 abajo
+    tipoOperacion: {
+      conversion: { x: 191, y: 71 }, modificacion: { x: 191, y: 75.5 },
+      revision_anual: { x: 191, y: 80 }, prueba_hidraulica: { x: 191, y: 84.5 },
+      desmontaje: { x: 191, y: 89 }, baja: { x: 167, y: 89 },   // -2 izq, +6 abajo
+    },
+    propNombre: { x: 25, y: 104 },           // +12 abajo
+    propCalle: { x: 30, y: 115 },            // -90 izq, +23 abajo
+    propCpa: { x: 193, y: 92 },              // s/ corrimiento (no se pasó)
+    propLocalidad: { x: 55, y: 126 },        // +30 der, +22 abajo
+    propProvincia: { x: 122, y: 126 },       // +27 der, +22 abajo
+    propTelefono: { x: 135, y: 104 },        // no se imprime
+    propDocumento: { x: 145, y: 106 },       // -25 izq, +2 abajo
+    reguladorColX: { sigue: 37, montaje: 59, desmontaje: 80, baja: 102 }, // +10 der
+    reguladorCodigoY: 143,                   // +22 abajo
+    reguladorSerieY: 150,                    // +22 abajo
+    reguladorNuevo: { x: 124, y: 143 },      // +18 der (la X baja con el regulador: asumido)
+    reguladorUsado: { x: 132, y: 143 },
+    manometro: { codX: 148, serieX: 140, codY: 120, serieY: 131 },          // s/ corrimiento
+    accesorioTuberia: { codX: 176, serieX: 168, codY: 120, serieY: 131 },   // s/ corrimiento
+    tuberiaAltaPresion: { codX: 202, serieX: 195, codY: 120, serieY: 131 }, // s/ corrimiento
+    cilindroYs: [145, 155, 164, 173],
+    cilindroCols: { codigo: 1, serie: 40, nuevo: 78, usado: 86, fabMes: 97, fabAnio: 104, revMes: 113, revAnio: 120, crpc: 111, op: 142 },
+    // Corrimiento vertical por columna del cilindro (mm sobre la fila).
+    // serie/nuevo/usado no se pasaron: siguen la fila (+22), x sin cambio.
+    cilindroColDY: { codigo: 21, serie: 22, nuevo: 22, usado: 22, fabMes: 22, fabAnio: 22, revMes: 22, revAnio: 22, crpc: 22, op: 21 },
+    valvulaCols: { codigo: 162, serie: 180, op: 192 }, // +7 / +10 der
+    valvulaDY: 22,          // válvula: +22 abajo
+    sinValvulaOp: true,     // en DVD no se marca la operación (S/C) de la válvula
+    otrosFila1: { keys: ['dispSujecionCilindro', 'electrovalvulaNafta', 'electrovalvulaGnc', 'dosifMezclador', 'sistemaVenteo', 'llaveConmutadora'], codXs: [22, 56, 91, 125, 159, 194], serieXs: [22, 56, 91, 125, 159, 194], codY: 185, serieY: 194 }, // s/ corrimiento
+    otrosFila2: { keys: ['valCargaInterna', 'valCargaExterna', 'mangueraBajaPresion'], codXs: [22, 56, 91], serieXs: [22, 56, 91], codY: 207, serieY: 216 }, // s/ corrimiento
+    observaciones: { x: 42, y: 222, maxW: 150 }, // s/ corrimiento
+    aclNombre: { x: 135, y: 273 },           // s/ corrimiento
+    aclDocumento: { x: 135, y: 273 },
+  };
+
+  function mapaPlanilla(formato) {
+    return formato === 'dvd' ? DVD_MAPA : PECMAR_MAPA;
+  }
+
   // Grilla de calibración: una regla en milímetros para imprimir SOBRE una
   // planilla en blanco. Con la regla encima de los casilleros, se puede leer
   // la coordenada exacta de cada campo directamente de la foto, sin importar
@@ -4060,7 +4128,7 @@ Documentación para realizar la renovación:
     const ajX = Number(tallerConfig.impresionAjusteX) || 0;
     const ajY = Number(tallerConfig.impresionAjusteY) || 0;
     doc.setFont('helvetica', 'bold');
-    const M = PECMAR_MAPA;
+    const M = mapaPlanilla((pecDeTramite(tramite) || {}).formato);
     const T = (texto, x, y, size, maxW) => {
       if (texto === null || texto === undefined || texto === '') return;
       doc.setFontSize(size || 9);
@@ -4121,24 +4189,32 @@ Documentación para realizar la renovación:
       T(o.serie, M[k].serieX, M[k].serieY, 8);
     });
 
+    // Corrimiento vertical por columna (mm sobre la fila). PECMAR no lo define,
+    // así que cae a 0 y queda igual; DVD lo usa para la calibración por campo.
+    const cdy = M.cilindroColDY || {};
     (eq.cilindros || []).slice(0, M.cilindroYs.length).forEach((c, i) => {
       const y = M.cilindroYs[i];
       const col = M.cilindroCols;
-      T(c.codigo, col.codigo, y, 8);
-      T(c.serie, col.serie, y, 8);
-      if (c.codigo || c.serie) T('X', c.nuevoUsado === 'nuevo' ? col.nuevo : col.usado, y, 8);
-      T(c.fabricadoMes, col.fabMes, y, 8);
-      T(c.fabricadoAnio ? String(c.fabricadoAnio).slice(-2) : '', col.fabAnio, y, 8);
-      T(c.revisadoMes, col.revMes, y, 8);
-      T(c.revisadoAnio ? String(c.revisadoAnio).slice(-2) : '', col.revAnio, y, 8);
-      T(c.crpc, col.crpc, y, 8);
-      T(pecOperacionLetra(c.msdb), col.op, y, 8);
+      T(c.codigo, col.codigo, y + (cdy.codigo || 0), 8);
+      T(c.serie, col.serie, y + (cdy.serie || 0), 8);
+      if (c.codigo || c.serie) {
+        const esNuevo = c.nuevoUsado === 'nuevo';
+        T('X', esNuevo ? col.nuevo : col.usado, y + (cdy[esNuevo ? 'nuevo' : 'usado'] || 0), 8);
+      }
+      T(c.fabricadoMes, col.fabMes, y + (cdy.fabMes || 0), 8);
+      T(c.fabricadoAnio ? String(c.fabricadoAnio).slice(-2) : '', col.fabAnio, y + (cdy.fabAnio || 0), 8);
+      T(c.revisadoMes, col.revMes, y + (cdy.revMes || 0), 8);
+      T(c.revisadoAnio ? String(c.revisadoAnio).slice(-2) : '', col.revAnio, y + (cdy.revAnio || 0), 8);
+      T(c.crpc, col.crpc, y + (cdy.crpc || 0), 8);
+      T(pecOperacionLetra(c.msdb), col.op, y + (cdy.op || 0), 8);
     });
+    const valvulaDY = M.valvulaDY || 0;
     (eq.valvulas || []).slice(0, M.cilindroYs.length).forEach((v, i) => {
-      const y = M.cilindroYs[i];
+      const y = M.cilindroYs[i] + valvulaDY;
       T(v.codigo, M.valvulaCols.codigo, y, 8);
       T(v.serie, M.valvulaCols.serie, y, 8);
-      T(pecOperacionLetra(v.msb), M.valvulaCols.op, y, 8);
+      // En DVD la operación (S/C) de la válvula no se imprime.
+      if (!M.sinValvulaOp) T(pecOperacionLetra(v.msb), M.valvulaCols.op, y, 8);
     });
 
     [M.otrosFila1, M.otrosFila2].forEach(fila => {
@@ -6104,6 +6180,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         codigoPec: (p.codigoPec || '').trim(), razonSocial: (p.razonSocial || '').trim(),
         direccion: (p.direccion || '').trim(), telefono: (p.telefono || '').trim(),
         ingeniero: (p.ingeniero || '').trim(), matriculaCipba: (p.matriculaCipba || '').trim(),
+        formato: p.formato === 'dvd' ? 'dvd' : 'pecmar',
       }));
       const p0 = pecs[0] || blankPec();
       tallerConfig = {
