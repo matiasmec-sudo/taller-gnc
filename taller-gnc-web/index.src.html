@@ -3988,7 +3988,7 @@ Documentación para realizar la renovación:
     },
     propNombre: { x: 25, y: 105 },           // +12; +1 abajo (prueba)
     propCalle: { x: 30, y: 118 },            // -90 izq; +3 abajo (prueba)
-    propCpa: { x: 193, y: 92 },              // s/ corrimiento (no se pasó)
+    propCpa: { x: 25, y: 129 },              // alineado con localidad/provincia; 30 izq de localidad (prueba)
     propLocalidad: { x: 55, y: 129 },        // +30 der; +3 abajo (prueba)
     propProvincia: { x: 122, y: 129 },       // +27 der; +3 abajo (prueba)
     propTelefono: { x: 135, y: 104 },        // no se imprime
@@ -4004,8 +4004,9 @@ Documentación para realizar la renovación:
     cilindroYs: [145, 155, 164, 173],
     cilindroCols: { codigo: 25, serie: 45, nuevo: 78, usado: 91, fabMes: 97, fabAnio: 104, revMes: 115, revAnio: 122, crpc: 134, op: 142 },
     // Corrimiento vertical por columna del cilindro (mm sobre la fila),
-    // afinado con la impresión de prueba.
-    cilindroColDY: { codigo: 24, serie: 24, nuevo: 22, usado: 24, fabMes: 22, fabAnio: 22, revMes: 24, revAnio: 24, crpc: 24, op: 21 },
+    // afinado con la impresión de prueba. Fabricado, revisado, CRPC y M/S/D/B
+    // quedan en la MISMA línea que "código" (dy 24).
+    cilindroColDY: { codigo: 24, serie: 24, nuevo: 22, usado: 24, fabMes: 24, fabAnio: 24, revMes: 24, revAnio: 24, crpc: 24, op: 24 },
     valvulaCols: { codigo: 162, serie: 180, op: 192 }, // +7 / +10 der
     valvulaDY: 24,          // válvula: +22; +2 abajo (prueba)
     sinValvulaOp: true,     // en DVD no se marca la operación (S/C) de la válvula
