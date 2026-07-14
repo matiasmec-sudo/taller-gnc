@@ -3972,42 +3972,42 @@ Documentación para realizar la renovación:
     codigoTaller: { x: 168, y: 57, size: 11 }, // -3 izq, +7 abajo
     fechaHab: { xs: [123, 136, 149], y: 21 },  // +5 der, -5 arriba
     fechaVenc: { xs: [122, 135, 148], y: 37 }, // +4 der, +1 abajo
-    obleaAnterior: { x: 168, y: 23 },        // -11 izq, -2 arriba
+    obleaAnterior: { x: 168, y: 25 },        // -11 izq; +2 abajo (prueba)
     obleaNueva: { x: 168, y: 37 },           // -11 izq, -2 arriba
-    marca: { x: 38, y: 70 },                 // +15 der
+    marca: { x: 38, y: 73 },                 // +15 der, +3 abajo (prueba)
     modelo: { x: 74, y: 75 },                // +5 abajo
     anio: { x: 97, y: 72 },                  // -17 izq, +2 abajo
-    dominio: { x: 16, y: 85 },               // -6 izq, +6 abajo
-    inyeccionSi: { x: 64, y: 86 },           // +7 der, +7 abajo
-    inyeccionNo: { x: 72, y: 86 },
-    tipoVehiculo: { xs: { moto: 64, taxi: 73, 'pick up': 81, bus: 93, oficial: 100, otros: 107 }, y: 87 }, // -18 izq, +8 abajo
+    dominio: { x: 36, y: 87 },               // ajustado en prueba (+20 der, +2 abajo)
+    inyeccionSi: { x: 64, y: 87 },           // +7 der; +1 abajo (prueba)
+    inyeccionNo: { x: 72, y: 87 },
+    tipoVehiculo: { xs: { moto: 66, taxi: 75, 'pick up': 83, bus: 95, oficial: 102, otros: 109 }, y: 87 }, // +2 der (prueba)
     tipoOperacion: {
       conversion: { x: 191, y: 71 }, modificacion: { x: 191, y: 75.5 },
       revision_anual: { x: 191, y: 80 }, prueba_hidraulica: { x: 191, y: 84.5 },
       desmontaje: { x: 191, y: 89 }, baja: { x: 167, y: 89 },   // -2 izq, +6 abajo
     },
-    propNombre: { x: 25, y: 104 },           // +12 abajo
-    propCalle: { x: 30, y: 115 },            // -90 izq, +23 abajo
+    propNombre: { x: 25, y: 105 },           // +12; +1 abajo (prueba)
+    propCalle: { x: 30, y: 118 },            // -90 izq; +3 abajo (prueba)
     propCpa: { x: 193, y: 92 },              // s/ corrimiento (no se pasó)
-    propLocalidad: { x: 55, y: 126 },        // +30 der, +22 abajo
-    propProvincia: { x: 122, y: 126 },       // +27 der, +22 abajo
+    propLocalidad: { x: 55, y: 129 },        // +30 der; +3 abajo (prueba)
+    propProvincia: { x: 122, y: 129 },       // +27 der; +3 abajo (prueba)
     propTelefono: { x: 135, y: 104 },        // no se imprime
     propDocumento: { x: 145, y: 106 },       // -25 izq, +2 abajo
     reguladorColX: { sigue: 37, montaje: 59, desmontaje: 80, baja: 102 }, // +10 der
-    reguladorCodigoY: 143,                   // +22 abajo
-    reguladorSerieY: 150,                    // +22 abajo
-    reguladorNuevo: { x: 124, y: 143 },      // +18 der (la X baja con el regulador: asumido)
-    reguladorUsado: { x: 132, y: 143 },
+    reguladorCodigoY: 145,                   // +22; +2 abajo (prueba)
+    reguladorSerieY: 153,                    // +22; +3 abajo (prueba)
+    reguladorNuevo: { x: 124, y: 143 },      // +18 der
+    reguladorUsado: { x: 105, y: 143 },      // -27 izq (prueba)
     manometro: { codX: 148, serieX: 140, codY: 120, serieY: 131 },          // s/ corrimiento
     accesorioTuberia: { codX: 176, serieX: 168, codY: 120, serieY: 131 },   // s/ corrimiento
     tuberiaAltaPresion: { codX: 202, serieX: 195, codY: 120, serieY: 131 }, // s/ corrimiento
     cilindroYs: [145, 155, 164, 173],
-    cilindroCols: { codigo: 1, serie: 40, nuevo: 78, usado: 86, fabMes: 97, fabAnio: 104, revMes: 113, revAnio: 120, crpc: 111, op: 142 },
-    // Corrimiento vertical por columna del cilindro (mm sobre la fila).
-    // serie/nuevo/usado no se pasaron: siguen la fila (+22), x sin cambio.
-    cilindroColDY: { codigo: 21, serie: 22, nuevo: 22, usado: 22, fabMes: 22, fabAnio: 22, revMes: 22, revAnio: 22, crpc: 22, op: 21 },
+    cilindroCols: { codigo: 25, serie: 45, nuevo: 78, usado: 91, fabMes: 97, fabAnio: 104, revMes: 115, revAnio: 122, crpc: 134, op: 142 },
+    // Corrimiento vertical por columna del cilindro (mm sobre la fila),
+    // afinado con la impresión de prueba.
+    cilindroColDY: { codigo: 24, serie: 24, nuevo: 22, usado: 24, fabMes: 22, fabAnio: 22, revMes: 24, revAnio: 24, crpc: 24, op: 21 },
     valvulaCols: { codigo: 162, serie: 180, op: 192 }, // +7 / +10 der
-    valvulaDY: 22,          // válvula: +22 abajo
+    valvulaDY: 24,          // válvula: +22; +2 abajo (prueba)
     sinValvulaOp: true,     // en DVD no se marca la operación (S/C) de la válvula
     otrosFila1: { keys: ['dispSujecionCilindro', 'electrovalvulaNafta', 'electrovalvulaGnc', 'dosifMezclador', 'sistemaVenteo', 'llaveConmutadora'], codXs: [22, 56, 91, 125, 159, 194], serieXs: [22, 56, 91, 125, 159, 194], codY: 185, serieY: 194 }, // s/ corrimiento
     otrosFila2: { keys: ['valCargaInterna', 'valCargaExterna', 'mangueraBajaPresion'], codXs: [22, 56, 91], serieXs: [22, 56, 91], codY: 207, serieY: 216 }, // s/ corrimiento
