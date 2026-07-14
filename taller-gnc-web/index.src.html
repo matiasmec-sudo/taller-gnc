@@ -3972,11 +3972,11 @@ Documentación para realizar la renovación:
     codigoTaller: { x: 168, y: 57, size: 11 }, // -3 izq, +7 abajo
     fechaHab: { xs: [123, 136, 149], y: 21 },  // +5 der, -5 arriba
     fechaVenc: { xs: [122, 135, 148], y: 37 }, // +4 der, +1 abajo
-    obleaAnterior: { x: 168, y: 25 },        // -11 izq; +2 abajo (prueba)
+    obleaAnterior: { x: 168, y: 21 },        // alineada con fecha de habilitación (prueba)
     obleaNueva: { x: 168, y: 37 },           // -11 izq, -2 arriba
-    marca: { x: 38, y: 73 },                 // +15 der, +3 abajo (prueba)
-    modelo: { x: 74, y: 75 },                // +5 abajo
-    anio: { x: 97, y: 72 },                  // -17 izq, +2 abajo
+    marca: { x: 38, y: 73 },                 // referencia de la fila vehículo
+    modelo: { x: 74, y: 73 },                // alineado con marca (prueba)
+    anio: { x: 129, y: 73 },                 // alineado con marca; +32 der (prueba)
     dominio: { x: 36, y: 87 },               // ajustado en prueba (+20 der, +2 abajo)
     inyeccionSi: { x: 64, y: 87 },           // +7 der; +1 abajo (prueba)
     inyeccionNo: { x: 72, y: 87 },
@@ -3992,7 +3992,7 @@ Documentación para realizar la renovación:
     propLocalidad: { x: 55, y: 129 },        // +30 der; +3 abajo (prueba)
     propProvincia: { x: 122, y: 129 },       // +27 der; +3 abajo (prueba)
     propTelefono: { x: 135, y: 104 },        // no se imprime
-    propDocumento: { x: 145, y: 106 },       // -25 izq, +2 abajo
+    propDocumento: { x: 145, y: 105 },       // alineado con apellido y nombre (prueba)
     reguladorColX: { sigue: 37, montaje: 59, desmontaje: 80, baja: 102 }, // +10 der
     reguladorCodigoY: 145,                   // +22; +2 abajo (prueba)
     reguladorSerieY: 153,                    // +22; +3 abajo (prueba)
@@ -4013,8 +4013,8 @@ Documentación para realizar la renovación:
     otrosFila1: { keys: ['dispSujecionCilindro', 'electrovalvulaNafta', 'electrovalvulaGnc', 'dosifMezclador', 'sistemaVenteo', 'llaveConmutadora'], codXs: [22, 56, 91, 125, 159, 194], serieXs: [22, 56, 91, 125, 159, 194], codY: 185, serieY: 194 }, // s/ corrimiento
     otrosFila2: { keys: ['valCargaInterna', 'valCargaExterna', 'mangueraBajaPresion'], codXs: [22, 56, 91], serieXs: [22, 56, 91], codY: 207, serieY: 216 }, // s/ corrimiento
     observaciones: { x: 42, y: 222, maxW: 150 }, // s/ corrimiento
-    aclNombre: { x: 135, y: 273 },           // s/ corrimiento
-    aclDocumento: { x: 135, y: 273 },
+    aclNombre: { x: 135, y: 269 },           // nombre sobre la firma: subido 4 mm (prueba)
+    aclDocumento: { x: 135, y: 269 },
   };
 
   function mapaPlanilla(formato) {
