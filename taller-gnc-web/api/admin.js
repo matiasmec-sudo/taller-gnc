@@ -4,7 +4,50 @@
 // eliminar. La primera vez importa (seed) los códigos de LICENSE_CODES para
 // que el panel muestre también los que ya estaban en uso.
 import crypto from 'crypto';
-import { leerLicencias, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, sumarMesISO, leerSugerencias, guardarSugerencias } from './_licencias.js';
+import { leerLicencias, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, sumarMesISO, leerSugerencias, guardarSugerencias, leerCredito, guardarCredito } from './_licencias.js';
+
+// Ritmo de consumo de la IA. El consumo se guarda por MES (no por día), así que
+// el ritmo se estima como: gastado del mes / días transcurridos del mes. Se
+// compara con el mes anterior para ver si se está acelerando.
+// La autonomía sale del saldo declarado a mano (Anthropic no expone el saldo):
+// saldo - (ritmo x días desde que se declaró).
+function calcularRitmo(costoMesUSD, readsMes, costoMesAnteriorUSD, credito) {
+  const hoy = new Date();
+  const diaDelMes = hoy.getUTCDate(); // días transcurridos (el de hoy, parcial, cuenta)
+  const diasDelMes = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth() + 1, 0)).getUTCDate();
+  const mesAnt = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), 0));
+  const diasMesAnterior = mesAnt.getUTCDate();
+
+  const ritmoEsteMes = diaDelMes > 0 ? costoMesUSD / diaDelMes : 0;
+  const ritmoMesAnterior = diasMesAnterior > 0 ? costoMesAnteriorUSD / diasMesAnterior : 0;
+  // Arranque de mes: 1-2 días es una muestra muy chica. Si todavía no hay
+  // consumo este mes, el ritmo del mes pasado representa mejor la realidad.
+  const muestraChica = diaDelMes <= 2;
+  const ritmoUSDdia = (ritmoEsteMes > 0) ? ritmoEsteMes : ritmoMesAnterior;
+  const lecturasDia = diaDelMes > 0 ? readsMes / diaDelMes : 0;
+
+  let autonomia = null;
+  if (credito && Number(credito.usd) > 0) {
+    const diasDesde = Math.max(0, (hoy - new Date(credito.fecha)) / 86400000);
+    const saldoEstimado = Math.max(0, Number(credito.usd) - ritmoUSDdia * diasDesde);
+    autonomia = {
+      declarado: Number(credito.usd),
+      declaradoEn: credito.fecha,
+      diasDesdeQueLoDeclaraste: Math.floor(diasDesde),
+      saldoEstimadoUSD: saldoEstimado,
+      // Sin consumo no se puede proyectar: días = null (no "infinito").
+      dias: ritmoUSDdia > 0 ? Math.floor(saldoEstimado / ritmoUSDdia) : null,
+    };
+  }
+
+  return {
+    ritmoUSDdia, lecturasDia, muestraChica,
+    ritmoMesAnteriorUSDdia: ritmoMesAnterior,
+    proyeccionMesUSD: ritmoUSDdia * diasDelMes,
+    diaDelMes, diasDelMes,
+    autonomia,
+  };
+}
 
 function tokenOk(req) {
   const provided = String((req.headers['x-admin-token'] || (req.body && req.body.token) || ''));
@@ -42,8 +85,22 @@ export default async function handler(req, res) {
 
     const { accion } = req.body || {};
 
+    if (accion === 'credito-guardar') {
+      const usd = Number(req.body.usd);
+      if (!Number.isFinite(usd) || usd < 0) return res.status(400).json({ error: 'Poné el saldo en dólares (ej: 18.40).' });
+      const dato = await guardarCredito(usd);
+      return res.status(200).json({ ok: true, credito: dato });
+    }
+
     if (accion === 'listar') {
-      const [act, consumo] = await Promise.all([leerActividad(30), leerConsumoMes()]);
+      const mesActual = new Date().toISOString().slice(0, 7);
+      const d = new Date();
+      const mesAnterior = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
+      const [act, consumo, consumoAnt, credito] = await Promise.all([
+        leerActividad(30), leerConsumoMes(), leerConsumoMes(mesAnterior), leerCredito(),
+      ]);
+      const costoMesAnteriorUSD = Object.values(consumoAnt || {})
+        .reduce((s, c) => s + (Number(c.costoUSD) || 0), 0);
       let costoTotalMes = 0;
       let readsTotalMes = 0;
       const conAct = lics.map(l => {
@@ -63,10 +120,12 @@ export default async function handler(req, res) {
       // mide acá; el total exacto está en el panel de Vercel.
       const vercel = { plan: process.env.VERCEL_PLAN || 'Pro', costoUSD: Number.isFinite(Number(process.env.VERCEL_COSTO_USD)) && process.env.VERCEL_COSTO_USD !== undefined ? Number(process.env.VERCEL_COSTO_USD) : 20 };
       const opsIaMes = readsTotalMes * 2;
+      const ritmo = calcularRitmo(costoTotalMes, readsTotalMes, costoMesAnteriorUSD, credito);
       return res.status(200).json({
         ok: true, licencias: conAct, costoTotalMes, readsTotalMes,
-        mes: new Date().toISOString().slice(0, 7),
+        mes: mesActual,
         infra: { vercel, opsIaMes, limiteOpsGratis: 2000 },
+        ritmo,
       });
     }
 
