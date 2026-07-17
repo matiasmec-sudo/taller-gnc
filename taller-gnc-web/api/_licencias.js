@@ -14,6 +14,7 @@ import crypto from 'crypto';
 const STORE_PATH = 'sistema/licencias.json';
 const SIGNUPS_PATH = 'sistema/signups.json';
 const SUGERENCIAS_PATH = 'sistema/sugerencias.json';
+const CREDITO_PATH = 'sistema/credito.json';
 const USO_PREFIX = 'sistema/uso-';
 const CONSUMO_PREFIX = 'sistema/consumo-';
 
@@ -168,6 +169,21 @@ export async function leerSugerencias() {
 }
 export async function guardarSugerencias(sugerencias) {
   await escribirJsonBlob(SUGERENCIAS_PATH, { sugerencias, actualizado: new Date().toISOString() });
+}
+
+// Saldo de crédito de Anthropic, declarado A MANO desde el panel.
+// Por qué a mano: la API de Anthropic NO expone el saldo restante (no existe
+// endpoint de balance), y la Usage & Cost Admin API solo informa lo YA gastado,
+// necesita otra clave (sk-ant-admin01-...) y no está disponible para cuentas
+// individuales. Así que el dueño anota lo que ve en la consola y desde ahí
+// estimamos: saldo - (ritmo diario x días transcurridos).
+export async function leerCredito() {
+  try { return (await leerJsonBlob(CREDITO_PATH)) || null; } catch (e) { return null; }
+}
+export async function guardarCredito(usd) {
+  const dato = { usd: Number(usd) || 0, fecha: new Date().toISOString() };
+  await escribirJsonBlob(CREDITO_PATH, dato);
+  return dato;
 }
 export async function agregarSugerencia({ license, taller, texto }) {
   const lista = await leerSugerencias();

@@ -80,6 +80,7 @@
     </div>
     <div class="resumen" id="resumen"></div>
     <div id="infra"></div>
+    <div id="ritmo"></div>
     <div id="tabla-msg"></div>
     <table>
       <thead><tr>
@@ -140,6 +141,74 @@
       </div>`;
   }
 
+  // Ritmo de consumo de la IA: lo que más importa mirar, porque quedarse sin
+  // crédito de Anthropic es la falla más probable (más que Vercel). Anthropic
+  // NO expone el saldo por API, así que el saldo se declara a mano y se estima
+  // la autonomía descontando el ritmo real.
+  function renderRitmo(r) {
+    const el = $('#ritmo');
+    if (!el) return;
+    if (!r) { el.innerHTML = ''; return; }
+    const porDia = r.ritmoUSDdia || 0;
+    const lecturas = r.lecturasDia || 0;
+    const ant = r.ritmoMesAnteriorUSDdia || 0;
+
+    let tendencia = '';
+    if (ant > 0 && porDia > 0) {
+      const pct = Math.round(((porDia - ant) / ant) * 100);
+      tendencia = pct > 5 ? ` <span style="color:#C0281A;">↑ ${pct}% más rápido</span>`
+        : pct < -5 ? ` <span style="color:#1E9E5A;">↓ ${Math.abs(pct)}% más lento</span>`
+        : ' <span class="muted">(estable)</span>';
+    }
+
+    const a = r.autonomia;
+    let cabecera;
+    if (!a) {
+      cabecera = '<div style="font-size:15px;">Para saber cuánto te queda, poné abajo el saldo que ves en la consola de Anthropic.</div>';
+    } else if (a.dias === null) {
+      cabecera = '<div style="font-size:15px;">🟢 Todavía no hubo consumo: no se puede proyectar la autonomía.</div>';
+    } else {
+      const sem = a.dias > 14 ? '🟢' : a.dias >= 7 ? '🟡' : '🔴';
+      const color = a.dias > 14 ? '#1E9E5A' : a.dias >= 7 ? '#B7791F' : '#C0281A';
+      cabecera = `<div style="font-size:19px; font-weight:800; color:${color};">${sem} Te quedan ~${a.dias} día(s) de crédito</div>
+        <div class="muted" style="font-size:12px; margin-top:2px;">Saldo estimado hoy: ${fmtUSD(a.saldoEstimadoUSD)} — declaraste ${fmtUSD(a.declarado)} hace ${a.diasDesdeQueLoDeclaraste} día(s).</div>`;
+    }
+
+    el.innerHTML = `
+      <div class="card" style="text-align:left; padding:14px 16px; margin-bottom:14px;">
+        <div style="font-weight:800; margin-bottom:8px;">Ritmo de consumo de la IA</div>
+        ${cabecera}
+        <div style="font-size:14px; line-height:1.9; margin-top:10px;">
+          <b>Ritmo actual:</b> ${fmtUSD(porDia)}/día · ~${lecturas.toFixed(1)} lectura(s)/día${r.muestraChica ? ' <span class="muted">(el mes recién arranca: poca muestra)</span>' : ''}<br>
+          <b>Mes pasado:</b> ${fmtUSD(ant)}/día${tendencia}<br>
+          <b>Proyección de este mes:</b> ${fmtUSD(r.proyeccionMesUSD || 0)} <span class="muted">(a este ritmo, ${r.diasDelMes} días)</span>
+        </div>
+        <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <label style="font-size:13px;">Saldo real (consola de Anthropic) US$
+            <input type="number" id="credito-usd" step="0.01" min="0" style="width:110px; margin-left:6px;" placeholder="18.40">
+          </label>
+          <button class="btn" id="btn-credito">Actualizar saldo</button>
+          <span id="credito-msg" class="muted" style="font-size:12px;"></span>
+        </div>
+        <div class="muted" style="font-size:12px; margin-top:8px;">Anthropic no permite consultar el saldo por API — hay que mirarlo en su consola y anotarlo acá. Con eso, Estelita lo va descontando sola al ritmo real. Actualizalo cada vez que recargues.</div>
+      </div>`;
+
+    const btn = $('#btn-credito');
+    if (btn) btn.addEventListener('click', async () => {
+      const usd = Number(($('#credito-usd') || {}).value);
+      const msg = $('#credito-msg');
+      if (!Number.isFinite(usd) || usd < 0) { if (msg) msg.textContent = 'Poné un número (ej: 18.40).'; return; }
+      btn.disabled = true;
+      try {
+        await api('credito-guardar', { usd });
+        if (msg) msg.textContent = 'Guardado.';
+        cargar();
+      } catch (e) {
+        if (msg) msg.textContent = 'No se pudo guardar: ' + (e.message || e);
+      } finally { btn.disabled = false; }
+    });
+  }
+
   const HOY = new Date().toISOString().slice(0, 10);
   function diasDesde(iso) { return Math.round((new Date(HOY) - new Date(iso)) / 86400000); }
   function fmtAct(iso) {
@@ -190,6 +259,7 @@
        <div class="card"><b>${activasHoy}</b><span>Usaron hoy</span></div>
        <div class="card"><b>${fmtUSD(costoTotal)}</b><span>Costo IA (mes)</span></div>`;
     renderInfra(data.infra || {}, costoTotal, data.readsTotalMes || 0);
+    renderRitmo(data.ritmo);
     $('#filas').innerHTML = orden.map(l => {
       const reciente = l.ultimoUso && diasDesde(l.ultimoUso) <= 7;
       const e = estadoSub(l);
