@@ -670,6 +670,42 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 }
 #gnc-app .license-link:hover { color: var(--flame); }
 
+/* PRESUPUESTOS */
+#gnc-app .presu-lite { text-transform: none; font-weight: 600; color: var(--text-muted); font-size: 11px; }
+#gnc-app .presu-lbl { display: block; font-size: 12px; color: var(--text-muted); font-weight: 600; margin-bottom: 4px; }
+#gnc-app .presu-row { display: flex; gap: 8px; margin-top: 8px; align-items: stretch; }
+#gnc-app .presu-sep { border-top: 1px dashed var(--line); margin: 12px 0 10px; }
+#gnc-app .presu-cats { display: flex; gap: 6px; flex-wrap: wrap; }
+#gnc-app .presu-cat { flex: 1; min-width: 64px; border: 1.5px solid var(--line); background: var(--surface); border-radius: 12px; padding: 8px 4px; text-align: center; cursor: pointer; font-family: inherit; color: var(--text); }
+#gnc-app .presu-cat b { font-size: 17px; display: block; }
+#gnc-app .presu-cat small { font-size: 9.5px; color: var(--text-muted); line-height: 1.15; display: block; margin-top: 2px; }
+#gnc-app .presu-cat.sel { border-color: var(--flame); background: rgba(29,91,216,.08); }
+#gnc-app .presu-cat.sel b { color: var(--flame); }
+#gnc-app .presu-detect { background: rgba(29,91,216,.08); border-radius: 12px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+#gnc-app .presu-detect.nope { background: rgba(242,169,59,.14); }
+#gnc-app .presu-detect b { color: var(--flame); font-size: 14px; }
+#gnc-app .presu-detect.nope b { color: var(--warn); }
+#gnc-app .presu-por { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+#gnc-app .presu-res { max-height: 210px; overflow-y: auto; margin-top: 8px; }
+#gnc-app .presu-res-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12.5px; }
+#gnc-app .presu-res-item:hover { background: rgba(29,91,216,.08); }
+#gnc-app .presu-ss { background: rgba(227,84,58,.15); color: var(--danger); font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 999px; margin-left: 4px; }
+#gnc-app .presu-chk { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
+#gnc-app .presu-chk input { width: 18px; height: 18px; flex: 0 0 18px; }
+#gnc-app .presu-chk span { color: var(--text-muted); font-weight: 500; font-size: 11.5px; }
+#gnc-app .presu-totales { background: #0F1F3D; color: #fff; border-radius: 16px; padding: 16px; margin-top: 16px; }
+#gnc-app .presu-cab { font-size: 10px; letter-spacing: 1px; opacity: .55; text-transform: uppercase; margin-bottom: 8px; }
+#gnc-app .presu-fila { display: flex; justify-content: space-between; font-size: 13.5px; margin-bottom: 7px; gap: 12px; }
+#gnc-app .presu-fila.desc { color: #7EE0A8; }
+#gnc-app .presu-total { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid rgba(255,255,255,.18); padding-top: 10px; margin-top: 4px; gap: 12px; }
+#gnc-app .presu-total span { font-size: 13px; opacity: .8; }
+#gnc-app .presu-total b { font-size: 24px; }
+#gnc-app .presu-gana { background: rgba(126,224,168,.13); border: 1px solid rgba(126,224,168,.35); border-radius: 12px; padding: 10px 12px; margin-top: 12px; }
+#gnc-app .presu-gana-fila { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+#gnc-app .presu-gana-fila span { font-size: 12.5px; color: #7EE0A8; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
+#gnc-app .presu-gana-fila b { font-size: 20px; color: #7EE0A8; }
+#gnc-app .presu-gana-nota { font-size: 10.5px; opacity: .7; margin-top: 4px; line-height: 1.4; }
+#gnc-app .presu-gana-nota .rojo { color: #FF9C8A; font-weight: 700; }
 /* TRAMITES */
 #gnc-app .tramites-list { display: flex; flex-direction: column; gap: 8px; }
 #gnc-app .tramite-row {
@@ -741,6 +777,7 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
   const TALLER_KEY = 'gnc_taller_nombre_v1';
   const LICENSE_KEY = 'gnc_license_code';
   const TALLER_CONFIG_KEY = 'gnc_taller_config_v1';
+  const PRESUPUESTOS_KEY = 'gnc_presupuestos_v1';
   // Fecha en que el taller aceptó Términos y Privacidad (constancia local).
   const TERMS_KEY = 'gnc_terms_accepted_v1';
   // WhatsApp comercial al que llegan las solicitudes de registro de talleres.
@@ -794,6 +831,16 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
     // Corrimiento en milímetros para "Imprimir solo los datos" sobre una
     // planilla preimpresa que no salió de Estelita.
     impresionAjusteX: 0, impresionAjusteY: 0,
+    // Logo del taller (dataURL) para el encabezado de los presupuestos.
+    logo: '',
+    // Presupuestos: numeración correlativa y la mano de obra que se sugiere
+    // sola al cargar un equipo completo de GNC.
+    presuUltimoNumero: 0,
+    presuInstalacion: 450000,
+    // Precios propios del taller para el catálogo de presupuestos:
+    // { ajusteGnc: %, ajusteMec: %, items: { 'nombre del ítem': precio } }.
+    // Si un ítem no está acá, se usa el de lista ajustado por el %.
+    listaPrecios: { ajusteGnc: 0, ajusteMec: 0, items: {} },
     // Precio por tipo de trámite (solo para la estimación de ingresos en
     // Estadísticas). { conversion: 50000, ... }
     precios: {},
@@ -1156,6 +1203,10 @@ Documentación para realizar la renovación:
       const res3 = await window.storage.get(TALLER_CONFIG_KEY, false);
       tallerConfig = res3 ? { ...TALLER_CONFIG_DEFAULT, ...JSON.parse(res3.value) } : { ...TALLER_CONFIG_DEFAULT };
     } catch (e) { tallerConfig = { ...TALLER_CONFIG_DEFAULT }; }
+    try {
+      const res4 = await window.storage.get(PRESUPUESTOS_KEY, false);
+      presupuestos = res4 ? JSON.parse(res4.value) : [];
+    } catch (e) { presupuestos = []; }
     migrarPecsConfig(tallerConfig);
     if (migrateClientes()) await saveClientes(false);
     tomarSnapshotClientes();
@@ -1340,6 +1391,26 @@ Documentación para realizar la renovación:
       document.body.appendChild(overlay);
     });
   }
+
+  // ===== CATÁLOGO DE PRESUPUESTOS =====
+  // Extraído de las listas oficiales: PecMar (20-04-2026) para GNC y ATAIA
+  // (abr-jun 2026) para mano de obra de mecánica. Va embebido para que la app
+  // pueda presupuestar sin internet. Cada taller ajusta lo suyo en
+  // Configuración → Listas de precios (no se toca este bloque).
+  const PRESU_COMPONENTES = [{"sec":"Cilindro","nom":"Cilindro 28/232","p":263200},{"sec":"Cilindro","nom":"Cilindro 28/244","p":295800},{"sec":"Cilindro","nom":"Cilindro 30/244","p":306600},{"sec":"Cilindro","nom":"Cilindro 60/244","p":470800},{"sec":"Cilindro","nom":"Cilindro 30/273","p":318300},{"sec":"Cilindro","nom":"Cilindro 60/273","p":480100},{"sec":"Cilindro","nom":"Cilindro 40/273","p":329700},{"sec":"Cilindro","nom":"Cilindro 45/273","p":398700},{"sec":"Cilindro","nom":"Cilindro 58/323","p":522600},{"sec":"Cilindro","nom":"Cilindro 58/340","p":527500},{"sec":"Cilindro","nom":"Cilindro 58/355","p":562000},{"sec":"Cilindro","nom":"Cilindro 65/340","p":560600},{"sec":"Cilindro","nom":"Cilindro 65/355","p":593000},{"sec":"Cilindro","nom":"Cilindro 70/355","p":634200},{"sec":"Cilindro","nom":"Cilindro 80/355","p":735700},{"sec":"Cilindro","nom":"Cilindro 90/355","p":850100},{"sec":"Cilindro","nom":"Cilindro 100/355","p":933200},{"sec":"Cilindro","nom":"Cilindro 120/355","p":1095300},{"sec":"Cilindro","nom":"Cilindro 90/406","p":1152100},{"sec":"Reductor","nom":"Reductor AIR 3ra.","p":157700},{"sec":"Reductor","nom":"Reductor AIR POTENCIADO 3ra.","p":157700},{"sec":"Reductor","nom":"Reductor OYRSA 3ra.","p":175800},{"sec":"Reductor","nom":"Reductor OYRSA POTENCIADO 3ra.","p":192500},{"sec":"Reductor","nom":"Reductor GASCOM 3ra.","p":89300},{"sec":"Reductor","nom":"Reductor SGV 3ra.","p":93100},{"sec":"Reductor","nom":"Reductor SGV 5ta.","p":79200},{"sec":"Válvula","nom":"VALVULA DE CARGA SGV","p":null,"ss":1},{"sec":"Válvula","nom":"VALVULA DE CARGA GASCOM","p":37800},{"sec":"Válvula","nom":"VALVULA DE CILINDRO SGV","p":null,"ss":1},{"sec":"Válvula","nom":"VALVULA DE CILINDRO SGV SIN CABLE","p":null,"ss":1},{"sec":"Válvula","nom":"VALVULA DE CILINDRO GASCOM","p":67000},{"sec":"Válvula","nom":"VALVULA DE CILINDRO GASCOM SIN CABLE","p":63100},{"sec":"Válvula","nom":"CABLEADO VALVULA CILINDRO GASCOM","p":6000},{"sec":"Válvula","nom":"CABLEADO VALVULA DE CILINDRO SGV","p":6000},{"sec":"Válvula","nom":"VALVULA DE CARGA EXTERNA FKC","p":29300},{"sec":"Válvula","nom":"RETENSORA EXTERNA","p":9700},{"sec":"Válvula","nom":"PICO DE CARGA INTERNA","p":15300},{"sec":"Cuña / soporte","nom":"Cuña 244","p":59800},{"sec":"Cuña / soporte","nom":"Cuña 323","p":59800},{"sec":"Cuña / soporte","nom":"Cuña KANGOO","p":71200},{"sec":"Cuña / soporte","nom":"Cuña ECOSPORT","p":71200},{"sec":"Cuña / soporte","nom":"Cuña VOYAGE / ELEVADA","p":78400},{"sec":"Cuña / soporte","nom":"Cuña SURAN","p":71200},{"sec":"Cuña / soporte","nom":"Cuña SOPORTE SURAN","p":51200},{"sec":"Cuña / soporte","nom":"Cuña F100","p":71200},{"sec":"Cuña / soporte","nom":"Cuña RANCHERO","p":71200},{"sec":"Cuña / soporte","nom":"Cuña PALIO ALTA","p":78400},{"sec":"Cuña / soporte","nom":"Cuña PALIO 1/2 ALTA","p":78400},{"sec":"Cuña / soporte","nom":"Cuña PARTNER","p":71200},{"sec":"Cuña / soporte","nom":"Cuña DUSTER/OROSH 2X30","p":78400},{"sec":"Cuña / soporte","nom":"Cuña DUSTER/OROSH 2X40","p":78400},{"sec":"Cuña / soporte","nom":"Cuña STRADA","p":71200},{"sec":"Cuña / soporte","nom":"Cuña RANGER REFORZADA 1 CILINDRO","p":125900},{"sec":"Cuña / soporte","nom":"Cuña RANGER 3 CILINDROS","p":125900},{"sec":"Cuña / soporte","nom":"Cuña GOL 2 CILINDROS","p":71200},{"sec":"Cuña / soporte","nom":"Cuña AROS F100 (PALOMA)","p":40000},{"sec":"Cuña / soporte","nom":"Cuña CUNA 406","p":113800},{"sec":"Kit","nom":"KIT CAMBIO DE 5TA. A 4TA. C/EMULADOR Y MEZCLADOR — SGV","p":205000},{"sec":"Kit","nom":"KIT CAMBIO DE 5TA. A 4TA. C/EMULADOR Y MEZCLADOR — AIR","p":269700},{"sec":"Kit","nom":"KIT CAMBIO DE 5TA. A 4TA. C/EMULADOR Y MEZCLADOR — AIR Potenciado","p":269700},{"sec":"Kit","nom":"KIT CAMBIO DE 5TA. A 4TA. C/EMULADOR Y MEZCLADOR — OYRSA","p":287900},{"sec":"Kit","nom":"KIT CAMBIO DE 5TA. A 4TA. C/EMULADOR Y MEZCLADOR — OYRSA Potenciado","p":304500},{"sec":"Kit","nom":"KIT CAMBIO DE 5TA. A 4TA. C/CHIP MAX BLUE Y MEZCLADOR — SGV","p":230100},{"sec":"Kit","nom":"KIT CAMBIO DE 5TA. A 4TA. C/CHIP MAX BLUE Y MEZCLADOR — AIR","p":294700},{"sec":"Kit","nom":"KIT CAMBIO DE 5TA. A 4TA. C/CHIP MAX BLUE Y MEZCLADOR — AIR Potenciado","p":294700},{"sec":"Kit","nom":"KIT CAMBIO DE 5TA. A 4TA. C/CHIP MAX BLUE Y MEZCLADOR — OYRSA","p":312900},{"sec":"Kit","nom":"KIT CAMBIO DE 5TA. A 4TA. C/CHIP MAX BLUE Y MEZCLADOR — OYRSA Potenciado","p":329600},{"sec":"Kit","nom":"KIT INYECCION C/EMULADOR/MEZCLADOR — SGV","p":321300},{"sec":"Kit","nom":"KIT INYECCION C/EMULADOR/MEZCLADOR — AIR","p":386000},{"sec":"Kit","nom":"KIT INYECCION C/EMULADOR/MEZCLADOR — AIR Potenciado","p":386000},{"sec":"Kit","nom":"KIT INYECCION C/EMULADOR/MEZCLADOR — OYRSA","p":404200},{"sec":"Kit","nom":"KIT INYECCION C/EMULADOR/MEZCLADOR — OYRSA Potenciado","p":420800},{"sec":"Kit","nom":"KIT INYECCION C/CHIP MAX BLUE/MEZCLADOR — SGV","p":346500},{"sec":"Kit","nom":"KIT INYECCION C/CHIP MAX BLUE/MEZCLADOR — AIR","p":411100},{"sec":"Kit","nom":"KIT INYECCION C/CHIP MAX BLUE/MEZCLADOR — AIR Potenciado","p":411100},{"sec":"Kit","nom":"KIT INYECCION C/CHIP MAX BLUE/MEZCLADOR — OYRSA","p":429300},{"sec":"Kit","nom":"KIT INYECCION C/CHIP MAX BLUE/MEZCLADOR — OYRSA Potenciado","p":445900},{"sec":"Kit","nom":"KIT CARBURADOR C/MEZCLADOR — SGV","p":334600},{"sec":"Kit","nom":"KIT CARBURADOR C/MEZCLADOR — AIR","p":399300},{"sec":"Kit","nom":"KIT CARBURADOR C/MEZCLADOR — AIR Potenciado","p":399300},{"sec":"Kit","nom":"KIT CARBURADOR C/MEZCLADOR — OYRSA","p":417500},{"sec":"Kit","nom":"KIT CARBURADOR C/MEZCLADOR — OYRSA Potenciado","p":434000},{"sec":"Kit","nom":"KIT CARBURADOR C/INYECTOR — SGV","p":324600},{"sec":"Kit","nom":"KIT CARBURADOR C/INYECTOR — AIR","p":389200},{"sec":"Kit","nom":"KIT CARBURADOR C/INYECTOR — AIR Potenciado","p":389200},{"sec":"Kit","nom":"KIT CARBURADOR C/INYECTOR — OYRSA","p":407400},{"sec":"Kit","nom":"KIT CARBURADOR C/INYECTOR — OYRSA Potenciado","p":424100},{"sec":"Kit 5ta","nom":"KIT 5TA. 4 CILINDROS — 5+","p":364100},{"sec":"Kit 5ta","nom":"KIT 5TA. 4 CILINDROS — BLUE48","p":438700},{"sec":"Kit 5ta","nom":"KIT 5TA. 4 CILINDROS — RED48","p":438700},{"sec":"Kit 5ta","nom":"KIT 5TA. 4 CILINDROS — 148S3","p":494800},{"sec":"Kit 5ta","nom":"KIT 5TA. 4 CILINDROS C/EXTERNA — 5+","p":385200},{"sec":"Kit 5ta","nom":"KIT 5TA. 4 CILINDROS C/EXTERNA — BLUE48","p":459700},{"sec":"Kit 5ta","nom":"KIT 5TA. 4 CILINDROS C/EXTERNA — RED48","p":459700},{"sec":"Kit 5ta","nom":"KIT 5TA. 4 CILINDROS C/EXTERNA — 148S3","p":515700},{"sec":"Kit 5ta","nom":"KIT 5TA. 6 CILINDROS — 148S3","p":520500},{"sec":"Kit 5ta","nom":"KIT 5TA. 6 CILINDROS C/EXTERNA — 148S3","p":541500},{"sec":"Kit 5ta","nom":"KIT 5TA. 8 CILINDROS — 148S3","p":561100},{"sec":"Kit 5ta","nom":"KIT 5TA. 8 CILINDROS C/EXTERNA — 148S3","p":582000},{"sec":"Kit 5ta","nom":"MINI KIT 5TA. 4 CILINDROS — 5+","p":213300},{"sec":"Kit 5ta","nom":"MINI KIT 5TA. 4 CILINDROS — BLUE48","p":287900},{"sec":"Kit 5ta","nom":"MINI KIT 5TA. 4 CILINDROS — RED48","p":287900},{"sec":"Kit 5ta","nom":"MINI KIT 5TA. 4 CILINDROS — 148S3","p":343900},{"sec":"Kit 5ta","nom":"MINI KIT 5TA. 4 CIL. (cambio 4ta. a 5ta. ) — 5+","p":251000},{"sec":"Kit 5ta","nom":"MINI KIT 5TA. 4 CIL. (cambio 4ta. a 5ta. ) — BLUE48","p":325600},{"sec":"Kit 5ta","nom":"MINI KIT 5TA. 4 CIL. (cambio 4ta. a 5ta. ) — RED48","p":325600},{"sec":"Kit 5ta","nom":"MINI KIT 5TA. 4 CIL. (cambio 4ta. a 5ta. ) — 148S3","p":381600},{"sec":"Kit 5ta","nom":"MINI KIT 5TA. 6 CILINDROS — 148S3","p":369700},{"sec":"Kit 5ta","nom":"MINI KIT 5TA. 6 CILINDROS C/BOLSA DE ACCESORIOS — 148S3","p":407400},{"sec":"Kit 5ta","nom":"MINI KIT 5TA. 8 CILINDROS — 148S3","p":410300},{"sec":"Kit 5ta","nom":"MINI KIT 5TA. 8 CILINDROS C/BOLSA DE ACCESORIOS — 148S3","p":485700},{"sec":"Electrónica 5ta","nom":"Adaptador Inyectores 1 Orring (AD7)","p":6890},{"sec":"Electrónica 5ta","nom":"Adaptador Inyectores 2 Orring (AD8)","p":6890},{"sec":"Electrónica 5ta","nom":"Adaptador Inyectores 3 Orring (AD9)","p":6890},{"sec":"Electrónica 5ta","nom":"Adaptador Inyectores 4 Orring (AD10)","p":6890},{"sec":"Electrónica 5ta","nom":"Cableado 5+","p":80200},{"sec":"Electrónica 5ta","nom":"Cableado RED48","p":119600},{"sec":"Electrónica 5ta","nom":"Cableado BLUE48","p":119600},{"sec":"Electrónica 5ta","nom":"Cableado 148S3","p":161300},{"sec":"Electrónica 5ta","nom":"Cableado 6 Cilindros","p":182800},{"sec":"Electrónica 5ta","nom":"Cableado 8 Cilindros","p":188700},{"sec":"Electrónica 5ta","nom":"Central 148S3 4 Cilindros","p":161300},{"sec":"Electrónica 5ta","nom":"Central 5ta. 148S3 6 Cilindros","p":182800},{"sec":"Electrónica 5ta","nom":"Central 5ta. 148S3 8 Cilindros","p":188700},{"sec":"Electrónica 5ta","nom":"Central 5ta.BLUE48 4 Cilindros","p":119600},{"sec":"Electrónica 5ta","nom":"Central 5ta. 5+ 4 Cilindros","p":80200},{"sec":"Electrónica 5ta","nom":"Central 5ta. RED48+ 4 Cilindros","p":119600},{"sec":"Electrónica 5ta","nom":"Electronica 5ta. SGAS PLUS 5+ 4 Cilindros (5+)","p":133600},{"sec":"Electrónica 5ta","nom":"Electronica 5ta. RED48 4 Cilindros","p":200600},{"sec":"Electrónica 5ta","nom":"Electronica 5ta. BLUE 48 4 Cilindros (ELE2)","p":200600},{"sec":"Electrónica 5ta","nom":"Electronica 5ta. SGAS PLUS 148S3 4 Cilindros (ELE10)","p":268800},{"sec":"Electrónica 5ta","nom":"Electronica 5ta. 148S3 6 Cilindros (ELE3)","p":304700},{"sec":"Electrónica 5ta","nom":"Electronica 5ta. 148S3 8 Cilindros (ELE4)","p":314500},{"sec":"Electrónica 5ta","nom":"Electronica 5ta. SGAS PLUS 5+ + Rampa (5+R)","p":172900},{"sec":"Electrónica 5ta","nom":"electronica 5ta. Generación RED48 + Rampa","p":237900},{"sec":"Electrónica 5ta","nom":"electronica 5ta. Generación BLUE48 + Rampa (RED48+R)","p":237900},{"sec":"Electrónica 5ta","nom":"Electronica 5ta. SGAS PLUS 148S3 + Rampa (148S3+R)","p":298700},{"sec":"Electrónica 5ta","nom":"electronica 5ta. Generación 148S3 6 Cil. + Rampas (148S36C+RS)","p":350300},{"sec":"Electrónica 5ta","nom":"electronica 5ta. Generación 148S3 8 Cil. + Rampas (148S38C+RS)","p":360100},{"sec":"Electrónica 5ta","nom":"Filtro de Gas Rampa de Inyectores (FIR1)","p":7100},{"sec":"Electrónica 5ta","nom":"Interfase USB (CONECT1)","p":81000},{"sec":"Electrónica 5ta","nom":"Micro Llave 5ta. (MIC1)","p":17000},{"sec":"Electrónica 5ta","nom":"Modulo Sensor Map 5ta. (SMA1)","p":78400},{"sec":"Electrónica 5ta","nom":"Conector sensor MAP 5ta.","p":7800},{"sec":"Electrónica 5ta","nom":"Rampa de Inyectores 4 Cilindros (RAM1)","p":45700},{"sec":"Electrónica 5ta","nom":"Sensor de Temperatura (STE1)","p":10000},{"sec":"Electrónica 5ta","nom":"CENTRAL AEB","p":175000},{"sec":"Electrónica 4ta","nom":"Adaptador Variador \"A\" (AD1)","p":15700},{"sec":"Electrónica 4ta","nom":"Adaptador Variador \"B\" (AD2)","p":15700},{"sec":"Electrónica 4ta","nom":"Adaptador Variador \"C\" (AD3)","p":15700},{"sec":"Electrónica 4ta","nom":"Adaptador Variador \"G\" (AD5)","p":15700},{"sec":"Electrónica 4ta","nom":"Adaptador Variador \"I\" (AD4)","p":15700},{"sec":"Electrónica 4ta","nom":"Adaptador Variador \"V\" (AD6)","p":15700},{"sec":"Electrónica 4ta","nom":"Chip Max Blue (INT1)","p":58600},{"sec":"Electrónica 4ta","nom":"Chip Max Green (INT2)","p":58600},{"sec":"Electrónica 4ta","nom":"Conmutadora Carburador (CN1)","p":41700},{"sec":"Electrónica 4ta","nom":"Conmutadora Dual (CN3)","p":41700},{"sec":"Electrónica 4ta","nom":"Conmutadora Inyeccion (CN2)","p":41700},{"sec":"Electrónica 4ta","nom":"Emulador 4 Cilindros Bosh (EM1)","p":29600},{"sec":"Electrónica 4ta","nom":"Emulador 4 Cilindros Japon (EM2)","p":29600},{"sec":"Electrónica 4ta","nom":"Emulador 6 Cilindros Bosh (EM3)","p":45600},{"sec":"Electrónica 4ta","nom":"Emulador 6 Cilindros Japon (EM4)","p":45600},{"sec":"Electrónica 4ta","nom":"Emulador Sonda Lambda (EM6)","p":31700},{"sec":"Electrónica 4ta","nom":"Manometro 5 Luces (SCN2)","p":27300},{"sec":"Electrónica 4ta","nom":"Mazo Manometro 5 Luces (EM33)","p":13700},{"sec":"Electrónica 4ta","nom":"Mazo 4 Cilindros Bosh (EM8)","p":17800},{"sec":"Electrónica 4ta","nom":"Mazo 4 Cilindros Varios (EM12)","p":17800},{"sec":"Electrónica 4ta","nom":"Mazo 6 Cilindros Bosh (EM10)","p":27400},{"sec":"Electrónica 4ta","nom":"Mazo 6 Cilindros Varios (EM13)","p":27400},{"sec":"Electrónica 4ta","nom":"Mazo Conmutadora (CN10)","p":25200},{"sec":"Electrónica 4ta","nom":"Mod. Chip Max Blue (INT5)","p":35100},{"sec":"Electrónica 4ta","nom":"Mod. Chip Max Green (INT6)","p":35100},{"sec":"Electrónica 4ta","nom":"Modulo Carburador (CN5)","p":25100},{"sec":"Electrónica 4ta","nom":"Modulo Dual (CN7)","p":25100},{"sec":"Electrónica 4ta","nom":"Modulo Emulador 4 Cilindros (EM14)","p":17800},{"sec":"Electrónica 4ta","nom":"Modulo Emulador 6 Cilindros (EM15)","p":27400},{"sec":"Electrónica 4ta","nom":"Modulo Inyeccion (CN6)","p":25100},{"sec":"Electrónica 4ta","nom":"Modulo Variador de Avance Hall (VA8)","p":32400},{"sec":"Electrónica 4ta","nom":"Modulo Variador de Avance RF (VA7)","p":32400},{"sec":"Electrónica 4ta","nom":"Reset de Combustible (RES1)","p":29500},{"sec":"Electrónica 4ta","nom":"Reset de Combustible Temporizado (RES2)","p":29500},{"sec":"Electrónica 4ta","nom":"Reset de Memoria FIX (RES5)","p":69300},{"sec":"Electrónica 4ta","nom":"Variador de Avance Hall (VA5)","p":53900},{"sec":"Electrónica 4ta","nom":"Variador de Avance MAP/MAF (VA1)","p":53900},{"sec":"Electrónica 4ta","nom":"Variador de Avance Rueda Fonica (VA3)","p":53900},{"sec":"Accesorio reductor","nom":"REDUCTOR AIR — Bobina (AG01)","p":24100},{"sec":"Accesorio reductor","nom":"REDUCTOR AIR — Diafragma 1Ra. Y 2Da. Etapa (AG01/AG05)","p":15200},{"sec":"Accesorio reductor","nom":"REDUCTOR AIR — Diafragma 3Ra. (AG01)","p":20500},{"sec":"Accesorio reductor","nom":"REDUCTOR AIR — Filtro Bonce Entrada de Gas (AG01)","p":5500},{"sec":"Accesorio reductor","nom":"REDUCTOR AIR — Filtro Entrada de Gas (AG01) CODO","p":22800},{"sec":"Accesorio reductor","nom":"REDUCTOR AIR — Junta de Camara de Agua (AG01)","p":6300},{"sec":"Accesorio reductor","nom":"REDUCTOR AIR — Kit de Reparacion (diafragma-Filtro-Piston) (AG01)","p":57900},{"sec":"Accesorio reductor","nom":"REDUCTOR AIR — Tapa de Camara de Agua (AG01)","p":6100},{"sec":"Accesorio reductor","nom":"REDUCTOR AIR — Torre Completa (AG01)","p":22000},{"sec":"Accesorio reductor","nom":"REDUCTOR AIR — Soporte Reductor (AG01)","p":1200},{"sec":"Accesorio reductor","nom":"REDUCTOR AIR — Valvula de Alivio (AG01)","p":16800},{"sec":"Accesorio reductor","nom":"REDUCTOR OYRSA — Bobina (OY02)","p":44300},{"sec":"Accesorio reductor","nom":"REDUCTOR OYRSA — Cilindro electrovalvula OYRSA","p":6750},{"sec":"Accesorio reductor","nom":"REDUCTOR OYRSA — Diafragma 1Ra. Etapa (OY02)","p":10600},{"sec":"Accesorio reductor","nom":"REDUCTOR OYRSA — Diafragma 2Da. Etapa (OY02)","p":9100},{"sec":"Accesorio reductor","nom":"REDUCTOR OYRSA — Diafragma 3Ra. Etapa (OY02)","p":13500},{"sec":"Accesorio reductor","nom":"REDUCTOR OYRSA — Kit de Reparacion (OY02)","p":39100},{"sec":"Accesorio reductor","nom":"REDUCTOR OYRSA — Piston Electrovalvula Corto OYRSA","p":4500},{"sec":"Accesorio reductor","nom":"REDUCTOR OYRSA — Soporte Reductor OYRSA","p":2600},{"sec":"Accesorio","nom":"\"T\" de Agua / Vacio","p":1200},{"sec":"Accesorio","nom":"\"T\" de Manometro","p":11500},{"sec":"Accesorio","nom":"Abrazadera 12-22","p":730},{"sec":"Accesorio","nom":"Abrazadera 16-27","p":750},{"sec":"Accesorio","nom":"Abrazadera 8-12","p":690},{"sec":"Accesorio","nom":"Abrazadera 8-16","p":730},{"sec":"Accesorio","nom":"Arandelas de Manometro","p":30},{"sec":"Accesorio","nom":"Bolsa de Accesorios y Mangueras 5ta. Generacion Completa","p":57600},{"sec":"Accesorio","nom":"Bolsa de Accesorios y Manqueras Carburador Completo","p":66100},{"sec":"Accesorio","nom":"Bolsa de Accesorios y Manguera Inyeccion Completo","p":58000},{"sec":"Accesorio","nom":"Bolsa de Venteo Simple","p":1600},{"sec":"Accesorio","nom":"Boquilla de Venteo","p":910},{"sec":"Accesorio","nom":"Caño de Alta","p":11000},{"sec":"Accesorio","nom":"Cinta Aisladora","p":6000},{"sec":"Accesorio","nom":"Electrovalvula de Nafta","p":36700},{"sec":"Accesorio","nom":"Goma Amortiguacion Cilindros","p":2100},{"sec":"Accesorio","nom":"Grampa Bundy","p":105},{"sec":"Accesorio","nom":"Inyectores 10mm","p":6600},{"sec":"Accesorio","nom":"Inyectores 12mm","p":6600},{"sec":"Accesorio","nom":"Inyectores 14mm","p":6600},{"sec":"Accesorio","nom":"KIT DE ACCESORIOS 4TA. / 5TA. CILINDRO","p":17700},{"sec":"Accesorio","nom":"KIT DE ACCESORIOS 5TA. GENERACION","p":24400},{"sec":"Accesorio","nom":"KIT DE ACCESORIOS CARBURADOR","p":23700},{"sec":"Accesorio","nom":"KIT DE ACCESORIOS INYECCION","p":20800},{"sec":"Accesorio","nom":"KIT DE MANGUERAS 5TA. GENERACION 4 Cilindros","p":19300},{"sec":"Accesorio","nom":"KIT DE MANGUERAS CARBURADOR","p":25100},{"sec":"Accesorio","nom":"KIT DE MANGUERAS INYECCION","p":19700},{"sec":"Accesorio","nom":"Manguera Agua 8mm","p":5700},{"sec":"Accesorio","nom":"Manguera Corrugada x unidad (Retractil)","p":3100},{"sec":"Accesorio","nom":"Manguera Corrugada Rollo (30 mts.)","p":57600},{"sec":"Accesorio","nom":"Manguera de Nafta 5 mm","p":5300},{"sec":"Accesorio","nom":"Manguera Ignifuga 19mm","p":14200},{"sec":"Accesorio","nom":"Manguera Vacio","p":3100},{"sec":"Accesorio","nom":"Mezclador","p":18000},{"sec":"Accesorio","nom":"Niples Cortos","p":1050},{"sec":"Accesorio","nom":"Niples Largos","p":1650},{"sec":"Accesorio","nom":"Pico de Rampa de Inyectores (Unidad)","p":2250},{"sec":"Accesorio","nom":"Precinto x Unidad","p":54},{"sec":"Accesorio","nom":"Racord Admision","p":1500},{"sec":"Accesorio","nom":"Registro de Alta","p":4600},{"sec":"Accesorio","nom":"Registro de Alta \"Y\" de 2 Reg.","p":10600},{"sec":"Accesorio","nom":"Registro de Alta \"Y\" de 1 Reg.","p":10600},{"sec":"Accesorio","nom":"Soporte de Valvula","p":1200},{"sec":"Accesorio","nom":"Soporte de Rampa","p":600},{"sec":"Accesorio","nom":"Tapon Corto","p":780},{"sec":"Accesorio","nom":"Tapon Largo","p":1260},{"sec":"Accesorio","nom":"Tapon Con Lazo Pico de Carga Delantero","p":2650},{"sec":"Accesorio","nom":"Tapon Valvula de Carga Externa","p":3500},{"sec":"Accesorio","nom":"Teflon","p":6000},{"sec":"Accesorio","nom":"Union de Caño","p":4800},{"sec":"Accesorio","nom":"Virolas","p":170},{"sec":"Accesorio","nom":"Zunchos 273","p":24600},{"sec":"Accesorio","nom":"Zunchos 323","p":24600},{"sec":"Accesorio","nom":"Zunchos Bajo Chasis","p":32700},{"sec":"Accesorio","nom":"Zunchos Largos","p":25500},{"sec":"Trámite","nom":"Oblea","p":23000},{"sec":"Trámite","nom":"Prueba hidráulica","p":50000}];
+  // Equipos completos: el precio sale de cruzar cilindro x sistema. Ojo, no
+  // todos los cilindros tienen todos los sistemas (por eso se guarda por clave).
+  const PRESU_EQUIPOS = {"sis":["MEZCL/INYEC","EMULADOR","BLUE","BLUE48+","5+","6 Cilindros"],"cil":[{"n":"28/232","p":{"MEZCL/INYEC":650700,"EMULADOR":638500,"BLUE":661600,"BLUE48+":778900,"5+":706500}},{"n":"28/244","p":{"MEZCL/INYEC":683200,"EMULADOR":671000,"BLUE":694300,"BLUE48+":812000,"5+":740700}},{"n":"30/244","p":{"MEZCL/INYEC":694100,"EMULADOR":681900,"BLUE":705100,"BLUE48+":823000,"5+":752800}},{"n":"60/244","p":{"MEZCL/INYEC":868900,"EMULADOR":856600,"BLUE":879800,"BLUE48+":1005400,"5+":934200}},{"n":"30/273","p":{"MEZCL/INYEC":705800,"EMULADOR":693600,"BLUE":716800,"BLUE48+":835100,"5+":765000}},{"n":"60/273","p":{"MEZCL/INYEC":878200,"EMULADOR":865900,"BLUE":889100,"BLUE48+":1015000,"5+":943400}},{"n":"40/273","p":{"MEZCL/INYEC":717100,"EMULADOR":704900,"BLUE":727900,"BLUE48+":848400,"5+":775400}},{"n":"40/273 Elevada","p":{"MEZCL/INYEC":734300,"EMULADOR":722100,"BLUE":745100,"BLUE48+":865300,"5+":794100}},{"n":"45/273","p":{"MEZCL/INYEC":786100,"EMULADOR":773900,"BLUE":797200,"BLUE48+":918900,"5+":847600}},{"n":"45/273 Elevada","p":{"MEZCL/INYEC":803300,"EMULADOR":791100,"BLUE":814300,"BLUE48+":937000,"5+":865200}},{"n":"58/323","p":{"MEZCL/INYEC":910100,"EMULADOR":897900,"BLUE":920800,"BLUE48+":1048500,"5+":977200}},{"n":"58/323 Elevada","p":{"MEZCL/INYEC":927200,"EMULADOR":915000,"BLUE":938000,"BLUE48+":1066000,"5+":994200}},{"n":"58/340","p":{"MEZCL/INYEC":915000,"EMULADOR":902800,"BLUE":925800,"BLUE48+":1054000,"5+":982700}},{"n":"58/340 Elevada","p":{"MEZCL/INYEC":932200,"EMULADOR":918000,"BLUE":942900,"BLUE48+":1071000,"5+":999700}},{"n":"58/355","p":{"MEZCL/INYEC":949500,"EMULADOR":936900,"BLUE":960100,"BLUE48+":1089500,"5+":1017800}},{"n":"58/355 Elevada","p":{"MEZCL/INYEC":966700,"EMULADOR":954100,"BLUE":977200,"BLUE48+":1107400,"5+":1035700}},{"n":"65/340","p":{"MEZCL/INYEC":947700,"EMULADOR":935600,"BLUE":958700,"BLUE48+":1087500,"5+":1015800}},{"n":"65/340 Elevada","p":{"MEZCL/INYEC":964800,"EMULADOR":952800,"BLUE":975800,"BLUE48+":1105100,"5+":1033900}},{"n":"65/355","p":{"MEZCL/INYEC":980400,"EMULADOR":968200,"BLUE":991400,"BLUE48+":1121700,"5+":1050500}},{"n":"65/355 Eleveva","p":{"MEZCL/INYEC":997500,"EMULADOR":985300,"BLUE":1008500,"BLUE48+":1139300,"5+":1068600}},{"n":"70/355","p":{"MEZCL/INYEC":1021700,"EMULADOR":1009600,"BLUE":1031800,"BLUE48+":1164700,"5+":1093500}},{"n":"70/355 Elevada","p":{"MEZCL/INYEC":1038800,"EMULADOR":1026600,"BLUE":1049800,"BLUE48+":1182300,"5+":1111600}},{"n":"80/355","p":{"MEZCL/INYEC":1123200,"EMULADOR":1110800,"BLUE":1134100,"BLUE48+":1270000,"5+":1198800}},{"n":"90/355","p":{"MEZCL/INYEC":1237600,"EMULADOR":1225400,"BLUE":1248700,"BLUE48+":1390200,"5+":1317900}},{"n":"100/355","p":{"MEZCL/INYEC":1320400,"EMULADOR":1308400,"BLUE":1331500,"BLUE48+":1476200,"5+":1468500}},{"n":"120/355","p":{"MEZCL/INYEC":1482400,"EMULADOR":1470200,"BLUE":1493500,"BLUE48+":1644200,"5+":1573400}},{"n":"120/355 RANGER","p":{"BLUE48+":1707700,"5+":1636900}},{"n":"2x28/232","p":{"MEZCL/INYEC":984100,"EMULADOR":972000,"BLUE":995300,"BLUE48+":1125500,"5+":1054800}},{"n":"2x28/244","p":{"MEZCL/INYEC":1049400,"EMULADOR":1037200,"BLUE":1060500,"BLUE48+":1193900,"5+":1122000}},{"n":"2x30/244","p":{"MEZCL/INYEC":1071000,"EMULADOR":1058900,"BLUE":1082100,"BLUE48+":1215900,"5+":1145200}},{"n":"2x60/244","p":{"MEZCL/INYEC":1399400,"EMULADOR":1387200,"BLUE":1410600,"BLUE48+":1558100,"5+":1486400}},{"n":"2x30/273","p":{"MEZCL/INYEC":1094400,"EMULADOR":1082200,"BLUE":1105500,"BLUE48+":1240600,"5+":1169500}},{"n":"2x40/273","p":{"MEZCL/INYEC":1117200,"EMULADOR":1105100,"BLUE":1128200,"BLUE48+":1263800,"5+":1192600}},{"n":"2x45/273","p":{"MEZCL/INYEC":1255200,"EMULADOR":1243100,"BLUE":1266200,"BLUE48+":1407700,"5+":1337000}},{"n":"2X60/273","p":{"MEZCL/INYEC":1418000,"EMULADOR":1405800,"BLUE":1429000,"BLUE48+":1577500,"5+":1505900}},{"n":"3x40/273","p":{"MEZCL/INYEC":1606600,"EMULADOR":1594500,"BLUE":1617700,"BLUE48+":1773900,"5+":1702200}},{"n":"2x58/323-340","p":{"MEZCL/INYEC":1502800,"EMULADOR":1500600,"BLUE":1523700,"BLUE48+":1664500,"5+":1594400}},{"n":"1x30/244+1x40/273","p":{"BLUE48+":1239800,"5+":1168100}},{"n":"2x30/273 Suran C/sop.","p":{"BLUE48+":1289300,"5+":1218600}},{"n":"90/406","p":{"MEZCL/INYEC":1588900,"EMULADOR":1577100,"BLUE":1600300,"BLUE48+":1756700,"5+":1685000}}]};
+  // Servicios frecuentes: cada uno es una receta (qué componentes lleva, qué
+  // trámites y cuánta mano de obra). El precio no está fijo: sale de la suma,
+  // así si cambia un repuesto el total se corrige solo.
+  const PRESU_SERVICIOS = [{"n":"Renovación de oblea","mo":37000,"c":[],"t":["Oblea"]},{"n":"Prueba hidráulica","porCil":1,"moBase":47000,"moCil":36900,"bajoChasis":20000,"cCil":["VALVULA DE CILINDRO GASCOM SIN CABLE"],"tCil":["Prueba hidráulica"],"c":[],"t":["Oblea"]},{"n":"Reemplazo de regulador 5ta","mo":140800,"c":["Reductor SGV 5ta."],"t":[]},{"n":"Reemplazo de regulador 3ra/4ta (Gascom)","mo":170700,"c":["Reductor GASCOM 3ra."],"t":[]},{"n":"Reemplazo de llave conmutadora","mo":108300,"c":["Conmutadora Inyeccion (CN2)"],"t":[]},{"n":"Reemplazo de caño de alta","mo":129000,"c":["Caño de Alta"],"t":[]},{"n":"Reemplazo de kit de mangueras 5ta","mo":100700,"c":["KIT DE MANGUERAS 5TA. GENERACION 4 Cilindros"],"t":[]},{"n":"Diagnóstico computarizado 5ta","mo":65000,"c":[],"t":[]},{"n":"Reemplazo de o-ring carga externa","mo":35000,"c":[],"t":[]},{"n":"Reemplazo de o-ring carga interna","mo":20000,"c":[],"t":[]},{"n":"Reemplazo de pico de carga interna","mo":19700,"c":["PICO DE CARGA INTERNA"],"t":[]},{"n":"Reemplazo de válvula de carga interna","mo":49200,"c":["VALVULA DE CARGA GASCOM"],"t":[]},{"n":"Reemplazo de emulador 4 cil. (ficha Bosch)","mo":110400,"c":["Emulador 4 Cilindros Bosh (EM1)"],"t":[]},{"n":"Regulaciones 4ta generación","mo":45000,"c":[],"t":[]}];
+  // Mano de obra de mecánica por categoría de vehículo (A/B/C/D-E).
+  const PRESU_TRABAJOS = [{"s":"DISTRIBUCION","n":"Distribucion Nafta 8v simple Fiat Duna, 147, Gol","p":{"A":181760}},{"s":"DISTRIBUCION","n":"Distribucion Nafta Motor Dragon o similar (Correa en baño de aceite)","p":{"B":653061}},{"s":"DISTRIBUCION","n":"Distribucion Nafta 8v Fire viejo, Corsa, Gol, Etc.","p":{"A":217600,"B":281600}},{"s":"DISTRIBUCION","n":"Distribucion Nafta 8v Fire EVO, Mobi, GM Nuevos Onix, Prisma, Spin","p":{"B":396800}},{"s":"DISTRIBUCION","n":"Distribucion Nafta 16v simple Peugeot, Citroën, Clío 1.2 16v","p":{"A":305741,"B":373760}},{"s":"DISTRIBUCION","n":"Distribucion Nafta 16v complejo / K4M '08-> Sandero etc. / Kinetic / MS","p":{"B":524800}},{"s":"DISTRIBUCION","n":"Distribucion Vw Amarok HDI","p":{"B":460800,"C":588800}},{"s":"DISTRIBUCION","n":"Distribucion Cadena MOTOR THP","p":{"B":1024000}},{"s":"DISTRIBUCION","n":"Distribucion cadenero Motor Zetec Rocam","p":{"A":742400,"B":742400}},{"s":"DISTRIBUCION","n":"Distribucion Nafta (tipo) K4M <-'08 y similares, Importados 16v","p":{"B":425654}},{"s":"DISTRIBUCION","n":"Distribucion cadenero TSI transversal","p":{"B":1251322,"C":1470303}},{"s":"DISTRIBUCION","n":"Distribucion cadenero TSI longitudinal","p":{"B":1549255,"C":1820375}},{"s":"DISTRIBUCION","n":"Distribucion Diesel simple 147, Duna, Gol","p":{"A":256000}},{"s":"DISTRIBUCION","n":"Distribucion Diesel DW8, XUD9, Fiat Siena TD","p":{"A":343365}},{"s":"DISTRIBUCION","n":"Distribucion Diesel HDI PSA","p":{"B":589061}},{"s":"DISTRIBUCION","n":"Distribucion Diesel TDI VAG alta gama","p":{"B":758058,"C":890718}},{"s":"DISTRIBUCION","n":"Distribucion Diesel motor Mitsubishi - Nissan 2.5 y Hilux viejas","p":{"B":411810,"C":475301}},{"s":"DISTRIBUCION","n":"Distribucion Diesel Hilux '05 -->","p":{"B":524800,"C":550}},{"s":"DISTRIBUCION","n":"Cambio de bomba de agua simple, purgado, control electro (sumar distr)","p":{"A":102400,"B":102400,"C":140800}},{"s":"DISTRIBUCION","n":"Cambio de bomba de agua compleja, purgado, control electro (sumar distr)","p":{"A":102400,"B":122880,"C":128000}},{"s":"EMBRAGUE","n":"Embrague simple VW Gol","p":{"A":640000}},{"s":"EMBRAGUE","n":"Embrague vehículos tracción trasera , camionetas viejas simples","p":{"A":716800,"B":928000}},{"s":"EMBRAGUE","n":"Embrague simple Siena naftero o similar, camionetas viejas simples","p":{"A":691200}},{"s":"EMBRAGUE","n":"Embrague complejo Renault o similar o crapodina hidráulica","p":{"A":691200,"B":729600}},{"s":"EMBRAGUE","n":"Embrague camionetas Ducato Boxer sprínter Master Jumper 4x2","p":{"B":1260800,"C":1260800}},{"s":"EMBRAGUE","n":"Embrague camionetas Ducato Bóxer sprínter Master Jumper 4x4","p":{"C":1544960}},{"s":"EMBRAGUE","n":"Bomba de embrague (precio mínimo en adelante según complejidad)","p":{"A":185600,"B":290898,"C":341805}},{"s":"EMBRAGUE","n":"Volante retirar y colocar (Balanceado de volante rectificado) (sumar)","p":{"A":256000,"B":256000,"C":281600}},{"s":"TAPA DE CILINDROS","n":"Tapa de cilindros simple Renault varillero o similar","p":{"A":768000}},{"s":"TAPA DE CILINDROS","n":"Tapa de cilindros Nafta 8v","p":{"A":768000}},{"s":"TAPA DE CILINDROS","n":"Tapa de cilindros Nafta 16v simples","p":{"B":1026048,"C":1371648}},{"s":"TAPA DE CILINDROS","n":"Tapa de cilindros K4M, importados, modernos motores 16v VVT variantes","p":{"B":1026048}},{"s":"TAPA DE CILINDROS","n":"Tapa de cilindros Diesel convencional","p":{"B":1167360,"C":1540652}},{"s":"TAPA DE CILINDROS","n":"Tapa de cilindros Diesel common rail","p":{"B":1167360,"C":1540652}},{"s":"MOTOR COMPLETO","n":"Motor completo Nafta 8v simple Renault varilleros, Fiat Duna","p":{"A":2304000}},{"s":"MOTOR COMPLETO","n":"Motor completo Nafta 8v Siena, Corsa, Suran","p":{"A":2560000}},{"s":"MOTOR COMPLETO","n":"Motor completo Nafta 16v simple","p":{"B":3020800}},{"s":"MOTOR COMPLETO","n":"Motor completo Nafta 16v complejo K4M o similar","p":{"B":3161600}},{"s":"MOTOR COMPLETO","n":"Motor completo Nafta alta gama, importados","p":{"B":3584000,"C":4408320}},{"s":"MOTOR COMPLETO","n":"Motor completo Nafta / Diesel alta gama, importados en V6 V8","p":{"B":4864000,"C":5982720}},{"s":"MOTOR COMPLETO","n":"Motor completo Diesel convencional simple Gol, Duna","p":{"A":2764800}},{"s":"MOTOR COMPLETO","n":"Motor completo Diesel convencional complejo Siena, Peugeot","p":{"A":2816000}},{"s":"MOTOR COMPLETO","n":"Motor completo Diesel common rail","p":{"B":4352000,"C":5352960}},{"s":"MOTOR COMPLETO","n":"Motor completo Diesel convencional camioneta","p":{"C":4872960}},{"s":"MOTOR COMPLETO","n":"Motor completo Diesel common rail camioneta","p":{"C":5594880}},{"s":"MOTOR COMPLETO","n":"Cambio de aros simple (sumar tapa de cilindros)","p":{"A":904960,"C":1050125}},{"s":"MOTOR COMPLETO","n":"Cambio de aros complejo (sumar tapa de cilindros)","p":{"A":1116160,"C":1278413}},{"s":"TREN DELANTERO","n":"Homocinética, fuelle de homocinética, fuelle de caja, reten de salida de caja","p":{"A":106452,"B":154284,"C":181284}},{"s":"TREN DELANTERO","n":"Sacar semieje que pasa por taco de motor PSA, EcoSport, Fiesta, Fiat etorque","p":{"A":139328,"B":192694,"C":226416}},{"s":"TREN DELANTERO","n":"Cambio de rodamiento de semieje PSA, EcoSport, Fiesta (sumar semieje)","p":{"A":54002,"B":63093,"C":74135}},{"s":"TREN DELANTERO","n":"Rulemán delantero","p":{"A":204936,"B":220174,"C":254224}},{"s":"TREN DELANTERO","n":"Rulemán trasero","p":{"A":162420,"B":181145,"C":229485}},{"s":"TREN DELANTERO","n":"Amortiguador delantero simple con 2 bulones abajo X2","p":{"A":106511,"B":154353,"C":232564}},{"s":"TREN DELANTERO","n":"Amortiguador delantero simple sin bulones abajo tipo brida X2","p":{"A":130540,"B":182427,"C":214352}},{"s":"TREN DELANTERO","n":"Amortiguador delantero complejo (alta gama, escobillas, plástico cobertor) X2","p":{"A":163098,"B":220467,"C":259048}},{"s":"TREN DELANTERO","n":"Amortiguador trasero 2 ojos X2","p":{"A":76401,"B":119173,"C":140029}},{"s":"TREN DELANTERO","n":"Amortiguador trasero 1 ojo + espiga arriba X2","p":{"A":83803,"B":127822,"C":150191}},{"s":"TREN DELANTERO","n":"Cambio parrilla completa","p":{"A":124459,"B":175323,"C":206004}},{"s":"TREN DELANTERO","n":"Bujes de parrilla","p":{"A":126226,"B":147477,"C":173286}},{"s":"TREN DELANTERO","n":"Bujes de barra estabilizadora simples tipo Corsa","p":{"A":37170,"B":57978,"C":86172}},{"s":"TREN DELANTERO","n":"Bujes de barra estabilizadora complejidad media tipo Suran","p":{"A":103951,"B":128753,"C":155764}},{"s":"TREN DELANTERO","n":"Bujes de barra estabilizadora complejo tipo Fluence","p":{"B":203512,"C":239126}},{"s":"TREN DELANTERO","n":"Bieleta (cada una)","p":{"A":45665,"B":53353,"C":62690}},{"s":"TREN DELANTERO","n":"Rotula con tornillos","p":{"A":52686,"B":91466,"C":107472}},{"s":"TREN DELANTERO","n":"Rotula remachada","p":{"A":64435,"B":105194,"C":123602}},{"s":"TREN DELANTERO","n":"Rotula clavada","p":{"A":106452,"B":154284,"C":181284}},{"s":"TREN DELANTERO","n":"Brazo rotula","p":{"A":61022,"B":101206,"C":118917}},{"s":"TREN DELANTERO","n":"Axial (uno solo) (incluye fuelle y extremo)","p":{"A":86622,"B":101206,"C":118917}},{"s":"TREN DELANTERO","n":"Axiales (juego) (incluye fuelles y extremos)","p":{"A":130461,"B":182335,"C":214244}},{"s":"TREN DELANTERO","n":"Extremo (uno solo)","p":{"A":60024,"B":70129,"C":82402}},{"s":"TREN DELANTERO","n":"Extremos (juego)","p":{"A":111181,"B":129899,"C":152631}},{"s":"TREN DELANTERO","n":"Caja de dirección (desmontaje y montaje) (hacer descuento si es simple)","p":{"A":260543,"B":279067,"C":384000}},{"s":"TREN DELANTERO","n":"Tren trasero (desmontaje y montaje)","p":{"A":260543,"B":279067,"C":384000}},{"s":"TREN DELANTERO","n":"Cambio de rodamientos en tren trasero Renault","p":{"A":453593,"B":829058}},{"s":"TREN DELANTERO","n":"Centro de cardan / Cruceta","p":{"A":153608,"B":203397,"C":238992}},{"s":"FRENOS","n":"Pastillas de freno delanteras","p":{"A":77253,"B":91604,"C":92211}},{"s":"FRENOS","n":"Pastillas de freno traseras a rosca","p":{"A":77340,"B":91604,"C":92211}},{"s":"FRENOS","n":"Pastillas de freno traseras simple","p":{"A":77340,"B":91604,"C":92211}},{"s":"FRENOS","n":"Pastillas de freno traseras apertura electrónica","p":{"B":92983,"C":94983}},{"s":"FRENOS","n":"Pastillas y discos de freno","p":{"A":155092,"B":159404,"C":181284}},{"s":"FRENOS","n":"Frenos traseros sin cilindros (tambor)","p":{"A":98859,"B":101083,"C":90804}},{"s":"FRENOS","n":"Frenos traseros con cilindros (tambor)","p":{"A":179450,"B":205050,"C":244006}},{"s":"FRENOS","n":"Cilindro de freno (cada uno)","p":{"A":77253,"B":91604,"C":92211}},{"s":"FRENOS","n":"Flexible de freno (cada uno)","p":{"A":35995,"B":42054,"C":49414}},{"s":"FRENOS","n":"Purgado sistema de freno","p":{"A":27693,"B":39278,"C":46215}},{"s":"FRENOS","n":"Desmontaje y montaje de calipers de freno","p":{"A":77253,"B":91604,"C":92211}},{"s":"FRENOS","n":"Bomba de freno (precio mínimo en adelante) (sumar purgado del sistema)","p":{"A":148488,"B":177797,"C":238992}},{"s":"FRENOS","n":"Servo freno (precio mínimo en adelante) (sumar purgado)","p":{"A":146580,"B":168018,"C":231725}},{"s":"OTROS","n":"Limpieza ultrasónica de inyectores simple tipo Corsa, Suran","p":{"A":204800,"B":256000}},{"s":"OTROS","n":"Limpieza ultrasónica de inyectores media complejidad","p":{"A":256000,"B":307200,"C":358400}},{"s":"OTROS","n":"Limpieza ultrasónica de inyectores alta complejidad","p":{"B":358400,"C":460800}},{"s":"OTROS","n":"Limpieza ultrasónica y prueba de rendimiento de inyectores inyección directa","p":{"B":460800,"C":563200}},{"s":"OTROS","n":"Cambio de bujías simple tipo Corsa, Suran","p":{"A":10240,"B":17920}},{"s":"OTROS","n":"Cambio de bujías complejidad media tipo Fire o bobinas individuales simples","p":{"B":24693}},{"s":"OTROS","n":"Cambio de bujías complejo tipo Fire con GNC arriba o similares","p":{"B":26478}},{"s":"OTROS","n":"Cambio de cables (sumar al cambio de bujías) (excepto corsa o similar)","p":{"A":12992,"B":28}},{"s":"OTROS","n":"Cambio de junta de tapa de válvulas simple Fire, Corsa","p":{"A":74240,"B":129899}},{"s":"OTROS","n":"Cambio de junta de tapa de válvulas complejo, 16v, etc.","p":{"B":178669}},{"s":"OTROS","n":"Regular válvulas Fire (sumar platillos y junta de tapa de válvulas)","p":{"A":204160,"B":273503}},{"s":"OTROS","n":"Regular válvulas tipo Clio 1.2 16v","p":{"A":167040,"B":336596}},{"s":"OTROS","n":"Regular válvulas Renault viejos","p":{"A":92800,"B":154284}},{"s":"OTROS","n":"Diagnostico computarizado (Solo reporte) 1Hs","p":{"A":97280,"B":110602,"C":129958}},{"s":"OTROS","n":"Diagnostico avanzado de alta complejidad 2Hs","p":{"A":204800,"B":221184,"C":259917}},{"s":"OTROS","n":"Diagnostico avanzado prueba en banco de unidades de mando (Laboratorio)","p":{"A":243200,"B":243200,"C":243200}},{"s":"OTROS","n":"Diagnostico Pre ITV / VTV 2Hs","p":{"A":189184,"B":221184,"C":259917}},{"s":"OTROS","n":"Service completo chico ídem concesionaria","p":{"A":222720}},{"s":"OTROS","n":"Service completo mediano ídem concesionaria","p":{"B":258048}},{"s":"OTROS","n":"Service completo alta gama ídem concesionaria","p":{"B":294912,"C":397056}},{"s":"OTROS","n":"Service completo camioneta ídem concesionaria","p":{"C":433152}},{"s":"OTROS","n":"Service completo camioneta alta gama ídem concesionaria","p":{"C":498125}},{"s":"OTROS","n":"Service completo suv ídem concesionaria","p":{"B":294912,"C":360960}},{"s":"OTROS","n":"Service completo suv alta gama ídem concesionaria","p":{"B":256808,"C":303206}},{"s":"OTROS","n":"Regeneración DPF Utilitarios Hilux y/o mismo trabajo","p":{"B":307200,"C":365568}},{"s":"OTROS","n":"Reparación de motor de arranque sacar Rep. Colocar ( vehículos simples)","p":{"A":185600,"B":221184,"C":246508}},{"s":"OTROS","n":"Reparación de motor de arranque sacar Rep. Colocar ( vehículos complejos )","p":{"B":239616,"C":257236}},{"s":"OTROS","n":"Reparación de alternador sacar reparar colocar (vehículos simples)","p":{"A":185600,"B":226304,"C":254188}},{"s":"OTROS","n":"Reparación de alternador sacar reparar colocar (vehículos complejos)","p":{"B":257536,"C":308}},{"s":"OTROS","n":"Reemplazo de motor de arranque o alternador","p":{"A":94720,"B":110080,"C":128000}},{"s":"CHEQUEOS PRE Y POST COMPRA","n":"Vehículo chico gama baja","p":{"A":147450}},{"s":"CHEQUEOS PRE Y POST COMPRA","n":"Vehículo mediano gama media","p":{"B":209470}},{"s":"CHEQUEOS PRE Y POST COMPRA","n":"Vehículo alta gama - suv","p":{"B":222969,"C":261989}},{"s":"CHEQUEOS PRE Y POST COMPRA","n":"Camionetas comunes","p":{"B":239616,"C":258030}},{"s":"CHEQUEOS PRE Y POST COMPRA","n":"Camionetas alta gama","p":{"B":276480,"C":285820}}];
+  const PRESU_CATS = [{"k":"A","d":"Chicos/medianos base · 8 válvulas"},{"k":"B","d":"Medianos full · 16v"},{"k":"C","d":"Alta gama y pick-up 4x4"},{"k":"DE","d":"Electrónica/laboratorio y pesados"}];
+  // Reconocimiento del vehículo: se busca de arriba hacia abajo, así lo más
+  // específico gana (ej. "gol trend" -> B antes que "gol" -> A).
+  const PRESU_MODELOS = [{"k":["hilux","sw4","amarok","ranger","s10","s-10","frontier","alaskan","l200","trailblazer"],"c":"C","m":"Pick-up / 4x4"},{"k":["bmw","audi","mercedes","volvo","lexus","porsche","jeep"],"c":"C","m":"Alta gama importada"},{"k":["tiguan","taos","compass","renegade","rav4","corolla cross","territory","3008","5008","tucson","sportage","toro"],"c":"C","m":"SUV / alta gama"},{"k":["camion","camión","colectivo","tractor","iveco","scania","acoplado"],"c":"DE","m":"Vehículo pesado (columna C + 25%)"},{"k":["gol trend","voyage","suran","fox","polo","virtus","nivus"],"c":"B","m":"16v, equipamiento full"},{"k":["208","207","307","308","partner"],"c":"B","m":"16v"},{"k":["c3","c4","berlingo"],"c":"B","m":"16v"},{"k":["sandero","logan","duster","stepway","fluence","megane","captur"],"c":"B","m":"16v"},{"k":["fiesta","focus","ecosport","eco sport"],"c":"B","m":"16v"},{"k":["onix","prisma","cruze","spin","agile","tracker","montana"],"c":"B","m":"16v"},{"k":["argo","cronos","mobi","pulse","fastback"],"c":"B","m":"16v"},{"k":["etios","corolla","yaris"],"c":"B","m":"16v"},{"k":["fit","city","civic","hr-v","hrv"],"c":"B","m":"16v"},{"k":["march","versa","note","kicks"],"c":"B","m":"16v"},{"k":["corsa classic","corsa clasic","classic","clasic","corsa"],"c":"A","m":"8v, equipamiento base"},{"k":["gol power","gol country","gol"],"c":"A","m":"8v, base"},{"k":["duna","uno","palio","siena","fiorino"],"c":"A","m":"8v, base"},{"k":["celta","corsita"],"c":"A","m":"8v, base"},{"k":["clio","kangoo","r19","twingo","symbol"],"c":"A","m":"8v, base"},{"k":["504","505","106","206"],"c":"A","m":"8v, base"},{"k":["ka","escort"],"c":"A","m":"8v, base"}];
 
   const TRAMITE_TIPOS = [
     { value: 'conversion', label: 'Conversión' },
@@ -1635,6 +1706,684 @@ Documentación para realizar la renovación:
   // desde el menú — cierra el panel y vuelve a la pantalla principal.
   function panelVolver() {
     return `<div class="panel-head"><button type="button" class="btn-volver" data-volver>← Volver</button></div>`;
+  }
+
+  // ===== PRESUPUESTOS =====
+  // Dos tipos: mecánica (lista ATAIA, por categoría de vehículo) y GNC
+  // (servicios frecuentes, equipos e instalación, o reparación suelta).
+  // Regla de negocio: los repuestos/componentes/trámites pasan a costo, así que
+  // la ganancia del taller es SIEMPRE la mano de obra. El descuento solo pega
+  // ahí. En mecánica el cliente ve el detalle con precios; en GNC, solo el total.
+
+  async function savePresupuestos() {
+    try { await window.storage.set(PRESUPUESTOS_KEY, JSON.stringify(presupuestos), false); }
+    catch (e) {
+      console.error('Error guardando presupuestos', e);
+      await customAlert('No se pudo guardar el presupuesto en este equipo. Fijate que no te estés quedando sin espacio.');
+    }
+  }
+
+  const presuNorm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  const presuComp = nom => PRESU_COMPONENTES.find(c => c.nom === nom);
+  // Precio efectivo de un componente: si el taller le puso el suyo, gana ese;
+  // si no, el de lista ajustado por el % que haya configurado.
+  function presuPrecioComp(c) {
+    if (!c) return 0;
+    const propios = (tallerConfig.listaPrecios && tallerConfig.listaPrecios.items) || {};
+    if (propios[c.nom] != null) return Number(propios[c.nom]) || 0;
+    const aj = Number((tallerConfig.listaPrecios || {}).ajusteGnc) || 0;
+    return Math.round((c.p || 0) * (1 + aj / 100));
+  }
+  function presuPrecioTrabajo(t, cat) {
+    const base = t.p[cat];
+    if (base == null) return null;
+    const propios = (tallerConfig.listaPrecios && tallerConfig.listaPrecios.items) || {};
+    const clave = t.n + ' — ' + cat;
+    if (propios[clave] != null) return Number(propios[clave]) || 0;
+    const aj = Number((tallerConfig.listaPrecios || {}).ajusteMec) || 0;
+    return Math.round(base * (1 + aj / 100));
+  }
+  function presuDetectarCat(txt) {
+    const t = presuNorm(txt);
+    if (t.length < 2) return null;
+    for (const m of PRESU_MODELOS) for (const k of m.k) if (t.includes(k)) return { cat: m.c, motivo: m.m };
+    return null;
+  }
+  const presuCatLabel = k => k === 'DE' ? 'D/E' : k;
+
+  function nuevoPresuDraft(modo, cliente) {
+    return {
+      id: 'p' + Date.now() + Math.random().toString(36).slice(2, 7),
+      modo, // 'mec' | 'gnc'
+      fecha: fechaLocalISO(),
+      numero: (tallerConfig.presuUltimoNumero || 0) + 1,
+      clienteId: cliente ? cliente.id : null,
+      nombre: cliente ? (cliente.nombre || '') : '',
+      patente: cliente ? (cliente.patente || '') : '',
+      vehiculo: cliente ? [cliente.marca, cliente.modelo, cliente.anio].filter(Boolean).join(' ') : '',
+      cat: null,
+      items: [],   // { tipo:'trabajo'|'repuesto'|'equipo'|'tramite', nom, neto, aMano?, esEquipo? }
+      mo: 0,       // mano de obra base (solo GNC; en mecánica sale de los trabajos)
+      desc: 0,     // % de descuento (solo sobre mano de obra)
+      iva: false,
+      nota: '',
+    };
+  }
+
+  function presuTotales(p) {
+    const f = p.iva ? 1.21 : 1;
+    const suma = t => p.items.filter(i => i.tipo === t).reduce((a, i) => a + (Number(i.neto) || 0), 0);
+    // En GNC la mano de obra es el número base + los adicionales cargados como
+    // ítem (ej. bajo chasis), para que se vean en el desglose.
+    const moNeto = p.modo === 'gnc' ? (Number(p.mo) || 0) + suma('trabajo') : suma('trabajo');
+    const matNeto = p.modo === 'gnc' ? suma('equipo') : suma('repuesto');
+    const tramNeto = suma('tramite');
+    const d = Math.min(100, Math.max(0, Number(p.desc) || 0));
+    const descNeto = moNeto * d / 100;   // el descuento SOLO afecta la mano de obra
+    return {
+      moBase: (Number(p.mo) || 0) * f,
+      mo: moNeto * f, mat: matNeto * f, tram: tramNeto * f, d,
+      descMonto: descNeto * f,
+      subtotal: (moNeto + matNeto + tramNeto) * f,
+      total: (moNeto - descNeto + matNeto + tramNeto) * f,
+      // La ganancia va SIEMPRE sin IVA: el IVA no es del taller.
+      ganancia: moNeto - descNeto, gananciaSinDesc: moNeto, resigna: descNeto,
+    };
+  }
+
+  // Agrupa repetidos: 3 válvulas iguales se muestran como "× 3", no como 3 filas.
+  function presuAgrupar(items) {
+    const g = [];
+    items.forEach(i => {
+      const e = g.find(x => x.nom === i.nom && x.neto === i.neto && x.tipo === i.tipo);
+      if (e) e.cant++; else g.push({ ...i, cant: 1 });
+    });
+    return g;
+  }
+
+  // Al elegir un servicio frecuente se carga su receta: los componentes y
+  // trámites van a la lista, y la mano de obra se SUMA a la que ya haya (así se
+  // pueden combinar dos servicios en un mismo presupuesto).
+  function presuCargarServicio(p, srv, cantCil, bajoChasis) {
+    const meter = (nom, tipo) => {
+      const c = presuComp(nom);
+      p.items.push({ tipo, nom: c ? c.nom : nom, neto: c ? presuPrecioComp(c) : 0, deServicio: srv.n });
+    };
+    let mo = srv.mo || 0;
+    if (srv.porCil) {
+      const n = Math.max(1, Math.min(6, Number(cantCil) || 1));
+      for (let k = 0; k < n; k++) {
+        (srv.cCil || []).forEach(x => meter(x, 'equipo'));
+        (srv.tCil || []).forEach(x => meter(x, 'tramite'));
+      }
+      mo = srv.moBase + n * srv.moCil;
+      // El bajo chasis va como ítem propio de mano de obra (para verlo en el
+      // desglose) y es único: no se multiplica por cilindro.
+      if (srv.bajoChasis && bajoChasis) {
+        p.items.push({ tipo: 'trabajo', nom: 'Adicional bajo chasis', neto: srv.bajoChasis, deServicio: srv.n });
+      }
+    }
+    (srv.c || []).forEach(x => meter(x, 'equipo'));
+    (srv.t || []).forEach(x => meter(x, 'tramite'));
+    p.mo = (Number(p.mo) || 0) + mo;
+  }
+
+  // Como el render reconstruye todo el DOM, hay que rescatar lo tipeado ANTES
+  // de cualquier render() disparado con el formulario abierto (mismo patrón que
+  // clienteDraft / tramiteDraftCampos).
+  function syncPresuFromDOM() {
+    if (!presuDraft) return;
+    const v = id => { const e = root.querySelector('#' + id); return e ? e.value : null; };
+    const n = id => { const e = root.querySelector('#' + id); return e ? (parseFloat((e.value || '').replace(/[^\d.-]/g, '')) || 0) : null; };
+    const nom = v('p-nombre'); if (nom !== null) presuDraft.nombre = nom.trim();
+    const pat = v('p-patente'); if (pat !== null) presuDraft.patente = pat.trim().toUpperCase();
+    const veh = v('p-vehiculo'); if (veh !== null) presuDraft.vehiculo = veh.trim();
+    const mo = n('p-mo'); if (mo !== null) presuDraft.mo = mo;
+    const de = n('p-desc'); if (de !== null) presuDraft.desc = de;
+    const nota = v('p-nota'); if (nota !== null) presuDraft.nota = nota.trim();
+    const iva = root.querySelector('#p-iva'); if (iva) presuDraft.iva = iva.checked;
+  }
+
+  function presuFilaItem(g, idx) {
+    const et = g.tipo === 'repuesto' ? 'Repuesto' : g.tipo === 'tramite' ? 'Trámite'
+      : g.tipo === 'equipo' ? (g.esEquipo ? 'Equipo' : 'Componente') : 'Mano de obra';
+    return `<div class="tramite-row">
+      <div>
+        <div class="hist-tipo">${escapeHtml(g.nom)}${g.cant > 1 ? ` <b>× ${g.cant}</b>` : ''}</div>
+        <div class="hist-nombre">${et}${g.aMano ? ' · a mano' : ''}</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <b>${presuMoney(g.neto * g.cant * (presuDraft.iva ? 1.21 : 1))}</b>
+        <button type="button" class="btn btn-trash" data-presu-quitar="${escapeHtml(g.nom)}" data-presu-tipo="${g.tipo}" title="Quitar" aria-label="Quitar">${trashSvg()}</button>
+      </div>
+    </div>`;
+  }
+  const presuMoney = n => '$' + Math.round(n || 0).toLocaleString('es-AR');
+
+  function presuListaBloque(p, filtro, vacio) {
+    const gs = presuAgrupar(p.items.filter(filtro));
+    if (!gs.length) return `<p class="scan-sub" style="margin:6px 0;">${vacio}</p>`;
+    return `<div class="tramites-list">${gs.map((g, i) => presuFilaItem(g, i)).join('')}</div>`;
+  }
+
+  // --- Panel: lista de presupuestos hechos ---
+  function presupuestosPanel(entrando) {
+    const lista = presupuestos.slice().sort((a, b) => (b.fecha + String(b.numero)).localeCompare(a.fecha + String(a.numero)));
+    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="presupuestos-panel">
+      ${panelVolver()}
+      <h2 style="margin-top:0;">Presupuestos ${infoAyuda('ayuda-presu')}</h2>
+      ${ayudaBloque('ayuda-presu', 'Armá un presupuesto de mecánica (con la lista de ATAIA por categoría de vehículo) o de GNC (equipos e instalación, o una reparación). El cliente recibe un PDF que podés imprimir o mandarle por WhatsApp. Los precios salen de Configuración → Listas de precios.')}
+      <div class="form-actions" style="margin-top:4px;">
+        <button type="button" class="btn btn-primary" id="btn-presu-nuevo-mec">+ Mecánica</button>
+        <button type="button" class="btn btn-primary" id="btn-presu-nuevo-gnc">+ GNC</button>
+      </div>
+      ${lista.length ? `<div class="tramites-list" style="margin-top:14px;">${lista.map(p => {
+        const t = presuTotales(p);
+        return `<div class="tramite-row">
+          <div>
+            <div class="hist-patente">${escapeHtml(p.patente || 'SIN PATENTE')}</div>
+            <div class="hist-tipo">N° ${p.numero} · ${p.modo === 'gnc' ? 'GNC' : 'Mecánica'} · ${fmtDate(p.fecha)}</div>
+            <div class="hist-nombre">${escapeHtml(p.nombre || '—')}${p.vehiculo ? ' · ' + escapeHtml(p.vehiculo) : ''}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <b>${presuMoney(t.total)}</b>
+            <button type="button" class="btn btn-ghost btn-sm" data-presu-abrir="${p.id}">Ver</button>
+            <button type="button" class="btn btn-trash" data-presu-borrar="${p.id}" title="Borrar" aria-label="Borrar">${trashSvg()}</button>
+          </div>
+        </div>`;
+      }).join('')}</div>`
+      : `<div class="empty" style="margin-top:14px;">${emptyIconSvg()}Todavía no hiciste ningún presupuesto.</div>`}
+    </div>`;
+  }
+
+  // --- Panel: armar el presupuesto ---
+  function presuFormPanel(entrando) {
+    const p = presuDraft;
+    const t = presuTotales(p);
+    const esGnc = p.modo === 'gnc';
+    const det = !esGnc && p.vehiculo ? presuDetectarCat(p.vehiculo) : null;
+    const catAuto = !!(det && det.cat === p.cat);
+    const iva = p.iva ? 1.21 : 1;
+
+    // Mecánica: solo los trabajos que existen para la categoría elegida.
+    const optTrabajos = () => {
+      if (!p.cat) return '<option value="">Poné el vehículo primero…</option>';
+      const disp = PRESU_TRABAJOS.map((tr, i) => ({ tr, i })).filter(x => x.tr.p[p.cat] != null);
+      const secs = [...new Set(disp.map(x => x.tr.s))];
+      return '<option value="">Elegí un trabajo…</option>' + secs.map(s =>
+        '<optgroup label="' + escapeHtml(s) + '">' + disp.filter(x => x.tr.s === s).map(x =>
+          `<option value="${x.i}">${escapeHtml(x.tr.n)} — ${presuMoney(presuPrecioTrabajo(x.tr, p.cat) * iva)}</option>`
+        ).join('') + '</optgroup>').join('');
+    };
+    const cilSel = p.cilSel || 0;
+    const cilActual = PRESU_EQUIPOS.cil[cilSel];
+    const optSistemas = () => {
+      const dis = PRESU_EQUIPOS.sis.filter(s => cilActual && cilActual.p[s] != null);
+      if (!dis.length) return '<option value="">(este cilindro no tiene sistemas en la lista)</option>';
+      return dis.map(s => `<option value="${escapeHtml(s)}"${p.sisSel === s ? ' selected' : ''}>${escapeHtml(s)} — ${presuMoney(cilActual.p[s] * iva)}</option>`).join('');
+    };
+    const srvSel = p.srvSel === undefined ? '' : p.srvSel;
+    const srvObj = (srvSel !== '' && !isNaN(+srvSel)) ? PRESU_SERVICIOS[+srvSel] : null;
+
+    const secCliente = `
+      <h3 style="margin-top:0;">Cliente y vehículo</h3>
+      ${p.clienteId ? '<div class="agent-hint" style="margin-top:0;">Datos traídos de la ficha del cliente. Si hay algún error, corregilos acá — solo afecta a este presupuesto.</div>' : ''}
+      <div class="form-grid">
+        <label>Cliente<input type="text" id="p-nombre" value="${escapeHtml(p.nombre)}" placeholder="Ej: Juan Pérez"></label>
+        <label>Patente<input type="text" id="p-patente" value="${escapeHtml(p.patente)}" placeholder="Ej: AB123CD"></label>
+      </div>
+      <label style="display:block; margin-top:8px;">Vehículo
+        <input type="text" id="p-vehiculo" value="${escapeHtml(p.vehiculo)}" placeholder="Ej: Corsa Classic, Gol Trend, Hilux 4x4…">
+      </label>
+      ${esGnc ? '' : `
+        <div style="margin-top:8px;">
+          ${p.cat ? `<div class="presu-detect">
+              <div><b>Categoría ${presuCatLabel(p.cat)}</b><div class="presu-por">${escapeHtml(catAuto ? det.motivo : ((PRESU_CATS.find(c => c.k === p.cat) || {}).d || '') + ' — elegida a mano')}</div></div>
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-presu-cambiar-cat">Cambiar</button>
+            </div>`
+            : (p.vehiculo && p.vehiculo.length > 1
+              ? '<div class="presu-detect nope"><div><b>No reconozco ese vehículo</b><div class="presu-por">Elegí la categoría abajo.</div></div></div>' : '')}
+        </div>
+        <div id="p-cats-wrap" style="${p.cat && catAuto ? 'display:none;' : ''} margin-top:8px;">
+          <div class="presu-cats">
+            ${PRESU_CATS.map(c => `<button type="button" class="presu-cat${p.cat === c.k ? ' sel' : ''}" data-presu-cat="${c.k}">
+              <b>${presuCatLabel(c.k)}</b><small>${escapeHtml(c.d)}</small></button>`).join('')}
+          </div>
+        </div>`}`;
+
+    const secMec = `
+      <h3>Trabajos <span class="presu-lite">— mano de obra (lista ATAIA)</span></h3>
+      <div class="presu-row">
+        <select id="p-sel-trabajo" style="flex:2;">${optTrabajos()}</select>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-presu-add-trabajo">Agregar</button>
+      </div>
+      <div class="presu-sep"></div>
+      <label class="presu-lbl">¿No está en la lista? Escribilo a mano</label>
+      <div class="presu-row">
+        <input type="text" id="p-man-desc" placeholder="Ej: Revisar ruido en tren delantero" style="flex:2;">
+        <input type="text" id="p-man-precio" placeholder="$" inputmode="numeric" style="flex:1;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-presu-add-man">+</button>
+      </div>
+      ${presuListaBloque(p, i => i.tipo === 'trabajo', 'Todavía no agregaste trabajos.')}
+
+      <h3>Repuestos</h3>
+      <div class="presu-row">
+        <input type="text" id="p-rep-desc" placeholder="Ej: Kit de embrague" style="flex:2;">
+        <input type="text" id="p-rep-precio" placeholder="$" inputmode="numeric" style="flex:1;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-presu-add-rep">+</button>
+      </div>
+      ${presuListaBloque(p, i => i.tipo === 'repuesto', 'Sin repuestos.')}`;
+
+    const hayComp = p.items.some(i => i.tipo === 'equipo');
+    const secGnc = `
+      <h3>Servicio <span class="presu-lite">— ¿qué vino a hacer?</span></h3>
+      <div class="presu-row">
+        <select id="p-sel-serv" style="flex:2;">
+          <option value="">¿Qué vino a hacer?…</option>
+          <optgroup label="Servicios frecuentes">
+            ${PRESU_SERVICIOS.map((s, i) => `<option value="${i}"${String(srvSel) === String(i) ? ' selected' : ''}>${escapeHtml(s.n)}</option>`).join('')}
+          </optgroup>
+          <optgroup label="Otros trabajos">
+            <option value="instal"${srvSel === 'instal' ? ' selected' : ''}>Instalación de equipo</option>
+            <option value="repar"${srvSel === 'repar' ? ' selected' : ''}>Otro trabajo</option>
+          </optgroup>
+        </select>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-presu-add-serv" style="${srvObj ? '' : 'visibility:hidden;'}">Agregar</button>
+      </div>
+      ${srvObj && srvObj.porCil ? `
+        <div class="presu-row">
+          <label class="presu-lbl" style="flex:1; align-self:center; margin:0;">¿Cuántos cilindros?</label>
+          <input type="number" id="p-cant-cil" value="1" min="1" max="6" style="flex:0 0 90px;">
+        </div>
+        <label class="presu-chk"><input type="checkbox" id="p-bajo-chasis"> Bajo chasis <span>(+${presuMoney(srvObj.bajoChasis)}, una sola vez)</span></label>` : ''}
+
+      ${srvSel === 'instal' ? `
+        <h3>Equipo <span class="presu-lite">— lista del PEC</span></h3>
+        <label class="presu-lbl">Cilindro</label>
+        <select id="p-sel-cil">${PRESU_EQUIPOS.cil.map((c, i) => `<option value="${i}"${i === cilSel ? ' selected' : ''}>${escapeHtml(c.n)}</option>`).join('')}</select>
+        <label class="presu-lbl" style="margin-top:8px;">Sistema</label>
+        <select id="p-sel-sis">${optSistemas()}</select>
+        <div class="form-actions" style="margin-top:8px;">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-presu-add-eq">Agregar equipo</button>
+        </div>` : ''}
+
+      ${srvSel === 'repar' || hayComp ? `
+        <h3>Componentes <span class="presu-lite">— buscá en el catálogo</span></h3>
+        <input type="text" id="p-busca" placeholder="Ej: caño de alta, reductor SGV, válvula, cuña…" autocomplete="off">
+        <div id="p-busca-res" class="presu-res"></div>
+        <div class="presu-sep"></div>
+        <label class="presu-lbl">¿No está? Cargalo a mano</label>
+        <div class="presu-row">
+          <input type="text" id="p-eqman-desc" placeholder="Ej: repuesto especial" style="flex:2;">
+          <input type="text" id="p-eqman-precio" placeholder="$" inputmode="numeric" style="flex:1;">
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-presu-add-eqman">+</button>
+        </div>
+        ${presuListaBloque(p, i => i.tipo === 'equipo', 'Sin componentes.')}` : ''}
+
+      ${p.items.some(i => i.tipo === 'tramite') ? `
+        <h3>Trámites <span class="presu-lite">— oblea y prueba hidráulica: no son repuestos</span></h3>
+        ${presuListaBloque(p, i => i.tipo === 'tramite', 'Sin trámites.')}` : ''}
+
+      <h3>Mano de obra <span class="presu-lite">— tu trabajo</span></h3>
+      <input type="text" id="p-mo" value="${p.mo || 0}" inputmode="numeric">
+      ${presuListaBloque(p, i => i.tipo === 'trabajo', '')}`;
+
+    const extrasMo = esGnc ? presuAgrupar(p.items.filter(i => i.tipo === 'trabajo')).map(g =>
+      `<div class="presu-fila"><span>${escapeHtml(g.nom)}${g.cant > 1 ? ' × ' + g.cant : ''}</span><span>${presuMoney(g.neto * g.cant * iva)}</span></div>`).join('') : '';
+
+    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="presu-form-panel">
+      ${panelVolver()}
+      <h2 class="panel-h2-sticky">Presupuesto N° ${p.numero} — ${esGnc ? 'GNC' : 'Mecánica'}</h2>
+      ${secCliente}
+      ${esGnc ? secGnc : secMec}
+
+      <h3>Descuento <span class="presu-lite">— solo sobre mano de obra</span></h3>
+      <div class="presu-row">
+        <input type="number" id="p-desc" value="${p.desc || 0}" min="0" max="100" style="flex:1;">
+        <span style="align-self:center; font-weight:700;">%</span>
+        ${[5, 10, 15].map(d => `<button type="button" class="btn btn-ghost btn-sm" data-presu-desc="${d}">${d}%</button>`).join('')}
+      </div>
+
+      <label class="presu-chk" style="margin-top:12px;"><input type="checkbox" id="p-iva"${p.iva ? ' checked' : ''}> Mostrar con IVA <span>(suma 21% sobre los precios de lista)</span></label>
+
+      <label style="display:block; margin-top:12px;">Observaciones (salen en el presupuesto)
+        <textarea id="p-nota" rows="2" placeholder="Ej: no incluye repuestos que aparezcan al desarmar">${escapeHtml(p.nota || '')}</textarea>
+      </label>
+
+      <div class="presu-totales">
+        <div class="presu-cab">Tu desglose — el cliente no lo ve</div>
+        <div class="presu-fila"><span>Mano de obra</span><span>${presuMoney(esGnc ? t.moBase : t.mo)}</span></div>
+        ${extrasMo}
+        <div class="presu-fila"><span>${esGnc ? 'Componentes' : 'Repuestos'}</span><span>${presuMoney(t.mat)}</span></div>
+        ${t.tram > 0 ? `<div class="presu-fila"><span>Trámites</span><span>${presuMoney(t.tram)}</span></div>` : ''}
+        ${t.d > 0 && t.mo > 0 ? `<div class="presu-fila desc"><span>Descuento ${t.d}% (mano de obra)</span><span>-${presuMoney(t.descMonto)}</span></div>` : ''}
+        <div class="presu-total"><span>TOTAL <small>(${p.iva ? 'IVA incluido' : 'sin IVA'})</small></span><b>${presuMoney(t.total)}</b></div>
+        <div class="presu-gana">
+          <div class="presu-gana-fila"><span>Tu ganancia</span><b>${presuMoney(t.ganancia)}</b></div>
+          <div class="presu-gana-nota">${t.resigna > 0
+            ? `Sin el descuento ganabas ${presuMoney(t.gananciaSinDesc)} — <span class="rojo">estás resignando ${presuMoney(t.resigna)}</span>.`
+            : 'Lo que te queda después de pagar repuestos y trámites. Siempre sin IVA.'}</div>
+        </div>
+      </div>
+
+      <div class="form-actions" style="margin-top:14px;">
+        <button type="button" class="btn btn-primary" id="btn-presu-guardar">Guardar</button>
+        <button type="button" class="btn btn-ghost" id="btn-presu-imprimir">Imprimir</button>
+        <button type="button" class="btn btn-wa" id="btn-presu-wa">Enviar por WhatsApp</button>
+      </div>
+    </div>`;
+  }
+
+  // --- El PDF que recibe el cliente ---
+  // En mecánica se itemiza con precios (el cliente quiere saber qué se le hace
+  // y cuánto sale cada cosa). En GNC va SOLO el detalle y el total final: no se
+  // muestra cuánto es equipo y cuánto mano de obra.
+  async function generarPresupuestoPdf(p) {
+    await cargarJsPdf();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const tc = tallerConfig;
+    const t = presuTotales(p);
+    const L = 20, R = 190;
+    let y = 20;
+
+    if (tc.logo) {
+      try {
+        const fmt = /^data:image\/png/i.test(tc.logo) ? 'PNG' : 'JPEG';
+        doc.addImage(tc.logo, fmt, L, y - 4, 0, 18);
+        y += 16;
+      } catch (e) { /* logo inválido: se sigue sin él */ }
+    }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
+    doc.text(tallerNombre || 'Taller', L, y); y += 7;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90);
+    [tc.razonSocial, tc.direccion, [tc.cuit ? 'CUIT ' + tc.cuit : '', tc.horario || ''].filter(Boolean).join('    ')]
+      .filter(Boolean).forEach(l => { doc.text(String(l), L, y); y += 5; });
+    doc.setTextColor(0); y += 3;
+    doc.setDrawColor(200); doc.line(L, y, R, y); y += 9;
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+    doc.text(`Presupuesto N° ${p.numero}`, L, y);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90);
+    doc.text(fmtDate(p.fecha) + '  ·  ' + (p.modo === 'gnc' ? 'GNC' : 'Mecánica'), R, y, { align: 'right' });
+    doc.setTextColor(0); y += 9;
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold'); doc.text('Cliente:', L, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text([p.nombre || '—', p.vehiculo, p.patente ? '(' + p.patente + ')' : ''].filter(Boolean).join('  ·  '), L + 20, y, { maxWidth: R - L - 20 });
+    y += 10;
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+    doc.text('Detalle del trabajo', L, y); y += 2;
+    doc.setDrawColor(220); doc.line(L, y, R, y); y += 6;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+    const iva = p.iva ? 1.21 : 1;
+    const grupos = presuAgrupar(p.items);
+    const rotulo = g => g.nom + (g.cant > 1 ? ' × ' + g.cant : '');
+    if (p.modo === 'gnc') {
+      // Solo qué se hace, sin precios por renglón.
+      grupos.forEach(g => {
+        const ls = doc.splitTextToSize('•  ' + rotulo(g), R - L);
+        doc.text(ls, L, y); y += ls.length * 5;
+      });
+      if (t.mo > 0) { doc.text('•  Mano de obra, instalación y puesta a punto', L, y); y += 5; }
+    } else {
+      grupos.forEach(g => {
+        const ls = doc.splitTextToSize(rotulo(g), R - L - 32);
+        doc.text(ls, L, y);
+        doc.text(presuMoney(g.neto * g.cant * iva), R, y, { align: 'right' });
+        y += Math.max(5, ls.length * 5);
+      });
+    }
+    y += 4; doc.setDrawColor(220); doc.line(L, y, R, y); y += 7;
+
+    if (t.d > 0 && t.mo > 0) {
+      doc.setFontSize(10); doc.setTextColor(90);
+      doc.text('Subtotal', L, y); doc.text(presuMoney(t.subtotal), R, y, { align: 'right' }); y += 5;
+      doc.setTextColor(21, 122, 68);
+      doc.text('Descuento', L, y); doc.text('-' + presuMoney(t.descMonto), R, y, { align: 'right' }); y += 6;
+      doc.setTextColor(0);
+    }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(29, 91, 216);
+    doc.text('TOTAL FINAL', L, y);
+    doc.text(presuMoney(t.total), R, y, { align: 'right' });
+    doc.setTextColor(0); y += 9;
+
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(120);
+    const pie = 'Precio final' + (p.iva ? ' con IVA incluido' : ' (sin IVA)') + '.'
+      + (p.modo === 'gnc' ? ' Incluye lo detallado arriba.' : '') + ' Presupuesto válido por 15 días.';
+    const pl = doc.splitTextToSize(pie, R - L);
+    doc.text(pl, L, y); y += pl.length * 4 + 2;
+    if (p.nota) {
+      const nl = doc.splitTextToSize(p.nota, R - L);
+      doc.text(nl, L, y);
+    }
+    doc.setTextColor(0);
+    return doc.output('blob');
+  }
+
+  async function abrirPresupuestoPdf(p) {
+    try {
+      const blob = await generarPresupuestoPdf(p);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      console.error(e);
+      await customAlert('No se pudo generar el presupuesto: ' + (e.message || e));
+    }
+  }
+
+  // WhatsApp: se comparte el PDF con el menú nativo del celular (así el cliente
+  // recibe el archivo, no un texto suelto). En la computadora no hay menú de
+  // compartir, así que se descarga el PDF y se abre el chat con el mensaje.
+  async function enviarPresupuestoWa(p) {
+    try {
+      const blob = await generarPresupuestoPdf(p);
+      const nombre = `Presupuesto-${p.numero}-${(p.patente || 'cliente').replace(/\W/g, '')}.pdf`;
+      const file = new File([blob], nombre, { type: 'application/pdf' });
+      const t = presuTotales(p);
+      const msg = `¡Hola${p.nombre ? ' ' + p.nombre : ''}! Te paso el presupuesto${p.vehiculo ? ' de tu ' + p.vehiculo : ''}: ${presuMoney(t.total)}. Cualquier duda, escribinos. ¡Gracias!`;
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Presupuesto N° ' + p.numero, text: msg });
+        return;
+      }
+      descargarBlob(blob, nombre);
+      const tel = cleanPhone(presuTelefonoDe(p));
+      window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg + ' (te adjunto el PDF que se acaba de descargar)')}`, '_blank');
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;   // el usuario cerró el menú de compartir
+      console.error(e);
+      await customAlert('No se pudo compartir el presupuesto: ' + (e.message || e));
+    }
+  }
+  function presuTelefonoDe(p) {
+    const c = p.clienteId ? clientes.find(x => x.id === p.clienteId) : null;
+    return c ? (c.telefono || '') : '';
+  }
+
+  // --- Eventos de presupuestos (se llama desde attachEvents) ---
+  function attachPresupuestos() {
+    const q = s => root.querySelector(s);
+    // Cualquier render() con el formulario abierto pisa lo tipeado: primero se
+    // rescata al borrador y recién ahí se redibuja.
+    const rerender = () => { syncPresuFromDOM(); render(); };
+
+    // Lista: abrir uno nuevo
+    const nuevo = (modo) => {
+      presuDraft = nuevoPresuDraft(modo, null);
+      render();
+    };
+    if (q('#btn-presu-nuevo-mec')) q('#btn-presu-nuevo-mec').addEventListener('click', () => nuevo('mec'));
+    if (q('#btn-presu-nuevo-gnc')) q('#btn-presu-nuevo-gnc').addEventListener('click', () => nuevo('gnc'));
+
+    root.querySelectorAll('[data-presu-abrir]').forEach(b => b.addEventListener('click', () => {
+      const p = presupuestos.find(x => x.id === b.getAttribute('data-presu-abrir'));
+      if (p) { presuDraft = JSON.parse(JSON.stringify(p)); render(); }
+    }));
+    root.querySelectorAll('[data-presu-borrar]').forEach(b => b.addEventListener('click', async () => {
+      const p = presupuestos.find(x => x.id === b.getAttribute('data-presu-borrar'));
+      if (!p) return;
+      const ok = await customConfirm(`¿Borrar el presupuesto N° ${p.numero} de ${p.nombre || p.patente || 'este cliente'}?`, { titulo: 'Borrar presupuesto', danger: true, okLabel: 'Borrar' });
+      if (!ok) return;
+      presupuestos = presupuestos.filter(x => x.id !== p.id);
+      await savePresupuestos();
+      render();
+    }));
+
+    if (!presuDraft) return;
+    const p = presuDraft;
+
+    // Vehículo: al escribirlo se detecta la categoría sola (solo mecánica).
+    const veh = q('#p-vehiculo');
+    if (veh) veh.addEventListener('change', () => {
+      syncPresuFromDOM();
+      if (p.modo === 'mec') {
+        const det = presuDetectarCat(p.vehiculo);
+        p.cat = det ? det.cat : null;
+      }
+      render();
+    });
+    root.querySelectorAll('[data-presu-cat]').forEach(b => b.addEventListener('click', () => {
+      syncPresuFromDOM();
+      p.cat = b.getAttribute('data-presu-cat');
+      render();
+    }));
+    if (q('#btn-presu-cambiar-cat')) q('#btn-presu-cambiar-cat').addEventListener('click', () => {
+      const w = q('#p-cats-wrap'); if (w) w.style.display = 'block';
+    });
+
+    // Mecánica
+    if (q('#btn-presu-add-trabajo')) q('#btn-presu-add-trabajo').addEventListener('click', async () => {
+      const sel = q('#p-sel-trabajo');
+      if (!p.cat) { await customAlert('Primero poné el vehículo (o elegí la categoría a mano).'); return; }
+      if (!sel || !sel.value) return;
+      const tr = PRESU_TRABAJOS[+sel.value];
+      syncPresuFromDOM();
+      p.items.push({ tipo: 'trabajo', nom: tr.n, neto: presuPrecioTrabajo(tr, p.cat) });
+      render();
+    });
+    const addAMano = async (idDesc, idPrecio, tipo, avisoVacio) => {
+      const d = (q('#' + idDesc) || {}).value || '';
+      const pr = parseFloat(((q('#' + idPrecio) || {}).value || '').replace(/[^\d]/g, '')) || 0;
+      if (!d.trim() || !pr) { await customAlert(avisoVacio); return; }
+      syncPresuFromDOM();
+      p.items.push({ tipo, nom: d.trim(), neto: pr, aMano: true });
+      render();
+    };
+    if (q('#btn-presu-add-man')) q('#btn-presu-add-man').addEventListener('click',
+      () => addAMano('p-man-desc', 'p-man-precio', 'trabajo', 'Poné qué trabajo es y cuánto sale.'));
+    if (q('#btn-presu-add-rep')) q('#btn-presu-add-rep').addEventListener('click',
+      () => addAMano('p-rep-desc', 'p-rep-precio', 'repuesto', 'Poné descripción y precio del repuesto.'));
+    if (q('#btn-presu-add-eqman')) q('#btn-presu-add-eqman').addEventListener('click',
+      () => addAMano('p-eqman-desc', 'p-eqman-precio', 'equipo', 'Poné qué es y cuánto sale.'));
+
+    // GNC: elegir servicio
+    const selServ = q('#p-sel-serv');
+    if (selServ) selServ.addEventListener('change', () => {
+      syncPresuFromDOM();
+      p.srvSel = selServ.value;
+      render();
+    });
+    if (q('#btn-presu-add-serv')) q('#btn-presu-add-serv').addEventListener('click', () => {
+      const srv = PRESU_SERVICIOS[+p.srvSel];
+      if (!srv) return;
+      syncPresuFromDOM();
+      const cant = (q('#p-cant-cil') || {}).value;
+      const bc = !!(q('#p-bajo-chasis') || {}).checked;
+      presuCargarServicio(p, srv, cant, bc);
+      p.srvSel = '';
+      render();
+    });
+
+    // GNC: equipo (cilindro + sistema)
+    const selCil = q('#p-sel-cil');
+    if (selCil) selCil.addEventListener('change', () => { syncPresuFromDOM(); p.cilSel = +selCil.value; p.sisSel = null; render(); });
+    if (q('#btn-presu-add-eq')) q('#btn-presu-add-eq').addEventListener('click', () => {
+      const c = PRESU_EQUIPOS.cil[p.cilSel || 0];
+      const s = (q('#p-sel-sis') || {}).value;
+      if (!c || !s || c.p[s] == null) return;
+      syncPresuFromDOM();
+      const propios = (tallerConfig.listaPrecios && tallerConfig.listaPrecios.items) || {};
+      const clave = `Equipo ${c.n} — ${s}`;
+      const aj = Number((tallerConfig.listaPrecios || {}).ajusteGnc) || 0;
+      const precio = propios[clave] != null ? Number(propios[clave]) : Math.round(c.p[s] * (1 + aj / 100));
+      p.items.push({ tipo: 'equipo', nom: clave, neto: precio, esEquipo: true });
+      // Si es un equipo completo, la instalación se sugiere sola.
+      if (!Number(p.mo)) p.mo = Number(tallerConfig.presuInstalacion) || 450000;
+      render();
+    });
+
+    // GNC: buscador de componentes. Actualiza SOLO la lista de resultados (no
+    // llama a render(), que borraría lo que se está tipeando).
+    const busca = q('#p-busca');
+    if (busca) busca.addEventListener('input', () => {
+      const cont = q('#p-busca-res');
+      const txt = presuNorm(busca.value);
+      if (!cont) return;
+      if (txt.length < 2) { cont.innerHTML = ''; return; }
+      const palabras = txt.split(/\s+/);
+      const hits = PRESU_COMPONENTES
+        .filter(c => palabras.every(w => presuNorm(c.nom).includes(w) || presuNorm(c.sec).includes(w)))
+        .slice(0, 12);
+      if (!hits.length) { cont.innerHTML = '<p class="scan-sub">No encontré nada con ese nombre.</p>'; return; }
+      cont.innerHTML = '';
+      hits.forEach(c => {
+        const d = document.createElement('div');
+        d.className = 'presu-res-item';
+        d.innerHTML = `<div>${escapeHtml(c.nom)}${c.ss ? '<span class="presu-ss">SIN STOCK</span>' : ''}
+          <div class="presu-por">${escapeHtml(c.sec)}</div></div><b>${c.p != null ? presuMoney(presuPrecioComp(c) * (p.iva ? 1.21 : 1)) : '—'}</b>`;
+        d.addEventListener('click', () => {
+          syncPresuFromDOM();
+          // La oblea y la prueba hidráulica no son repuestos: van como trámite.
+          p.items.push({ tipo: c.sec === 'Trámite' ? 'tramite' : 'equipo', nom: c.nom, neto: presuPrecioComp(c) });
+          render();
+        });
+        cont.appendChild(d);
+      });
+    });
+
+    // Quitar un ítem (saca uno del grupo, no todos)
+    root.querySelectorAll('[data-presu-quitar]').forEach(b => b.addEventListener('click', () => {
+      syncPresuFromDOM();
+      const nom = b.getAttribute('data-presu-quitar'), tipo = b.getAttribute('data-presu-tipo');
+      const i = p.items.map((it, k) => ({ it, k })).filter(x => x.it.nom === nom && x.it.tipo === tipo).pop();
+      if (i) p.items.splice(i.k, 1);
+      render();
+    }));
+
+    root.querySelectorAll('[data-presu-desc]').forEach(b => b.addEventListener('click', () => {
+      syncPresuFromDOM();
+      p.desc = +b.getAttribute('data-presu-desc');
+      render();
+    }));
+    ['p-desc', 'p-mo'].forEach(id => { const e = q('#' + id); if (e) e.addEventListener('change', rerender); });
+    if (q('#p-iva')) q('#p-iva').addEventListener('change', rerender);
+
+    // Guardar / imprimir / WhatsApp
+    const guardar = async () => {
+      syncPresuFromDOM();
+      if (!p.items.length && !Number(p.mo)) { await customAlert('Agregá al menos un trabajo, un componente o la mano de obra.'); return false; }
+      const i = presupuestos.findIndex(x => x.id === p.id);
+      if (i >= 0) presupuestos[i] = JSON.parse(JSON.stringify(p));
+      else {
+        presupuestos.push(JSON.parse(JSON.stringify(p)));
+        tallerConfig.presuUltimoNumero = p.numero;
+        await saveTallerConfig();
+      }
+      await savePresupuestos();
+      return true;
+    };
+    if (q('#btn-presu-guardar')) q('#btn-presu-guardar').addEventListener('click', async () => {
+      if (await guardar()) { presuDraft = null; render(); }
+    });
+    if (q('#btn-presu-imprimir')) q('#btn-presu-imprimir').addEventListener('click', async () => {
+      if (await guardar()) { render(); await abrirPresupuestoPdf(presuDraft); }
+    });
+    if (q('#btn-presu-wa')) q('#btn-presu-wa').addEventListener('click', async () => {
+      if (await guardar()) { render(); await enviarPresupuestoWa(presuDraft); }
+    });
   }
 
   // --- Panel "Hoy" (resumen del día) ---
@@ -2545,6 +3294,7 @@ Documentación para realizar la renovación:
     home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
     clipboard: '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/>',
     calendar: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+    presupuesto: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>',
     history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
     chart: '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
     download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
@@ -3305,6 +4055,15 @@ Documentación para realizar la renovación:
           <input type="number" min="0" step="100" id="tc-precio-${t.value}" value="${escapeHtml(String((tallerConfig.precios && tallerConfig.precios[t.value]) || ''))}" placeholder="$">
         </label>`).join('')}
       </div>`;
+    const secLogo = `
+      <div class="agent-hint" style="margin-top:0;">El logo va arriba de todo en los presupuestos que le entregás al cliente. Elegí una imagen (PNG o JPG); se guarda en este equipo junto con el resto de la configuración.</div>
+      ${tallerConfig.logo ? `<div style="margin:10px 0;"><img src="${tallerConfig.logo}" alt="Logo del taller" style="max-height:70px; max-width:200px; border:1px solid var(--line); border-radius:8px; padding:6px; background:#fff;"></div>` : ''}
+      <div class="form-actions" style="margin-top:8px;">
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer;">${tallerConfig.logo ? 'Cambiar logo' : 'Elegir logo'}
+          <input type="file" id="tc-logo-file" accept="image/*" style="display:none;">
+        </label>
+        ${tallerConfig.logo ? '<button type="button" class="btn btn-danger-outline btn-sm" id="btn-quitar-logo">Quitar</button>' : ''}
+      </div>`;
     const secLicencia = `
       <div class="agent-hint" style="margin-top:0;">Código de licencia de este equipo: <b>${escapeHtml(localStorage.getItem(LICENSE_KEY) || '(sin activar)')}</b> — es el que tenés que usar para activar Estelita en otro dispositivo y recuperar ahí tu copia de seguridad.</div>
       <div class="form-actions" style="margin-top:8px;">
@@ -3327,6 +4086,7 @@ Documentación para realizar la renovación:
       ${configSeccionCard('pec', 'Productores de Equipos Completos (PEC)', secPec)}
       ${configSeccionCard('tecnico', 'App del técnico', secTecnico)}
       ${configSeccionCard('mensajes', 'Mensajes de WhatsApp', secMensajes)}
+      ${configSeccionCard('logo', 'Logo del taller', secLogo)}
       ${configSeccionCard('precios', 'Precios de trámites', secPrecios)}
       ${configSeccionCard('impresion', 'Impresión sobre la planilla', secImpresion)}
       ${configSeccionCard('licencia', 'Licencia del equipo', secLicencia)}
@@ -4710,6 +5470,11 @@ Documentación para realizar la renovación:
   let showHoy = false;
   // Panel de estadísticas (trámites por mes/tipo, totales, ingresos estimados).
   let showEstadisticas = false;
+  // Presupuestos: los guardados, y el que se está armando ahora.
+  // presuDraft = null significa que se está viendo la lista, no el formulario.
+  let showPresupuestos = false;
+  let presupuestos = [];
+  let presuDraft = null;
   // Id del trámite cuyo detalle de cliente está desplegado en el historial.
   let historialAbierto = null;
   // Días del historial que están desplegados (abiertos). Arranca en null y se
@@ -5960,6 +6725,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       quickAdd: showQuickAdd && !prevPanelState.quickAdd,
       respaldo: showRespaldo && !prevPanelState.respaldo,
       turnos: showTurnos && !prevPanelState.turnos,
+      presupuestos: showPresupuestos && !prevPanelState.presupuestos,
       hoy: showHoy && !prevPanelState.hoy,
       estadisticas: showEstadisticas && !prevPanelState.estadisticas,
       ultimoTramite: !!verUltimoTramiteId && !prevPanelState.ultimoTramite,
@@ -5980,6 +6746,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
               ${menuOpen ? `<div class="menu-dropdown">
                 <div class="menu-group-label">Gestión</div>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-turnos">${menuIco('calendar')}Turnos${turnosAvisoCount ? ` <span class="menu-badge-inline">${turnosAvisoCount}</span>` : ''}</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-presupuestos">${menuIco('presupuesto')}Presupuestos</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-estadisticas">${menuIco('chart')}Estadísticas</button>
                 <div class="menu-sep"></div>
                 <div class="menu-group-label">Datos</div>
@@ -6035,6 +6802,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         ${showHistorial ? historialPanel(entrando.historial) : ''}
         ${showRespaldo ? respaldoPanel(entrando.respaldo) : ''}
         ${showTurnos ? turnosPanel(entrando.turnos) : ''}
+        ${showPresupuestos ? (presuDraft ? presuFormPanel(entrando.presupuestos) : presupuestosPanel(entrando.presupuestos)) : ''}
         ${verUltimoTramiteId ? ultimoTramitePanel(entrando.ultimoTramite) : ''}
 
         ${showForm || editing ? tramiteWizardPanel(editing, entrando.wizard, entrando.wizardPaso, entrando.enargasPaste) : ''}
@@ -6101,12 +6869,17 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     showEstadisticas = false;
     showBulkImport = false;
     showQuickAdd = false;
+    showPresupuestos = false;
+    presuDraft = null;
   }
 
   function attachEvents() {
     // Botón "← Volver" común a todos los paneles del menú.
     root.querySelectorAll('[data-volver]').forEach(btn => {
       btn.addEventListener('click', () => {
+        // Desde el formulario de presupuesto, "Volver" lleva a la lista de
+        // presupuestos; no cierra todo el panel.
+        if (presuDraft) { presuDraft = null; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
         cerrarPanelesConsulta();
         render();
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -7416,6 +8189,40 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
     });
 
     // --- Turnos ---
+    // Logo del taller: se comprime como las fotos (un logo de cámara pesa
+    // varios MB y no entra cómodo en el guardado del equipo).
+    const logoFile = root.querySelector('#tc-logo-file');
+    if (logoFile) logoFile.addEventListener('change', async () => {
+      const f = logoFile.files[0];
+      if (!f) return;
+      try {
+        tallerConfig.logo = await compressImageFile(f);
+        await saveTallerConfig();
+        render();
+      } catch (e) {
+        console.error(e);
+        await customAlert('No se pudo procesar esa imagen. Probá con otra (PNG o JPG).');
+      }
+    });
+    const btnQuitarLogo = root.querySelector('#btn-quitar-logo');
+    if (btnQuitarLogo) btnQuitarLogo.addEventListener('click', async () => {
+      tallerConfig.logo = '';
+      await saveTallerConfig();
+      render();
+    });
+
+    const btnPresupuestos = root.querySelector('#btn-presupuestos');
+    if (btnPresupuestos) btnPresupuestos.addEventListener('click', () => {
+      const abierto = showPresupuestos;
+      cerrarPanelesConsulta();
+      menuOpen = false;
+      showPresupuestos = !abierto;
+      render();
+      const panel = root.querySelector('#presupuestos-panel');
+      if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    attachPresupuestos();
+
     const btnTurnos = root.querySelector('#btn-turnos');
     if (btnTurnos) btnTurnos.addEventListener('click', () => {
       const abierto = showTurnos;
