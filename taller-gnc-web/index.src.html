@@ -707,6 +707,8 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 
 /* BANNERS */
 #gnc-app .reminder-banner, #gnc-app .incompletos-banner { border-color: var(--flame-dim); }
+/* Aviso de instalar: en ámbar, porque avisa de un riesgo real de perder datos. */
+#gnc-app .install-banner { border-color: var(--warn); background: var(--surface-alt); }
 #gnc-app .reminder-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 
 /* EQUIPO (grilla del tramite) */
@@ -1540,6 +1542,55 @@ Documentación para realizar la renovación:
       }
     });
     return out;
+  }
+
+  // ¿Está corriendo instalada (desde la pantalla de inicio) o dentro del navegador?
+  function appInstalada() {
+    try {
+      return window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true; // iOS
+    } catch (e) { return false; }
+  }
+  function esIOS() {
+    const ua = navigator.userAgent || '';
+    return /iphone|ipad|ipod/i.test(ua)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad nuevo
+  }
+  // "Más tarde" pospone el aviso una semana (no lo mata: protege los datos).
+  const AVISO_INSTALAR_KEY = 'gnc_aviso_instalar_v1';
+  function avisoInstalarPospuesto() {
+    const t = Number(localStorage.getItem(AVISO_INSTALAR_KEY) || 0);
+    return !!t && (Date.now() - t) < 7 * 24 * 60 * 60 * 1000;
+  }
+
+  // Aviso de instalación. Importa de verdad: si la app NO está instalada, el
+  // navegador se siente libre de borrar los datos cuando el dispositivo se
+  // queda sin espacio (y iOS los borra tras unos días sin uso). Instalarla es
+  // lo que habilita el almacenamiento persistente.
+  function bannerInstalar() {
+    if (appInstalada() || avisoInstalarPospuesto()) return '';
+    const ios = esIOS();
+    const comoInstalar = ios
+      ? 'Tocá <b>Compartir</b> (el cuadradito con la flecha ↑) y elegí <b>“Agregar a inicio”</b>.'
+      : (showInstallButton
+        ? 'Tocá <b>Instalar</b> acá al lado y listo.'
+        : 'Abrí el menú de tu navegador (⋮) y elegí <b>“Instalar app”</b> o <b>“Agregar a pantalla de inicio”</b>.');
+    return `<div class="panel install-banner">
+      <div class="reminder-header">
+        <div style="min-width:0;">
+          <h2 style="margin:0; font-size:16px;">📲 Instalá Estelita para proteger tus datos</h2>
+          <p class="scan-sub" style="margin:6px 0 0;">
+            Mientras la uses desde el navegador, ${ios ? 'el iPhone' : 'el celular'} puede
+            <b>borrar tus clientes y fotos</b> si se queda sin espacio. Instalada, quedan protegidos.
+            ${comoInstalar}
+          </p>
+        </div>
+        <div style="display:flex; gap:6px; flex-shrink:0;">
+          ${!ios && showInstallButton ? '<button type="button" class="btn btn-primary btn-sm" id="btn-install-banner">Instalar</button>' : ''}
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-install-luego">Más tarde</button>
+        </div>
+      </div>
+    </div>`;
   }
 
   function reminderBanner() {
@@ -5959,6 +6010,8 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
           <div class="chip chip-ok"><div class="chip-num">${counts.ok}</div><div class="chip-lbl">Al día</div></div>
         </div>`}
 
+        ${algunPanelAbierto ? '' : bannerInstalar()}
+
         ${showHoy ? hoyPanel(entrando.hoy) : ''}
         ${showEstadisticas ? estadisticasPanel(entrando.estadisticas) : ''}
         ${showTallerConfig ? tallerConfigPanel(entrando.tallerConfig) : ''}
@@ -6484,6 +6537,22 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         deferredInstallPrompt = null;
         showInstallButton = false;
       }
+      render();
+    });
+
+    const btnInstallBanner = root.querySelector('#btn-install-banner');
+    if (btnInstallBanner) btnInstallBanner.addEventListener('click', async () => {
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt = null;
+        showInstallButton = false;
+      }
+      render();
+    });
+    const btnInstallLuego = root.querySelector('#btn-install-luego');
+    if (btnInstallLuego) btnInstallLuego.addEventListener('click', () => {
+      try { localStorage.setItem(AVISO_INSTALAR_KEY, String(Date.now())); } catch (e) { /* ok */ }
       render();
     });
 
