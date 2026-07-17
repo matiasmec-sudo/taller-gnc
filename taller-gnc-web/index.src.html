@@ -17,10 +17,11 @@
 <body>
 <script>
 // window.storage: misma interfaz (get/set/delete/list) que usa toda la app.
-// Todo va a localStorage, MENOS las fotos ("fotos:<id>"), que se guardan en
-// IndexedDB: una base de datos del navegador con muchísima más capacidad que
-// localStorage (que se llena con pocas fotos) y que el navegador no borra solo
-// (con almacenamiento persistente). Las fotos siguen dentro del dispositivo.
+// Todo va a localStorage, MENOS lo que puede crecer: las fotos ("fotos:<id>")
+// y la lista de clientes ("gnc_clientes_v2"). Eso se guarda en IndexedDB: una
+// base de datos del navegador con muchísima más capacidad que localStorage
+// (que tiene ~5 MB y se llena) y que el navegador no borra solo (con
+// almacenamiento persistente). Todo sigue dentro del dispositivo del taller.
 (function () {
   const DB_NAME = 'estelita';
   const STORE = 'fotos';
@@ -40,11 +41,18 @@
   function idbSet(key, value) { return abrirDB().then(db => new Promise((res, rej) => { const tx = db.transaction(STORE, 'readwrite'); tx.objectStore(STORE).put(value, key); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); })); }
   function idbDelete(key) { return abrirDB().then(db => new Promise((res, rej) => { const tx = db.transaction(STORE, 'readwrite'); tx.objectStore(STORE).delete(key); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); })); }
   function idbKeys() { return abrirDB().then(db => new Promise((res, rej) => { const r = db.transaction(STORE, 'readonly').objectStore(STORE).getAllKeys(); r.onsuccess = () => res((r.result || []).map(String)); r.onerror = () => rej(r.error); })); }
-  const esFoto = (key) => typeof key === 'string' && key.indexOf('fotos:') === 0;
+  // Qué va a IndexedDB en vez de localStorage: las fotos y la LISTA DE
+  // CLIENTES. localStorage tiene ~5 MB: un taller con muchos clientes y años
+  // de trámites lo llena, y ahí setItem tira error y se perderían los cambios.
+  // IndexedDB aguanta muchísimo más. La migración es transparente: al leer se
+  // cae a localStorage si el dato todavía no pasó, y al guardar se escribe en
+  // IndexedDB y se borra la copia vieja.
+  const CLIENTES_KEY = 'gnc_clientes_v2';
+  const vaEnIdb = (key) => typeof key === 'string' && (key.indexOf('fotos:') === 0 || key === CLIENTES_KEY);
 
   window.storage = {
     async get(key) {
-      if (esFoto(key)) {
+      if (vaEnIdb(key)) {
         try { const v = await idbGet(key); if (v !== null) return { key, value: v, shared: false }; } catch (e) { /* fallback abajo */ }
         // Puede seguir en localStorage (migración en curso o dato viejo).
         const raw = localStorage.getItem(key);
@@ -54,12 +62,12 @@
       return raw === null ? null : { key, value: raw, shared: false };
     },
     async set(key, value) {
-      if (esFoto(key)) { await idbSet(key, value); try { localStorage.removeItem(key); } catch (e) { /* ok */ } return { key, value, shared: false }; }
+      if (vaEnIdb(key)) { await idbSet(key, value); try { localStorage.removeItem(key); } catch (e) { /* ok */ } return { key, value, shared: false }; }
       localStorage.setItem(key, value);
       return { key, value, shared: false };
     },
     async delete(key) {
-      if (esFoto(key)) {
+      if (vaEnIdb(key)) {
         let existed = false;
         try { existed = (await idbGet(key)) !== null; } catch (e) { /* ok */ }
         try { await idbDelete(key); } catch (e) { /* ok */ }
@@ -81,13 +89,14 @@
     },
   };
 
-  // Migración única: pasar las fotos que hoy están en localStorage a IndexedDB
-  // (libera lugar), y pedir almacenamiento persistente para que el navegador no
-  // las borre solo. Fire-and-forget: las lecturas ya caen a localStorage si algo
-  // todavía no migró.
+  // Migración única: pasar a IndexedDB lo que hoy está en localStorage (las
+  // fotos y la lista de clientes), y pedir almacenamiento persistente para que
+  // el navegador no lo borre solo. Fire-and-forget: no hay riesgo de perder
+  // nada, porque la copia de localStorage recién se borra si idbSet salió bien,
+  // y mientras tanto las lecturas caen a localStorage igual.
   (async function () {
     try {
-      const claves = Object.keys(localStorage).filter(k => k.indexOf('fotos:') === 0);
+      const claves = Object.keys(localStorage).filter(k => vaEnIdb(k));
       for (const k of claves) { const v = localStorage.getItem(k); if (v !== null) { try { await idbSet(k, v); localStorage.removeItem(k); } catch (e) { /* se reintenta la próxima */ } } }
     } catch (e) { /* ok */ }
     try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch (e) { /* ok */ }
@@ -725,6 +734,8 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
   const root = document.getElementById('gnc-app');
   const WARN_DAYS = 5;
   const STORAGE_KEY = 'gnc_clientes_v2';
+  // Ya se avisó que el guardado falló: no repetir el cartel en cada autoguardado.
+  let avisoGuardadoFallido = false;
   const TALLER_KEY = 'gnc_taller_nombre_v1';
   const LICENSE_KEY = 'gnc_license_code';
   const TALLER_CONFIG_KEY = 'gnc_taller_config_v1';
@@ -1442,7 +1453,17 @@ Documentación para realizar la renovación:
       tomarSnapshotClientes();
     }
     try { await window.storage.set(STORAGE_KEY, JSON.stringify(clientes), false); }
-    catch (e) { console.error('Error guardando clientes', e); }
+    catch (e) {
+      // Si el guardado falla (dispositivo sin espacio, permisos), NO se puede
+      // dejar pasar en silencio: el taller seguiría cargando trámites creyendo
+      // que se guardan. Se avisa una sola vez por sesión para no molestar en
+      // cada autoguardado.
+      console.error('Error guardando clientes', e);
+      if (!avisoGuardadoFallido) {
+        avisoGuardadoFallido = true;
+        customAlert('No se pudieron guardar los últimos cambios en este dispositivo — puede estar sin espacio. Sacá una copia ahora con "Exportar CSV" o con la copia de seguridad en la nube, y liberá espacio antes de seguir cargando.', 'Atención: no se pudo guardar');
+      }
+    }
   }
 
   async function saveTaller() {
