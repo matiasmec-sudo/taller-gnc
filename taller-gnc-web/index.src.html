@@ -728,6 +728,8 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
   display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
 }
 #gnc-app .tramite-row select { font-size: 11px; padding: 5px 7px; }
+#gnc-app .oblea-check { font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; color: var(--text-muted); }
+#gnc-app .oblea-check input { width: 16px; height: 16px; accent-color: var(--ok); cursor: pointer; }
 #gnc-app .tramite-row-info { flex: 1; min-width: 150px; }
 #gnc-app .tramite-row-acciones { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 #gnc-app .rev-estado { font-size: 12px; margin-top: 3px; font-weight: 600; }
@@ -5451,6 +5453,8 @@ Documentación para realizar la renovación:
         <option value="enviado" ${t.estadoPec === 'enviado' ? 'selected' : ''}>Enviado al PEC</option>
       </select>
       <span class="badge ${badgeClass}">${ESTADO_PEC_LABELS[t.estadoPec]}</span>
+      ${t.estadoPec === 'enviado' ? `<label class="oblea-check" title="Marcá cuando la oblea volvió del PEC y está lista para retirar"><input type="checkbox" data-oblea-lista="${clienteId}" data-oblea-tramite="${t.id}" ${t.obleaLista ? 'checked' : ''}> Oblea lista</label>` : ''}
+      ${t.obleaLista ? `<span class="badge badge-ok">Oblea lista ✅</span>` : ''}
       ${t.estadoPec !== 'enviado' ? `<button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${clienteId}" data-editar-tramite-id="${t.id}">Editar</button>` : ''}
       <button type="button" class="btn btn-trash btn-sm" data-borrar-tramite-cliente="${clienteId}" data-borrar-tramite-id="${t.id}" title="Eliminar trámite" aria-label="Eliminar trámite">${trashSvg()}</button>
     </div>`;
@@ -9403,6 +9407,24 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         t.estadoPec = sel.value;
         if (sel.value === 'enviado' && !t.enviadoEn) t.enviadoEn = new Date().toISOString();
         t.motivoIncompleto = '';
+        await saveClientes();
+        render();
+      });
+    });
+
+    // Check "Oblea lista para retirar": marca cuando la oblea volvió del PEC.
+    // Queda registrado en el trámite (con fecha) para poder consultarlo desde
+    // afuera (integración con el CRM de WhatsApp) y avisarle al cliente.
+    root.querySelectorAll('[data-oblea-lista]').forEach(chk => {
+      chk.addEventListener('change', async () => {
+        const clienteId = chk.getAttribute('data-oblea-lista');
+        const tramiteId = chk.getAttribute('data-oblea-tramite');
+        const c = clientes.find(x => x.id === clienteId);
+        if (!c) return;
+        const t = (c.tramites || []).find(x => x.id === tramiteId);
+        if (!t) return;
+        t.obleaLista = chk.checked;
+        t.obleaListaEn = chk.checked ? new Date().toISOString() : null;
         await saveClientes();
         render();
       });
