@@ -185,6 +185,21 @@ export async function guardarCredito(usd) {
   await escribirJsonBlob(CREDITO_PATH, dato);
   return dato;
 }
+
+// --- Estado de trámites por patente (Nivel 2: integración con el CRM) ---
+// Índice liviano y NO sensible (sin fotos ni DNI): por patente, el nombre, el
+// estado del último trámite, si la oblea está lista y el próximo turno.
+// Estelita lo empuja al guardar; el CRM lo consulta por patente para que el
+// agente de WhatsApp responda con datos reales. Un archivo por licencia/taller.
+function estadoPath(license) {
+  return 'sistema/estado-' + String(license || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 60) + '.json';
+}
+export async function leerEstadoTramites(license) {
+  try { return (await leerJsonBlob(estadoPath(license))) || null; } catch (e) { return null; }
+}
+export async function guardarEstadoTramites(license, estados) {
+  await escribirJsonBlob(estadoPath(license), { estados: estados || {}, actualizado: new Date().toISOString() });
+}
 export async function agregarSugerencia({ license, taller, texto }) {
   const lista = await leerSugerencias();
   const item = {
