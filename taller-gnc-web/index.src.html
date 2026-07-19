@@ -690,6 +690,21 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 #gnc-app .presu-res-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12.5px; }
 #gnc-app .presu-res-item:hover { background: rgba(29,91,216,.08); }
 #gnc-app .presu-ss { background: rgba(227,84,58,.15); color: var(--danger); font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 999px; margin-left: 4px; }
+#gnc-app .lp-h { font-size: 13px; font-weight: 700; margin: 16px 0 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+#gnc-app .config-item-body > .lp-h:first-child { border-top: 0; padding-top: 0; margin-top: 12px; }
+#gnc-app .lp-ej { font-style: italic; }
+#gnc-app .lp-mo-fila { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: 13px; }
+#gnc-app .lp-mo-fila input { width: 110px; flex: 0 0 110px; }
+#gnc-app .lp-mo-multi { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin: 8px 0; }
+#gnc-app .lp-mo-nom { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+#gnc-app .lp-res { max-height: 320px; }
+#gnc-app .lp-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; }
+#gnc-app .lp-item:nth-child(odd) { background: var(--bg-soft, rgba(0,0,0,.03)); }
+#gnc-app .lp-item-info { flex: 1; min-width: 0; }
+#gnc-app .lp-item-input { width: 100px; flex: 0 0 100px; }
+#gnc-app .lp-propio .lp-item-input { border-color: var(--brand); font-weight: 700; }
+/* El display de .btn le gana a [hidden] si no se dice lo contrario. */
+#gnc-app .lp-item-reset[hidden] { display: none; }
 #gnc-app .presu-chk { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
 #gnc-app .presu-chk input { width: 18px; height: 18px; flex: 0 0 18px; }
 #gnc-app .presu-chk span { color: var(--text-muted); font-weight: 500; font-size: 11.5px; }
@@ -713,6 +728,8 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
   display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
 }
 #gnc-app .tramite-row select { font-size: 11px; padding: 5px 7px; }
+#gnc-app .oblea-check { font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; color: var(--text-muted); }
+#gnc-app .oblea-check input { width: 16px; height: 16px; accent-color: var(--ok); cursor: pointer; }
 #gnc-app .tramite-row-info { flex: 1; min-width: 150px; }
 #gnc-app .tramite-row-acciones { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 #gnc-app .rev-estado { font-size: 12px; margin-top: 3px; font-weight: 600; }
@@ -1743,6 +1760,55 @@ Documentación para realizar la renovación:
     const aj = Number((tallerConfig.listaPrecios || {}).ajusteMec) || 0;
     return Math.round(base * (1 + aj / 100));
   }
+  // Mano de obra de un servicio de GNC: la que cargó el taller o, si no la tocó,
+  // la de la receta original. La prueba hidráulica tiene tres números en vez de
+  // uno (base, por cilindro y bajo chasis), de ahí el campo.
+  const PRESU_MO_CAMPOS = { base: 'moBase', cil: 'moCil', bajoChasis: 'bajoChasis' };
+  function presuMo(srv, campo) {
+    const propios = (tallerConfig.listaPrecios && tallerConfig.listaPrecios.mo) || {};
+    const v = propios[srv.n + (campo ? '.' + campo : '')];
+    if (v != null && v !== '') return Number(v) || 0;
+    return Number(srv[campo ? PRESU_MO_CAMPOS[campo] : 'mo']) || 0;
+  }
+
+  // Índice plano de todo lo que tiene precio de lista, para el buscador de
+  // "Listas de precios". La clave es la misma con la que presuPrecioComp y
+  // presuPrecioTrabajo buscan el precio propio del taller.
+  let _presuCatalogo = null;
+  function presuCatalogo() {
+    if (_presuCatalogo) return _presuCatalogo;
+    const out = [];
+    PRESU_COMPONENTES.forEach(c => {
+      if (c.p == null) return;
+      out.push({ clave: c.nom, nom: c.nom, sec: c.sec, base: c.p, tipo: 'gnc' });
+    });
+    PRESU_EQUIPOS.cil.forEach(c => PRESU_EQUIPOS.sis.forEach(s => {
+      if (c.p[s] == null) return;
+      out.push({ clave: `Equipo ${c.n} — ${s}`, nom: `Equipo completo ${c.n} — ${s}`, sec: 'Equipo completo', base: c.p[s], tipo: 'gnc' });
+    }));
+    PRESU_TRABAJOS.forEach(t => Object.keys(t.p).forEach(k => {
+      if (t.p[k] == null) return;
+      out.push({ clave: t.n + ' — ' + k, nom: t.n, sec: 'Mecánica · ' + t.s + ' · Cat. ' + presuCatLabel(k), base: t.p[k], tipo: 'mec' });
+    }));
+    _presuCatalogo = out;
+    return out;
+  }
+  // El precio de lista con el ajuste general ya aplicado, ignorando cualquier
+  // precio propio: es contra este número que se decide si lo tipeado es una
+  // excepción real o simplemente lo mismo que ya daba la lista.
+  function presuPrecioLista(e) {
+    const lp = tallerConfig.listaPrecios || {};
+    const aj = Number(lp[e.tipo === 'mec' ? 'ajusteMec' : 'ajusteGnc']) || 0;
+    return Math.round(e.base * (1 + aj / 100));
+  }
+  // Qué precio termina usando un ítem del catálogo, y si sale de un precio
+  // propio o de la lista.
+  function presuPrecioDe(e) {
+    const propio = ((tallerConfig.listaPrecios || {}).items || {})[e.clave];
+    if (propio != null && propio !== '') return { valor: Number(propio) || 0, propio: true };
+    return { valor: presuPrecioLista(e), propio: false };
+  }
+
   function presuDetectarCat(txt) {
     const t = presuNorm(txt);
     if (t.length < 2) return null;
@@ -1809,18 +1875,18 @@ Documentación para realizar la renovación:
       const c = presuComp(nom);
       p.items.push({ tipo, nom: c ? c.nom : nom, neto: c ? presuPrecioComp(c) : 0, deServicio: srv.n });
     };
-    let mo = srv.mo || 0;
+    let mo = presuMo(srv);
     if (srv.porCil) {
       const n = Math.max(1, Math.min(6, Number(cantCil) || 1));
       for (let k = 0; k < n; k++) {
         (srv.cCil || []).forEach(x => meter(x, 'equipo'));
         (srv.tCil || []).forEach(x => meter(x, 'tramite'));
       }
-      mo = srv.moBase + n * srv.moCil;
+      mo = presuMo(srv, 'base') + n * presuMo(srv, 'cil');
       // El bajo chasis va como ítem propio de mano de obra (para verlo en el
       // desglose) y es único: no se multiplica por cilindro.
       if (srv.bajoChasis && bajoChasis) {
-        p.items.push({ tipo: 'trabajo', nom: 'Adicional bajo chasis', neto: srv.bajoChasis, deServicio: srv.n });
+        p.items.push({ tipo: 'trabajo', nom: 'Adicional bajo chasis', neto: presuMo(srv, 'bajoChasis'), deServicio: srv.n });
       }
     }
     (srv.c || []).forEach(x => meter(x, 'equipo'));
@@ -1995,7 +2061,7 @@ Documentación para realizar la renovación:
           <label class="presu-lbl" style="flex:1; align-self:center; margin:0;">¿Cuántos cilindros?</label>
           <input type="number" id="p-cant-cil" value="1" min="1" max="6" style="flex:0 0 90px;">
         </div>
-        <label class="presu-chk"><input type="checkbox" id="p-bajo-chasis"> Bajo chasis <span>(+${presuMoney(srvObj.bajoChasis)}, una sola vez)</span></label>` : ''}
+        <label class="presu-chk"><input type="checkbox" id="p-bajo-chasis"> Bajo chasis <span>(+${presuMoney(presuMo(srvObj, 'bajoChasis'))}, una sola vez)</span></label>` : ''}
 
       ${srvSel === 'instal' ? `
         <h3>Equipo <span class="presu-lite">— lista del PEC</span></h3>
@@ -3920,6 +3986,16 @@ Documentación para realizar la renovación:
     </div>`;
   }
 
+  // Traduce el ajuste general a plata, que es como se entiende: "+15%" no dice
+  // nada, "un componente de $100.000 te sale $115.000" sí.
+  function ajusteEjemplo(ajGnc, ajMec) {
+    const g = Number(ajGnc) || 0, m = Number(ajMec) || 0;
+    if (!g && !m) return 'Sin ajuste: se usan los precios de lista tal cual vienen.';
+    const linea = (aj, qué, base) => !aj ? '' :
+      `${qué}: ${aj > 0 ? '+' : ''}${aj}% — lo que en la lista sale ${presuMoney(base)}, en tus presupuestos sale ${presuMoney(Math.round(base * (1 + aj / 100)))}.`;
+    return [linea(g, 'GNC', 100000), linea(m, 'Mecánica', 200000)].filter(Boolean).join(' ');
+  }
+
   function tallerConfigPanel(entrando) {
     const t = tallerConfig;
     const secDatos = `
@@ -4064,6 +4140,50 @@ Documentación para realizar la renovación:
         </label>
         ${tallerConfig.logo ? '<button type="button" class="btn btn-danger-outline btn-sm" id="btn-quitar-logo">Quitar</button>' : ''}
       </div>`;
+    // Listas de precios de los presupuestos. Tres perillas, de la más gruesa a
+    // la más fina: ajuste general por porcentaje, mano de obra de los servicios
+    // de GNC (que es la ganancia del taller) y, si hace falta, el ítem suelto.
+    const lp = t.listaPrecios || {};
+    const nPropios = Object.keys(lp.items || {}).length;
+    const secListas = `
+      <div class="agent-hint" style="margin-top:0;">Estelita ya viene cargada con la lista de componentes y equipos de PecMar y con los precios sugeridos de mano de obra de la Cámara (ATAIA), así podés presupuestar desde el primer día. Acá los llevás a los tuyos.</div>
+
+      <div class="lp-h">1. Ajuste general</div>
+      <div class="agent-hint" style="margin-top:0;">Si tus precios están parejo por encima (o por debajo) de la lista, con esto solo alcanza. Poné cuánto por ciento, o dejá 0 para usar la lista tal cual.</div>
+      <div class="form-grid">
+        <label>GNC: componentes y equipos (%)
+          <input type="number" step="1" id="tc-aj-gnc" value="${escapeHtml(String(lp.ajusteGnc || ''))}" placeholder="0">
+        </label>
+        <label>Mecánica: mano de obra (%)
+          <input type="number" step="1" id="tc-aj-mec" value="${escapeHtml(String(lp.ajusteMec || ''))}" placeholder="0">
+        </label>
+      </div>
+      <div class="agent-hint lp-ej" id="tc-aj-ej">${escapeHtml(ajusteEjemplo(lp.ajusteGnc, lp.ajusteMec))}</div>
+
+      <div class="lp-h">2. Tu mano de obra en GNC</div>
+      <div class="agent-hint" style="margin-top:0;">Lo que cobrás de mano de obra en cada servicio frecuente. Este es el número que te deja la ganancia: los componentes pasan a costo. El precio final del servicio sale solo, sumando los componentes de la lista.</div>
+      ${PRESU_SERVICIOS.map((s, i) => s.porCil ? `
+        <div class="lp-mo-multi">
+          <div class="lp-mo-nom">${escapeHtml(s.n)}</div>
+          <div class="form-grid">
+            <label>Base (fija)<input type="number" min="0" step="1000" id="tc-mo-${i}-base" value="${escapeHtml(String(presuMo(s, 'base')))}"></label>
+            <label>Por cilindro<input type="number" min="0" step="1000" id="tc-mo-${i}-cil" value="${escapeHtml(String(presuMo(s, 'cil')))}"></label>
+            <label>Adicional bajo chasis<input type="number" min="0" step="1000" id="tc-mo-${i}-bajoChasis" value="${escapeHtml(String(presuMo(s, 'bajoChasis')))}"></label>
+          </div>
+          <div class="agent-hint" style="margin-top:2px;">Mano de obra = base + (cilindros × por cilindro). Hoy: 1 cil. ${presuMoney(presuMo(s, 'base') + presuMo(s, 'cil'))} · 2 cil. ${presuMoney(presuMo(s, 'base') + 2 * presuMo(s, 'cil'))} · 3 cil. ${presuMoney(presuMo(s, 'base') + 3 * presuMo(s, 'cil'))}</div>
+        </div>` : `
+        <label class="lp-mo-fila">
+          <span>${escapeHtml(s.n)}</span>
+          <input type="number" min="0" step="1000" id="tc-mo-${i}" value="${escapeHtml(String(presuMo(s)))}">
+        </label>`).join('')}
+
+      <div class="lp-h">3. Un ítem puntual</div>
+      <div class="agent-hint" style="margin-top:0;">Buscá cualquier componente, equipo o trabajo de mecánica y ponele tu precio. Se guarda apenas lo escribís${nPropios ? ` — hoy tenés <b id="tc-lp-n">${nPropios}</b> ${nPropios === 1 ? 'ítem con precio propio' : 'ítems con precio propio'}` : '. <b id="tc-lp-n" hidden>0</b>'}.</div>
+      <input type="text" id="tc-lp-busca" placeholder="Ej: reductor SGV, embrague, cilindro 30/244…" autocomplete="off">
+      <div id="tc-lp-res" class="presu-res lp-res"></div>
+      <div class="form-actions" style="margin-top:8px;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-lp-reset"${nPropios ? '' : ' disabled'}>Volver todo a los precios de lista</button>
+      </div>`;
     const secLicencia = `
       <div class="agent-hint" style="margin-top:0;">Código de licencia de este equipo: <b>${escapeHtml(localStorage.getItem(LICENSE_KEY) || '(sin activar)')}</b> — es el que tenés que usar para activar Estelita en otro dispositivo y recuperar ahí tu copia de seguridad.</div>
       <div class="form-actions" style="margin-top:8px;">
@@ -4087,6 +4207,7 @@ Documentación para realizar la renovación:
       ${configSeccionCard('tecnico', 'App del técnico', secTecnico)}
       ${configSeccionCard('mensajes', 'Mensajes de WhatsApp', secMensajes)}
       ${configSeccionCard('logo', 'Logo del taller', secLogo)}
+      ${configSeccionCard('listas', 'Listas de precios (para los presupuestos)', secListas)}
       ${configSeccionCard('precios', 'Precios de trámites', secPrecios)}
       ${configSeccionCard('impresion', 'Impresión sobre la planilla', secImpresion)}
       ${configSeccionCard('licencia', 'Licencia del equipo', secLicencia)}
@@ -4126,6 +4247,28 @@ Documentación para realizar la renovación:
         if (!e) return;
         const v = Number(e.value);
         if (v > 0) tallerConfig.precios[t.value] = v; else delete tallerConfig.precios[t.value];
+      });
+    }
+    // Listas de precios. El ajuste general y la mano de obra de cada servicio;
+    // los precios propios de ítems sueltos se guardan solos al tipearlos.
+    if (el('tc-aj-gnc')) {
+      tallerConfig.listaPrecios = tallerConfig.listaPrecios || { ajusteGnc: 0, ajusteMec: 0, items: {} };
+      const lp = tallerConfig.listaPrecios;
+      lp.ajusteGnc = Number(el('tc-aj-gnc').value) || 0;
+      lp.ajusteMec = Number(el('tc-aj-mec').value) || 0;
+      lp.mo = lp.mo || {};
+      PRESU_SERVICIOS.forEach((s, i) => {
+        // Se guarda solo lo que difiere de la receta, así una actualización
+        // futura de los precios base llega a quien no los tocó.
+        const guardar = (campo, orig) => {
+          const e = el('tc-mo-' + i + (campo ? '-' + campo : ''));
+          if (!e) return;
+          const clave = s.n + (campo ? '.' + campo : '');
+          const v = Number(e.value);
+          if (e.value !== '' && v >= 0 && v !== orig) lp.mo[clave] = v; else delete lp.mo[clave];
+        };
+        if (s.porCil) { guardar('base', s.moBase); guardar('cil', s.moCil); guardar('bajoChasis', s.bajoChasis); }
+        else guardar(null, s.mo);
       });
     }
     (tallerConfig.pecs || []).forEach((p, i) => {
@@ -5310,6 +5453,8 @@ Documentación para realizar la renovación:
         <option value="enviado" ${t.estadoPec === 'enviado' ? 'selected' : ''}>Enviado al PEC</option>
       </select>
       <span class="badge ${badgeClass}">${ESTADO_PEC_LABELS[t.estadoPec]}</span>
+      ${t.estadoPec === 'enviado' ? `<label class="oblea-check" title="Marcá cuando la oblea volvió del PEC y está lista para retirar"><input type="checkbox" data-oblea-lista="${clienteId}" data-oblea-tramite="${t.id}" ${t.obleaLista ? 'checked' : ''}> Oblea lista</label>` : ''}
+      ${t.obleaLista ? `<span class="badge badge-ok">Oblea lista ✅</span>` : ''}
       ${t.estadoPec !== 'enviado' ? `<button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${clienteId}" data-editar-tramite-id="${t.id}">Editar</button>` : ''}
       <button type="button" class="btn btn-trash btn-sm" data-borrar-tramite-cliente="${clienteId}" data-borrar-tramite-id="${t.id}" title="Eliminar trámite" aria-label="Eliminar trámite">${trashSvg()}</button>
     </div>`;
@@ -7032,6 +7177,11 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       }));
       const p0 = pecs[0] || blankPec();
       tallerConfig = {
+        // Se parte de lo que ya había: este formulario no edita todo (el logo,
+        // las listas de precios y la numeración de presupuestos viven acá pero
+        // se guardan por su cuenta), y sin esto los campos que no figuren abajo
+        // se perderían al guardar.
+        ...tallerConfig,
         razonSocial: (tallerConfig.razonSocial || '').trim(),
         direccion: (tallerConfig.direccion || '').trim(),
         horario: (tallerConfig.horario || '').trim(),
@@ -8211,6 +8361,98 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       render();
     });
 
+    // --- Listas de precios (dentro de Configuración del taller) ---
+    // Todo se actualiza a mano, sin render(): un render() acá cerraría el
+    // teclado y borraría lo que se está escribiendo.
+    const lpBusca = root.querySelector('#tc-lp-busca');
+    const ajGnc = root.querySelector('#tc-aj-gnc'), ajMec = root.querySelector('#tc-aj-mec');
+    if (lpBusca && ajGnc && ajMec) {
+      const contarPropios = () => {
+        const n = Object.keys((tallerConfig.listaPrecios || {}).items || {}).length;
+        const b = root.querySelector('#tc-lp-n');
+        if (b) { b.textContent = String(n); b.hidden = false; }
+        const r = root.querySelector('#btn-lp-reset');
+        if (r) r.disabled = !n;
+      };
+      const filaLp = (e) => {
+        const pr = presuPrecioDe(e);
+        const d = document.createElement('div');
+        d.className = 'lp-item' + (pr.propio ? ' lp-propio' : '');
+        d.innerHTML = `<div class="lp-item-info">
+            <div>${escapeHtml(e.nom)}</div>
+            <div class="presu-por">${escapeHtml(e.sec)} · lista ${presuMoney(e.base)}${pr.propio ? ' · <b>precio propio</b>' : ''}</div>
+          </div>
+          <input type="number" min="0" step="100" class="lp-item-input" value="${pr.valor}">
+          <button type="button" class="btn btn-ghost btn-sm lp-item-reset"${pr.propio ? '' : ' hidden'}>A lista</button>`;
+        const input = d.querySelector('.lp-item-input');
+        const reset = d.querySelector('.lp-item-reset');
+        const marcar = (propio) => {
+          d.classList.toggle('lp-propio', propio);
+          reset.hidden = !propio;
+          const sub = d.querySelector('.presu-por');
+          sub.innerHTML = `${escapeHtml(e.sec)} · lista ${presuMoney(e.base)}${propio ? ' · <b>precio propio</b>' : ''}`;
+        };
+        input.addEventListener('change', async () => {
+          tallerConfig.listaPrecios = tallerConfig.listaPrecios || { ajusteGnc: 0, ajusteMec: 0, items: {} };
+          const items = tallerConfig.listaPrecios.items = tallerConfig.listaPrecios.items || {};
+          const v = Number(input.value);
+          // Volver al precio que ya daba la lista no es un precio propio: se
+          // borra la excepción para que el ajuste general siga mandando.
+          const conAjuste = presuPrecioLista(e);
+          if (input.value === '' || !(v >= 0) || v === conAjuste) { delete items[e.clave]; input.value = conAjuste; marcar(false); }
+          else { items[e.clave] = v; marcar(true); }
+          await saveTallerConfig();
+          contarPropios();
+        });
+        reset.addEventListener('click', async () => {
+          delete ((tallerConfig.listaPrecios || {}).items || {})[e.clave];
+          await saveTallerConfig();
+          input.value = presuPrecioDe(e).valor;
+          marcar(false);
+          contarPropios();
+        });
+        return d;
+      };
+      const buscar = () => {
+        const cont = root.querySelector('#tc-lp-res');
+        if (!cont) return;
+        const txt = presuNorm(lpBusca.value);
+        if (txt.length < 2) { cont.innerHTML = '<p class="scan-sub">Escribí al menos dos letras para buscar.</p>'; return; }
+        const palabras = txt.split(/\s+/);
+        const hits = presuCatalogo()
+          .filter(e => palabras.every(w => presuNorm(e.nom).includes(w) || presuNorm(e.sec).includes(w)))
+          .slice(0, 25);
+        cont.innerHTML = '';
+        if (!hits.length) { cont.innerHTML = '<p class="scan-sub">No encontré nada con ese nombre.</p>'; return; }
+        hits.forEach(e => cont.appendChild(filaLp(e)));
+      };
+      lpBusca.addEventListener('input', buscar);
+
+      // El ajuste general tiene que estar en memoria antes de dibujar cualquier
+      // precio: si no, el buscador mostraría los de lista sin ajustar y tomaría
+      // como "precio propio" algo que en realidad ya daba la lista.
+      const refrescarAjuste = () => {
+        tallerConfig.listaPrecios = tallerConfig.listaPrecios || { ajusteGnc: 0, ajusteMec: 0, items: {} };
+        tallerConfig.listaPrecios.ajusteGnc = Number(ajGnc.value) || 0;
+        tallerConfig.listaPrecios.ajusteMec = Number(ajMec.value) || 0;
+        const e = root.querySelector('#tc-aj-ej');
+        if (e) e.textContent = ajusteEjemplo(ajGnc.value, ajMec.value);
+        buscar();
+      };
+      ajGnc.addEventListener('input', refrescarAjuste);
+      ajMec.addEventListener('input', refrescarAjuste);
+      const btnLpReset = root.querySelector('#btn-lp-reset');
+      if (btnLpReset) btnLpReset.addEventListener('click', async () => {
+        const n = Object.keys((tallerConfig.listaPrecios || {}).items || {}).length;
+        const ok = await customConfirm(`Se van a borrar los ${n} precios propios que cargaste y todo vuelve a la lista con tu ajuste general. Tu mano de obra no se toca.`, { titulo: 'Volver a los precios de lista', danger: true, okLabel: 'Volver a lista' });
+        if (!ok) return;
+        syncTallerConfigFromDOM();
+        tallerConfig.listaPrecios.items = {};
+        await saveTallerConfig();
+        render();
+      });
+    }
+
     const btnPresupuestos = root.querySelector('#btn-presupuestos');
     if (btnPresupuestos) btnPresupuestos.addEventListener('click', () => {
       const abierto = showPresupuestos;
@@ -9165,6 +9407,24 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         t.estadoPec = sel.value;
         if (sel.value === 'enviado' && !t.enviadoEn) t.enviadoEn = new Date().toISOString();
         t.motivoIncompleto = '';
+        await saveClientes();
+        render();
+      });
+    });
+
+    // Check "Oblea lista para retirar": marca cuando la oblea volvió del PEC.
+    // Queda registrado en el trámite (con fecha) para poder consultarlo desde
+    // afuera (integración con el CRM de WhatsApp) y avisarle al cliente.
+    root.querySelectorAll('[data-oblea-lista]').forEach(chk => {
+      chk.addEventListener('change', async () => {
+        const clienteId = chk.getAttribute('data-oblea-lista');
+        const tramiteId = chk.getAttribute('data-oblea-tramite');
+        const c = clientes.find(x => x.id === clienteId);
+        if (!c) return;
+        const t = (c.tramites || []).find(x => x.id === tramiteId);
+        if (!t) return;
+        t.obleaLista = chk.checked;
+        t.obleaListaEn = chk.checked ? new Date().toISOString() : null;
         await saveClientes();
         render();
       });
