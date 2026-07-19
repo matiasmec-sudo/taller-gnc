@@ -1539,6 +1539,7 @@ Documentación para realizar la renovación:
     if (bumpTs !== false) {
       const cambio = marcarClientesModificados();
       if (cambio) programarSync('cambios guardados');
+      programarPushEstado();
     } else {
       tomarSnapshotClientes();
     }
@@ -1554,6 +1555,42 @@ Documentación para realizar la renovación:
         customAlert('No se pudieron guardar los últimos cambios en este dispositivo — puede estar sin espacio. Sacá una copia ahora con "Exportar CSV" o con la copia de seguridad en la nube, y liberá espacio antes de seguir cargando.', 'Atención: no se pudo guardar');
       }
     }
+  }
+
+  // --- Nivel 2: empujar el estado de los trámites al CRM de WhatsApp ---
+  // Índice liviano por patente (sin fotos ni DNI): nombre, estado del último
+  // trámite, si la oblea está lista y el próximo turno. Se sube con debounce
+  // así el agente puede responder "¿está lista tu oblea?" con datos reales.
+  let estadoPushTimer = null;
+  function programarPushEstado() {
+    if (estadoPushTimer) clearTimeout(estadoPushTimer);
+    estadoPushTimer = setTimeout(() => { pushEstadoTramites().catch(() => {}); }, 5000);
+  }
+  async function pushEstadoTramites() {
+    const license = (localStorage.getItem(LICENSE_KEY) || '').trim();
+    if (!license) return;
+    const estados = {};
+    (clientes || []).forEach(c => {
+      const pat = (c.patente || '').trim().toUpperCase().replace(/\s+/g, '');
+      if (!pat) return;
+      const tr = c.tramites || [];
+      const ultimo = tr.length ? tr[tr.length - 1] : null;
+      const pt = proximoTurnoDe(c);
+      estados[pat] = {
+        nombre: nombreFicha(c),
+        estado: ultimo ? (ultimo.estadoPec || 'pendiente') : null,
+        obleaLista: !!(ultimo && ultimo.obleaLista),
+        obleaListaEn: (ultimo && ultimo.obleaListaEn) || null,
+        proximoTurno: pt ? { fecha: pt.fecha, hora: pt.hora || '' } : null,
+      };
+    });
+    try {
+      await fetch('/api/estado', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ license, estados }),
+      });
+    } catch (e) { /* best-effort: si falla no se molesta al usuario */ }
   }
 
   async function saveTaller() {
