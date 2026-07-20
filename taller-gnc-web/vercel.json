@@ -1,0 +1,14 @@
+{
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "estelita.com.ar" }],
+      "destination": "/estelita.html"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "www.estelita.com.ar" }],
+      "destination": "/estelita.html"
+    }
+  ]
+}
