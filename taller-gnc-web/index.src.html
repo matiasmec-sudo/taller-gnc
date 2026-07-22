@@ -8604,6 +8604,20 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         c.turnos.push({ id: 't' + Date.now() + Math.random().toString(36).slice(2, 7), fecha: r.fecha, hora: r.hora, motivo: r.motivo, presupuesto: r.presupuesto, avisoEnviado: false });
         await saveClientes();
         await quitarPedidoWa(p.id);
+        // Cerrar el loop: avisar al cliente por WhatsApp (desde el asistente) que
+        // su turno quedó confirmado. Best-effort: si falla no molesta al dueño.
+        if (p.telefono) {
+          const cuando = fmtDate(r.fecha) + (r.hora ? ' a las ' + r.hora + ' hs' : '');
+          fetch('https://estelitacrm.duckdns.org/api/turno-confirmado', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              license: (localStorage.getItem(LICENSE_KEY) || '').trim(),
+              telefono: p.telefono,
+              texto: '¡Listo! Te confirmamos el turno para el ' + cuando + '. Te esperamos. 🔧',
+            }),
+          }).catch(() => {});
+        }
         render();
       });
     });
