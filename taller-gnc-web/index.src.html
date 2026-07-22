@@ -1235,6 +1235,7 @@ Documentación para realizar la renovación:
     ready = true;
     render();
     if (syncActiva()) sincronizar('apertura');
+    fetchPedidosWa(); // Nivel 2: traer pedidos de turno que llegaron por WhatsApp.
     iniciarAvisoPendientesDiario();
     // En segundo plano: saber si hay técnicos vinculados (muestra u oculta
     // el botón "Enviar al técnico" del paso 1).
@@ -1591,6 +1592,32 @@ Documentación para realizar la renovación:
         body: JSON.stringify({ license, estados }),
       });
     } catch (e) { /* best-effort: si falla no se molesta al usuario */ }
+  }
+
+  // --- Pedidos de turno desde WhatsApp (Nivel 2: los empuja el CRM al buzón) ---
+  let pedidosWa = [];
+  async function fetchPedidosWa() {
+    const license = (localStorage.getItem(LICENSE_KEY) || '').trim();
+    if (!license) return;
+    try {
+      const r = await fetch('/api/turnos-wa?license=' + encodeURIComponent(license));
+      if (!r.ok) return;
+      const data = await r.json();
+      pedidosWa = Array.isArray(data.turnos) ? data.turnos : [];
+      if (typeof showTurnos !== 'undefined' && showTurnos) render();
+    } catch (e) { /* best-effort */ }
+  }
+  async function quitarPedidoWa(id) {
+    const license = (localStorage.getItem(LICENSE_KEY) || '').trim();
+    pedidosWa = pedidosWa.filter(p => p.id !== id);
+    if (!license) return;
+    try {
+      await fetch('/api/turnos-wa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ license, accion: 'quitar', id }),
+      });
+    } catch (e) { /* best-effort */ }
   }
 
   async function saveTaller() {
@@ -3044,6 +3071,22 @@ Documentación para realizar la renovación:
       ${panelVolver()}
       <h2 style="margin-top:0;">Turnos ${infoAyuda('ayuda-turnos')}</h2>
       ${ayudaBloque('ayuda-turnos', 'Los turnos se agendan desde el alta de un cliente nuevo o con el botón "Turno" de su tarjeta. Para los de hoy y mañana aparece el botón de WhatsApp con el recordatorio ya escrito. Cuando el cliente viene (o falta), tocá "Asistió" o "No asistió" y queda guardado en su historial. Estelita también te avisa a vos con la notificación diaria si hay turnos para mañana sin avisar.')}
+      ${pedidosWa.length ? `
+        <div class="hist-dia" style="color:var(--flame);">📱 Pedidos por WhatsApp (${pedidosWa.length})</div>
+        <div class="tramites-list">
+          ${pedidosWa.map(p => `
+            <div class="tramite-row">
+              <div>
+                <div class="hist-patente">${escapeHtml(p.patente || 'SIN PATENTE')}</div>
+                <div class="hist-tipo">${escapeHtml(p.vehiculo || '')}${p.detalle ? ' — ' + escapeHtml(p.detalle) : ''}</div>
+                <div class="hist-nombre">${escapeHtml(p.nombre || '')}${p.telefono ? ' · ' + escapeHtml(p.telefono) : ''}</div>
+                <div class="turno-confirmar">
+                  <button type="button" class="btn btn-primary btn-sm" data-cargar-wa="${escapeHtml(p.id)}">Cargar turno</button>
+                  <button type="button" class="btn btn-ghost btn-sm" data-descartar-wa="${escapeHtml(p.id)}">Descartar</button>
+                </div>
+              </div>
+            </div>`).join('')}
+        </div>` : ''}
       ${grupos.length ? grupos.map(g => `
         <div class="hist-dia">${g.titulo}</div>
         <div class="tramites-list">
@@ -8508,6 +8551,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       cerrarPanelesConsulta();
       menuOpen = false;
       showTurnos = !abierto;
+      if (showTurnos) fetchPedidosWa();
       render();
     });
     const btnCloseTurnos = root.querySelector('#btn-close-turnos');
@@ -8536,6 +8580,36 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
           });
         }
         await saveClientes();
+        render();
+      });
+    });
+
+    // Nivel 2: pedidos de turno que llegaron por WhatsApp (buzón del CRM).
+    root.querySelectorAll('[data-cargar-wa]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const p = pedidosWa.find(x => x.id === btn.getAttribute('data-cargar-wa'));
+        if (!p) return;
+        const r = await mostrarModalTurno({ motivo: p.detalle || '' });
+        if (!r) return;
+        const pat = (p.patente || '').trim().toUpperCase().replace(/\s+/g, '');
+        let c = pat ? clientes.find(x => (x.patente || '').trim().toUpperCase().replace(/\s+/g, '') === pat) : null;
+        if (!c) {
+          c = { id: 'c' + Date.now() + Math.random().toString(36).slice(2, 7), ...blankClienteBase(), patente: p.patente || '', nombre: p.nombre || '', telefono: p.telefono || '', tramites: [], turnos: [], ultimoAvisoMes: {}, notas: '' };
+          clientes.push(c);
+        } else {
+          if (!c.telefono && p.telefono) c.telefono = p.telefono;
+          if (!c.nombre && p.nombre) c.nombre = p.nombre;
+        }
+        if (!Array.isArray(c.turnos)) c.turnos = [];
+        c.turnos.push({ id: 't' + Date.now() + Math.random().toString(36).slice(2, 7), fecha: r.fecha, hora: r.hora, motivo: r.motivo, presupuesto: r.presupuesto, avisoEnviado: false });
+        await saveClientes();
+        await quitarPedidoWa(p.id);
+        render();
+      });
+    });
+    root.querySelectorAll('[data-descartar-wa]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await quitarPedidoWa(btn.getAttribute('data-descartar-wa'));
         render();
       });
     });
