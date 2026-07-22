@@ -200,6 +200,44 @@ export async function leerEstadoTramites(license) {
 export async function guardarEstadoTramites(license, estados) {
   await escribirJsonBlob(estadoPath(license), { estados: estados || {}, actualizado: new Date().toISOString() });
 }
+
+// --- Pedidos de turno desde WhatsApp (Nivel 2) ---
+// El CRM empuja acá los pedidos de turno que hace el cliente por WhatsApp;
+// Estelita los lee y el dueño los carga a su agenda con un toque. Un archivo
+// por licencia/taller. NO sensible: solo nombre, teléfono y qué pidió.
+function turnosWaPath(license) {
+  return 'sistema/turnoswa-' + String(license || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 60) + '.json';
+}
+export async function leerTurnosWa(license) {
+  try {
+    const data = await leerJsonBlob(turnosWaPath(license));
+    return data && Array.isArray(data.turnos) ? data.turnos : [];
+  } catch (e) { return []; }
+}
+export async function guardarTurnosWa(license, turnos) {
+  await escribirJsonBlob(turnosWaPath(license), { turnos: turnos || [], actualizado: new Date().toISOString() });
+}
+export async function agregarTurnoWa(license, turno) {
+  const lista = await leerTurnosWa(license);
+  const item = {
+    id: crypto.randomUUID ? crypto.randomUUID() : (Date.now() + '-' + crypto.randomInt(1e9)),
+    creado: new Date().toISOString(),
+    nombre: String(turno?.nombre || '').trim().slice(0, 120),
+    telefono: String(turno?.telefono || '').trim().slice(0, 40),
+    patente: String(turno?.patente || '').trim().slice(0, 15).toUpperCase(),
+    vehiculo: String(turno?.vehiculo || '').trim().slice(0, 120),
+    detalle: String(turno?.detalle || '').trim().slice(0, 500),
+  };
+  lista.unshift(item); // el más nuevo primero
+  await guardarTurnosWa(license, lista.slice(0, 200)); // tope de resguardo
+  return item;
+}
+export async function quitarTurnoWa(license, id) {
+  const lista = await leerTurnosWa(license);
+  const filtrada = lista.filter(t => t.id !== id);
+  await guardarTurnosWa(license, filtrada);
+  return lista.length !== filtrada.length;
+}
 export async function agregarSugerencia({ license, taller, texto }) {
   const lista = await leerSugerencias();
   const item = {
