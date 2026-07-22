@@ -1410,6 +1410,32 @@ Documentación para realizar la renovación:
     });
   }
 
+  // Mensaje de confirmación al cliente (Nivel 2): editable antes de enviarlo,
+  // por si le cambiaste el día o querés aclararle algo. Devuelve el texto o null.
+  function mostrarModalConfirmacionWa(textoDefecto) {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'gnc-modal-overlay';
+      overlay.innerHTML = `
+        <div class="gnc-modal-box">
+          <div class="gnc-modal-title" style="margin-bottom:8px;">Confirmar al cliente</div>
+          <p class="scan-sub" style="margin:0 0 10px;">Este mensaje le llega al cliente por WhatsApp. Editalo si hace falta (por ejemplo, si le cambiaste el día que había pedido).</p>
+          <textarea id="modal-conf-texto" rows="4" style="width:100%; padding:10px; border-radius:10px; border:1.5px solid var(--celeste-borde); font-family:inherit; font-size:14px;">${escapeHtml(textoDefecto)}</textarea>
+          <div class="gnc-modal-actions">
+            <button type="button" class="btn btn-sm btn-ghost" id="modal-conf-no">No enviar</button>
+            <button type="button" class="btn btn-sm btn-primary" id="modal-conf-enviar">Enviar al cliente</button>
+          </div>
+        </div>`;
+      function cerrar(valor) { overlay.classList.add('closing'); setTimeout(() => { overlay.remove(); resolve(valor); }, 150); }
+      overlay.querySelector('#modal-conf-no').addEventListener('click', () => cerrar(null));
+      overlay.querySelector('#modal-conf-enviar').addEventListener('click', () => {
+        cerrar((overlay.querySelector('#modal-conf-texto').value || '').trim() || null);
+      });
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(null); });
+      document.body.appendChild(overlay);
+    });
+  }
+
   // ===== CATÁLOGO DE PRESUPUESTOS =====
   // Extraído de las listas oficiales: PecMar (20-04-2026) para GNC y ATAIA
   // (abr-jun 2026) para mano de obra de mecánica. Va embebido para que la app
@@ -8604,21 +8630,26 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         c.turnos.push({ id: 't' + Date.now() + Math.random().toString(36).slice(2, 7), fecha: r.fecha, hora: r.hora, motivo: r.motivo, presupuesto: r.presupuesto, avisoEnviado: false });
         await saveClientes();
         await quitarPedidoWa(p.id);
+        render();
         // Cerrar el loop: avisar al cliente por WhatsApp (desde el asistente) que
-        // su turno quedó confirmado. Best-effort: si falla no molesta al dueño.
+        // su turno quedó confirmado. El dueño puede editar el mensaje antes de
+        // enviarlo (ej. si le cambió el día que pidió). Best-effort: si falla no molesta.
         if (p.telefono) {
           const cuando = fmtDate(r.fecha) + (r.hora ? ' a las ' + r.hora + ' hs' : '');
-          fetch('https://estelitacrm.duckdns.org/api/turno-confirmado', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              license: (localStorage.getItem(LICENSE_KEY) || '').trim(),
-              telefono: p.telefono,
-              texto: '¡Listo! Te confirmamos el turno para el ' + cuando + '. Te esperamos. 🔧',
-            }),
-          }).catch(() => {});
+          const textoDef = '¡Listo! Te confirmamos el turno para el ' + cuando + '. Te esperamos. 🔧';
+          const texto = await mostrarModalConfirmacionWa(textoDef);
+          if (texto) {
+            fetch('https://estelitacrm.duckdns.org/api/turno-confirmado', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                license: (localStorage.getItem(LICENSE_KEY) || '').trim(),
+                telefono: p.telefono,
+                texto,
+              }),
+            }).catch(() => {});
+          }
         }
-        render();
       });
     });
     root.querySelectorAll('[data-descartar-wa]').forEach(btn => {
