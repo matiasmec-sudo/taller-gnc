@@ -612,6 +612,40 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 #gnc-app .hist-tipo { font-size: 13.5px; font-weight: 700; margin-top: 1px; }
 #gnc-app .hist-nombre { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
 #gnc-app .turno-confirmar { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+/* ===== Agenda semanal de turnos ===== */
+#gnc-app .ag-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin: 4px 0 12px; }
+#gnc-app .ag-rango { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+#gnc-app .ag-nav { display: flex; align-items: center; gap: 6px; }
+#gnc-app .ag-nav button { border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 9px; height: 34px; min-width: 34px; padding: 0 12px; font-size: 14px; font-weight: 700; cursor: pointer; }
+#gnc-app .ag-nav button.ag-hoy { background: var(--flame); color: #fff; border-color: var(--flame); }
+#gnc-app .ag-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; font-size: 12px; color: var(--text-muted); }
+#gnc-app .ag-legend span { display: flex; align-items: center; gap: 5px; }
+#gnc-app .ag-legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+#gnc-app .ag-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 6px; }
+#gnc-app .ag-grid { min-width: 640px; }
+#gnc-app .ag-row, #gnc-app .ag-head { display: grid; grid-template-columns: 46px repeat(5, minmax(116px, 1fr)); }
+#gnc-app .ag-dhead { text-align: center; padding: 8px 4px; border-bottom: 2px solid var(--line); }
+#gnc-app .ag-dhead .dn { font-size: 11px; color: var(--text-muted); letter-spacing: .6px; font-weight: 700; }
+#gnc-app .ag-dhead .df { font-size: 19px; font-weight: 800; line-height: 1.1; }
+#gnc-app .ag-dhead .dc { font-size: 11px; color: var(--text-muted); }
+#gnc-app .ag-dhead.hoy { background: var(--surface-alt); border-radius: 10px 10px 0 0; border-bottom-color: var(--flame); }
+#gnc-app .ag-dhead.hoy .dn, #gnc-app .ag-dhead.hoy .df, #gnc-app .ag-dhead.hoy .dc { color: var(--flame); }
+#gnc-app .ag-hlabel { font-size: 11px; color: var(--text-muted); text-align: right; padding: 4px 6px 0 0; }
+#gnc-app .ag-cell { border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); min-height: 46px; padding: 3px; }
+#gnc-app .ag-cell.hoy { background: color-mix(in srgb, var(--flame) 6%, transparent); }
+#gnc-app .ag-cell:last-child { border-right: 1px solid var(--line); }
+#gnc-app .ag-turno { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--flame); border-radius: 6px; padding: 5px 6px; margin-bottom: 4px; cursor: pointer; }
+#gnc-app .ag-turno:hover { border-color: var(--flame-dim); }
+#gnc-app .ag-turno .h { font-size: 12px; font-weight: 800; }
+#gnc-app .ag-turno .p { font-size: 12.5px; font-weight: 700; letter-spacing: .3px; }
+#gnc-app .ag-turno .m { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+#gnc-app .ag-sinhora { grid-column: 2 / -1; }
+#gnc-app .ag-nota { font-size: 12px; color: var(--text-muted); margin-top: 10px; display: flex; align-items: center; gap: 6px; }
+#gnc-app .ag-wa-strip { border: 1.5px dashed var(--flame); background: color-mix(in srgb, var(--flame) 7%, transparent); border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; }
+#gnc-app .ag-wa-strip .titulo { font-size: 12.5px; font-weight: 800; color: var(--flame); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+#gnc-app .ag-wa-cards { display: flex; gap: 8px; flex-wrap: wrap; }
+#gnc-app .ag-wa-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; flex: 1 1 220px; min-width: 200px; }
+#gnc-app .ag-wa-card .pill { display: inline-block; font-size: 10px; font-weight: 800; color: #fff; background: var(--flame); border-radius: 20px; padding: 2px 8px; letter-spacing: .5px; margin-bottom: 4px; }
 #gnc-app .hist-modelo { font-family: var(--sans); font-size: 13px; font-weight: 600; letter-spacing: 0; color: var(--text-muted); }
 /* Zona tocable de la fila del historial: al tocarla se despliega el
    detalle del cliente hacia abajo (los botones de la derecha quedan aparte). */
@@ -3077,6 +3111,117 @@ Documentación para realizar la renovación:
   // taller (aunque hoy venga a reparar, no a renovar la oblea) — con
   // patente y teléfono ya entra al circuito de avisos de vencimiento. La
   // documentación se completa después, al iniciar un trámite.
+  // ===== Agenda semanal (vista calendario de los turnos) =====
+  // Color de la barra del turno según el tipo de trabajo (por palabras clave
+  // del motivo). Sirve para leer de un vistazo la carga de cada día.
+  function tipoTurnoColor(motivo) {
+    const m = (motivo || '').toLowerCase();
+    if (m.includes('hidra') || m.includes('reprueba') || m.includes('crpc')) return '#DF8B00';
+    if (m.includes('instal') || m.includes('conver')) return '#1E9E5A';
+    if (m.includes('oblea') || m.includes('renov') || m.includes('rto')) return '#1D5BD8';
+    if (m.includes('repar') || m.includes('arregl') || m.includes('fuga') || m.includes('perd') || m.includes('regul') || m.includes('reduct')) return '#8A7FD6';
+    return '#6B7688';
+  }
+  // Lunes (00:00 local) de la semana desplazada 'offset' semanas.
+  function lunesDeSemana(offset) {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + offset * 7);
+    const dow = (d.getDay() + 6) % 7; // 0 = lunes
+    d.setDate(d.getDate() - dow);
+    return d;
+  }
+  // Pedidos de turno que llegaron por WhatsApp y todavía no se agendaron:
+  // se muestran arriba de la agenda, con marca "SIN CARGAR" bien visible.
+  function pedidosWaStripAgenda() {
+    if (!pedidosWa.length) return '';
+    return `<div class="ag-wa-strip">
+      <div class="titulo">📱 Pedidos por WhatsApp sin cargar (${pedidosWa.length})</div>
+      <div class="ag-wa-cards">
+        ${pedidosWa.map(p => `<div class="ag-wa-card">
+          <div class="pill">SIN CARGAR</div>
+          <div class="hist-patente" style="font-size:15px;">${escapeHtml(p.patente || 'SIN PATENTE')}</div>
+          <div class="hist-tipo" style="font-size:12.5px;">${escapeHtml(p.vehiculo || '')}${p.detalle ? ' — ' + escapeHtml(p.detalle) : ''}</div>
+          <div class="hist-nombre">${escapeHtml(p.nombre || '')}${p.telefono ? ' · ' + escapeHtml(p.telefono) : ''}</div>
+          <div class="turno-confirmar">
+            <button type="button" class="btn btn-primary btn-sm" data-cargar-wa="${escapeHtml(p.id)}">Cargar turno</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-descartar-wa="${escapeHtml(p.id)}">Descartar</button>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }
+  function agendaSemanalHtml() {
+    const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const DIAS = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE'];
+    const HORAS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
+    const hoyISO = fechaLocalISO();
+    const lunes = lunesDeSemana(agendaOffset);
+    const dias = [];
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(lunes); d.setDate(lunes.getDate() + i);
+      const iso = fechaLocalISO(d);
+      const items = [];
+      clientes.forEach(c => (c.turnos || []).forEach(t => { if (t.fecha === iso && !t.estado) items.push({ c, t }); }));
+      items.sort((a, b) => (a.t.hora || '').localeCompare(b.t.hora || ''));
+      dias.push({ iso, num: d.getDate(), items, esHoy: iso === hoyISO });
+    }
+    const total = dias.reduce((n, x) => n + x.items.length, 0);
+    const finde = new Date(lunes); finde.setDate(lunes.getDate() + 4);
+    const rango = `${lunes.getDate()} al ${finde.getDate()} de ${MESES[finde.getMonth()]}`;
+    const bloque = ({ c, t }) => {
+      const nom = nombreFicha(c);
+      const sub = (t.motivo || '') + (nom && nom !== c.patente ? ' · ' + nom : '');
+      return `<div class="ag-turno" style="border-left-color:${tipoTurnoColor(t.motivo)}" data-agenda-turno="${c.id}">
+        ${t.hora ? `<div class="h">${escapeHtml(t.hora)}</div>` : ''}
+        <div class="p">${escapeHtml(c.patente || '—')}</div>
+        ${sub ? `<div class="m">${escapeHtml(sub)}</div>` : ''}
+      </div>`;
+    };
+    const haySinHora = dias.some(x => x.items.some(i => !i.t.hora));
+    const filaSinHora = haySinHora ? `<div class="ag-row">
+      <div class="ag-hlabel">s/h</div>
+      ${dias.map(x => `<div class="ag-cell ${x.esHoy ? 'hoy' : ''}">${x.items.filter(i => !i.t.hora).map(bloque).join('')}</div>`).join('')}
+    </div>` : '';
+    const filas = HORAS.map(h => `<div class="ag-row">
+      <div class="ag-hlabel">${h}</div>
+      ${dias.map(x => {
+        const enHora = x.items.filter(i => {
+          const hh = parseInt((i.t.hora || '').slice(0, 2), 10);
+          if (isNaN(hh)) return false;
+          return Math.min(18, Math.max(8, hh)) === h;
+        });
+        return `<div class="ag-cell ${x.esHoy ? 'hoy' : ''}">${enHora.map(bloque).join('')}</div>`;
+      }).join('')}
+    </div>`).join('');
+    return `
+      <div class="ag-toolbar">
+        <div><div style="font-size:16px;font-weight:800;">Agenda de la semana</div><div class="ag-rango">${rango} · ${total} turno${total === 1 ? '' : 's'}</div></div>
+        <div class="ag-nav">
+          <button type="button" id="ag-prev" aria-label="Semana anterior">‹</button>
+          <button type="button" class="ag-hoy" id="ag-hoy">Hoy</button>
+          <button type="button" id="ag-next" aria-label="Semana siguiente">›</button>
+        </div>
+      </div>
+      ${pedidosWaStripAgenda()}
+      <div class="ag-legend">
+        <span><i style="background:#1D5BD8"></i>Oblea</span>
+        <span><i style="background:#DF8B00"></i>Prueba hidráulica</span>
+        <span><i style="background:#1E9E5A"></i>Instalación</span>
+        <span><i style="background:#8A7FD6"></i>Reparación</span>
+      </div>
+      <div class="ag-scroll"><div class="ag-grid">
+        <div class="ag-head">
+          <div class="ag-hlabel"></div>
+          ${dias.map((x, i) => `<div class="ag-dhead ${x.esHoy ? 'hoy' : ''}"><div class="dn">${DIAS[i]}${x.esHoy ? ' · HOY' : ''}</div><div class="df">${x.num}</div><div class="dc">${x.items.length ? x.items.length + (x.items.length === 1 ? ' turno' : ' turnos') : 'libre'}</div></div>`).join('')}
+        </div>
+        ${filaSinHora}
+        ${filas}
+      </div></div>
+      <div class="ag-nota">Los espacios en blanco son horarios libres. Tocá un turno para abrir la ficha del cliente.</div>
+    `;
+  }
+
   // Panel de turnos: los que vienen, agrupados, con el recordatorio de
   // WhatsApp listo para los de hoy y mañana.
   function turnosPanel(entrando) {
@@ -3097,6 +3242,10 @@ Documentación para realizar la renovación:
       ${panelVolver()}
       <h2 style="margin-top:0;">Turnos ${infoAyuda('ayuda-turnos')}</h2>
       ${ayudaBloque('ayuda-turnos', 'Los turnos se agendan desde el alta de un cliente nuevo o con el botón "Turno" de su tarjeta. Para los de hoy y mañana aparece el botón de WhatsApp con el recordatorio ya escrito. Cuando el cliente viene (o falta), tocá "Asistió" o "No asistió" y queda guardado en su historial. Estelita también te avisa a vos con la notificación diaria si hay turnos para mañana sin avisar.')}
+      <div style="margin:2px 0 14px;">
+        <button type="button" class="btn ${agendaSemana ? 'btn-ghost' : 'btn-outline'} btn-sm" id="btn-toggle-agenda">${agendaSemana ? '☰ Ver como lista' : '📅 Ver agenda semanal'}</button>
+      </div>
+      ${agendaSemana ? agendaSemanalHtml() : `
       ${pedidosWa.length ? `
         <div class="hist-dia" style="color:var(--flame);">📱 Pedidos por WhatsApp (${pedidosWa.length})</div>
         <div class="tramites-list">
@@ -3134,6 +3283,7 @@ Documentación para realizar la renovación:
               <button type="button" class="btn btn-trash" data-borrar-turno-cliente="${cliente.id}" data-borrar-turno-id="${turno.id}" title="Borrar turno" aria-label="Borrar turno">${trashSvg()}</button>
             </div>`).join('')}
         </div>`).join('') : `<div class="empty">${emptyIconSvg()}No hay turnos agendados. Se agendan desde el alta de un cliente o con el botón "Turno" de su tarjeta.</div>`}
+      `}
     </div>`;
   }
 
@@ -5716,6 +5866,8 @@ Documentación para realizar la renovación:
   let respaldoUltima = null;
   // Panel de turnos (agenda del taller).
   let showTurnos = false;
+  let agendaSemana = false;
+  let agendaOffset = 0;
   // Panel "Hoy": resumen del día (turnos de hoy, vencimientos para avisar y
   // pendientes) para arrancar la jornada de un vistazo.
   let showHoy = false;
@@ -8582,6 +8734,28 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
     });
     const btnCloseTurnos = root.querySelector('#btn-close-turnos');
     if (btnCloseTurnos) btnCloseTurnos.addEventListener('click', () => { showTurnos = false; render(); });
+
+    // Agenda semanal: cambiar entre lista y vista calendario, y navegar semanas.
+    const btnToggleAgenda = root.querySelector('#btn-toggle-agenda');
+    if (btnToggleAgenda) btnToggleAgenda.addEventListener('click', () => { agendaSemana = !agendaSemana; if (agendaSemana) agendaOffset = 0; render(); });
+    const btnAgPrev = root.querySelector('#ag-prev');
+    if (btnAgPrev) btnAgPrev.addEventListener('click', () => { agendaOffset -= 1; render(); });
+    const btnAgNext = root.querySelector('#ag-next');
+    if (btnAgNext) btnAgNext.addEventListener('click', () => { agendaOffset += 1; render(); });
+    const btnAgHoy = root.querySelector('#ag-hoy');
+    if (btnAgHoy) btnAgHoy.addEventListener('click', () => { agendaOffset = 0; render(); });
+    // Tocar un turno de la agenda abre la ficha del cliente (lo busca por patente).
+    root.querySelectorAll('[data-agenda-turno]').forEach(el => {
+      el.addEventListener('click', () => {
+        const c = clientes.find(x => x.id === el.getAttribute('data-agenda-turno'));
+        if (!c) return;
+        showTurnos = false; agendaSemana = false;
+        currentQuery = c.patente || nombreFicha(c) || '';
+        render();
+        const card = root.querySelector('.client-card');
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
 
     // Dar / cambiar el turno desde la tarjeta del cliente.
     root.querySelectorAll('[data-turno]').forEach(btn => {
