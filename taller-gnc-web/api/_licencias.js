@@ -228,8 +228,11 @@ export async function agregarTurnoWa(license, turno) {
     vehiculo: String(turno?.vehiculo || '').trim().slice(0, 120),
     detalle: String(turno?.detalle || '').trim().slice(0, 500),
   };
-  lista.unshift(item); // el más nuevo primero
-  await guardarTurnosWa(license, lista.slice(0, 200)); // tope de resguardo
+  // Dedup: la extracción del CRM corre en cada mensaje, así que si ya hay un
+  // pedido pendiente del mismo teléfono lo reemplazamos por el más nuevo.
+  const sinDup = item.telefono ? lista.filter(t => t.telefono !== item.telefono) : lista;
+  sinDup.unshift(item); // el más nuevo primero
+  await guardarTurnosWa(license, sinDup.slice(0, 200)); // tope de resguardo
   return item;
 }
 export async function quitarTurnoWa(license, id) {
