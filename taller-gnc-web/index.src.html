@@ -3115,7 +3115,7 @@ Documentación para realizar la renovación:
   // Color de la barra del turno según el tipo de trabajo (por palabras clave
   // del motivo). Sirve para leer de un vistazo la carga de cada día.
   function tipoTurnoColor(motivo) {
-    const m = (motivo || '').toLowerCase();
+    const m = (motivo || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     if (m.includes('hidra') || m.includes('reprueba') || m.includes('crpc')) return '#DF8B00';
     if (m.includes('instal') || m.includes('conver')) return '#1E9E5A';
     if (m.includes('oblea') || m.includes('renov') || m.includes('rto')) return '#1D5BD8';
