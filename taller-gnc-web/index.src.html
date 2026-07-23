@@ -7014,7 +7014,11 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       try {
         parsed = JSON.parse(clean);
       } catch (e2) {
-        throw new Error('No pude interpretar la respuesta como JSON: ' + clean.slice(0, 200));
+        // A veces el modelo agrega texto antes o después del JSON: rescatamos el
+        // primer objeto {...} de la respuesta antes de darla por perdida.
+        const m = clean.match(/\{[\s\S]*\}/);
+        if (m) { try { parsed = JSON.parse(m[0]); } catch (e3) { /* sigue null */ } }
+        if (!parsed) throw new Error('No pude interpretar la respuesta como JSON: ' + clean.slice(0, 200));
       }
 
       // La IA escribe en el BORRADOR, no en los inputs: en este momento los
@@ -7050,7 +7054,11 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       const stErr = root.querySelector('#scan-status');
       if (stErr) {
         stErr.className = 'scan-status err';
-        stErr.textContent = 'No se pudo leer con IA — cargá los datos a mano.';
+        // Mostrar el motivo real (licencia, límite, error de la API, etc.) en vez
+        // de un mensaje genérico: ayuda al taller a entender qué corregir.
+        const detalle = (e && e.message) ? String(e.message).slice(0, 240) : '';
+        stErr.textContent = detalle ? ('No se pudo leer con IA: ' + detalle + ' — o cargá los datos a mano.')
+          : 'No se pudo leer con IA — cargá los datos a mano.';
       }
     } finally {
       btnScan.disabled = false;
