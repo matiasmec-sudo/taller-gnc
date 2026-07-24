@@ -496,6 +496,21 @@ body.gnc-dark .gnc-modal-box { background: #1B2029; border-color: #313A4B; color
 body.gnc-dark .gnc-modal-msg { color: #9AA6B8; }
 body.gnc-dark .gnc-modal-box .btn-ghost { border-color: #313A4B; color: #9AA6B8; }
 body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { background: #232B39; border-color: #313A4B; color: #E7ECF3; }
+/* Visor de fotos a pantalla completa: para leer un chasis o una letra chica.
+   Se toca la imagen para acercar/alejar; con zoom se puede arrastrar. */
+.gnc-foto-overlay {
+  position: fixed; inset: 0; background: rgba(8,14,26,0.94); z-index: 600;
+  display: flex; flex-direction: column; animation: gncModalFade 150ms ease-out;
+  font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+.gnc-foto-overlay.closing { animation: gncModalFade 150ms ease-in reverse; }
+.gnc-foto-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; color: #fff; flex-shrink: 0; }
+.gnc-foto-bar .t { font-size: 14px; font-weight: 700; }
+.gnc-foto-x { background: rgba(255,255,255,0.16); color: #fff; border: 0; width: 36px; height: 36px; border-radius: 50%; font-size: 18px; line-height: 1; cursor: pointer; flex-shrink: 0; }
+.gnc-foto-scroll { flex: 1; overflow: auto; display: grid; padding: 0 8px 14px; }
+.gnc-foto-img { margin: auto; max-width: 100%; max-height: 100%; border-radius: 8px; cursor: zoom-in; }
+.gnc-foto-img.zoom { max-width: none; max-height: none; width: 260%; border-radius: 0; cursor: zoom-out; }
+.gnc-foto-hint { text-align: center; color: rgba(255,255,255,0.72); font-size: 12px; padding: 0 14px 12px; flex-shrink: 0; }
 .gnc-modal-box .form-grid { display: grid; gap: 12px; }
 .gnc-modal-box .form-grid label {
   display: flex; flex-direction: column; gap: 5px;
@@ -1391,6 +1406,38 @@ Documentación para realizar la renovación:
       motivo: turno.motivo ? ' por: ' + turno.motivo : '',
     });
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  }
+
+  // Abre una foto de la documentación a pantalla completa, para poder leer un
+  // dato chico (chasis, número de motor, una letra de la patente). Se toca la
+  // imagen para acercar/alejar; con zoom se arrastra para recorrerla.
+  function mostrarFotoGrande(src, titulo) {
+    if (!src) return;
+    const overlay = document.createElement('div');
+    overlay.className = 'gnc-foto-overlay';
+    overlay.innerHTML = `
+      <div class="gnc-foto-bar">
+        <span class="t">${escapeHtml(titulo || 'Documentación')}</span>
+        <button type="button" class="gnc-foto-x" id="foto-cerrar" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="gnc-foto-scroll"><img class="gnc-foto-img" id="foto-grande" alt="${escapeHtml(titulo || 'Documento')}"></div>
+      <div class="gnc-foto-hint">Tocá la imagen para acercar o alejar.</div>`;
+    const img = overlay.querySelector('#foto-grande');
+    img.src = src;
+    function cerrar() {
+      overlay.classList.add('closing');
+      document.removeEventListener('keydown', onKey);
+      setTimeout(() => overlay.remove(), 150);
+    }
+    function onKey(e) { if (e.key === 'Escape') cerrar(); }
+    overlay.querySelector('#foto-cerrar').addEventListener('click', cerrar);
+    img.addEventListener('click', (e) => { e.stopPropagation(); img.classList.toggle('zoom'); });
+    // Tocar el fondo (fuera de la foto) también cierra.
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay || e.target.classList.contains('gnc-foto-scroll')) cerrar();
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(overlay);
   }
 
   // Modal para dar/cambiar un turno (calendario nativo + hora + motivo).
@@ -4165,7 +4212,8 @@ Documentación para realizar la renovación:
         <div class="scan-slot">
           <label>${s.label}</label>
           ${scanFiles[s.key]
-            ? `<img class="scan-thumb" style="height:240px; display:block;" src="${scanFiles[s.key]}">`
+            ? `<img class="scan-thumb" style="height:240px; display:block; cursor:zoom-in;" src="${scanFiles[s.key]}" data-foto-grande="${s.key}" data-foto-label="${escapeHtml(s.label)}" title="Tocá para verla en grande">
+               <p class="scan-sub" style="margin:4px 0 0; text-align:center;">Tocá la foto para verla en grande</p>`
             : '<p class="scan-sub">Todavía no hay foto guardada.</p>'}
         </div>`).join('')}
       </div>
@@ -8521,6 +8569,13 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
     const btnDescargarFotos = root.querySelector('#btn-descargar-fotos');
     if (btnDescargarFotos) btnDescargarFotos.addEventListener('click', () => {
       descargarFotosCliente(clientes.find(c => c.id === showFotosFor) || {});
+    });
+    // Tocar una foto de la documentación la abre a pantalla completa.
+    root.querySelectorAll('[data-foto-grande]').forEach(im => {
+      im.addEventListener('click', () => {
+        const key = im.getAttribute('data-foto-grande');
+        if (scanFiles[key]) mostrarFotoGrande(scanFiles[key], im.getAttribute('data-foto-label') || 'Documentación');
+      });
     });
 
     // "Actualizar datos": abre solo el paso 1 (datos + ENARGAS) y guarda
