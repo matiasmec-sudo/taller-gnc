@@ -2690,6 +2690,64 @@ Documentación para realizar la renovación:
     return { fecha: fechaLocalISO(), tallerNombre: tallerNombre || '', turnos, revisiones };
   }
 
+  // Estelita te habla: lee en voz alta lo que tenés que hacer hoy, usando el
+  // lector de voz del propio celular (SpeechSynthesis). Es gratis, no gasta
+  // crédito de IA ni datos. Pensado para escucharlo con las manos ocupadas.
+  function horaEnPalabras(hhmm) {
+    const p = String(hhmm || '').split(':');
+    const h = parseInt(p[0], 10), m = parseInt(p[1], 10);
+    if (isNaN(h)) return '';
+    if (isNaN(m) || m === 0) return String(h);
+    if (m === 15) return h + ' y cuarto';
+    if (m === 30) return h + ' y media';
+    return h + ' y ' + m;
+  }
+  function fechaHablada(iso) {
+    const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+    const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const p = String(iso).split('-').map(n => parseInt(n, 10));
+    const dt = new Date(p[0], p[1] - 1, p[2]);
+    return `${DIAS[dt.getDay()]} ${p[2]} de ${MESES[p[1] - 1]}`;
+  }
+  function resumenHabladoHoy() {
+    const partes = [`¡Buen día! Hoy es ${fechaHablada(fechaLocalISO())}.`];
+    const turnos = turnosHoy();
+    if (!turnos.length) {
+      partes.push('No tenés turnos agendados para hoy.');
+    } else {
+      partes.push(`Tenés ${turnos.length} ${turnos.length === 1 ? 'turno' : 'turnos'}.`);
+      turnos.slice(0, 4).forEach(({ cliente, turno }) => {
+        const nom = nombreFicha(cliente);
+        const quien = (nom && nom !== cliente.patente) ? nom : ('patente ' + String(cliente.patente || '').split('').join(' '));
+        const hora = turno.hora ? ('a las ' + horaEnPalabras(turno.hora)) : 'sin hora definida';
+        const motivo = turno.motivo ? (', ' + turno.motivo) : '';
+        partes.push(`${hora}, ${quien}${motivo}.`);
+      });
+      if (turnos.length > 4) partes.push(`Y ${turnos.length - 4} más.`);
+    }
+    const vc = vencimientosParaAvisarCount();
+    if (vc) partes.push(`Tenés ${vc} ${vc === 1 ? 'vencimiento' : 'vencimientos'} para avisar por WhatsApp.`);
+    const pend = pendientesItems();
+    if (pend.length) partes.push(`Y ${pend.length} ${pend.length === 1 ? 'trámite pendiente' : 'trámites pendientes'} de enviar al PEC.`);
+    if (!turnos.length && !vc && !pend.length) partes.push('Está todo al día. ¡Buen trabajo!');
+    else partes.push('¡A darle!');
+    return partes.join(' ');
+  }
+  function hablarResumenHoy() {
+    const synth = window.speechSynthesis;
+    if (!synth) { customAlert('Este celular no tiene lector de voz disponible.'); return; }
+    // Si ya está hablando, este toque lo corta (funciona como play/stop).
+    if (synth.speaking || synth.pending) { synth.cancel(); return; }
+    const u = new SpeechSynthesisUtterance(resumenHabladoHoy());
+    u.lang = 'es-AR';
+    u.rate = 0.98;
+    const voces = synth.getVoices();
+    const vEs = voces.find(v => /es[-_]AR/i.test(v.lang)) || voces.find(v => /^es/i.test(v.lang));
+    if (vEs) u.voice = vEs;
+    synth.cancel();
+    synth.speak(u);
+  }
+
   function hoyPanel(entrando) {
     const turnos = turnosHoy();
     const v = vencimientosAgenda();
@@ -2711,6 +2769,10 @@ Documentación para realizar la renovación:
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="hoy-panel">
       ${panelVolver()}
       <h2 style="margin-top:0;">📅 Hoy — ${fmtDate(fechaLocalISO())}</h2>
+
+      <div class="form-actions" style="margin:2px 0 12px;">
+        <button type="button" class="btn btn-primary" id="btn-hablar-hoy">🔊 Escuchá qué tenés que hacer hoy</button>
+      </div>
 
       <h3 style="margin-top:6px;">Turnos de hoy</h3>
       ${turnos.length ? `<div class="docs">${turnos.map(({ cliente, turno }) => `
@@ -7354,6 +7416,8 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
   // barra de abajo — así en pantalla queda un solo panel a la vez y "Volver"
   // devuelve siempre a la pantalla principal. No toca el asistente de trámite.
   function cerrarPanelesConsulta() {
+    // Cortar la lectura por voz si estaba hablando (al cambiar de pantalla).
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
     showPendientes = false;
     showHistorial = false;
     showTallerConfig = false;
@@ -8984,6 +9048,9 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
 
     // "Avisar al técnico": manda la agenda del día (turnos + autos para
     // revisión) a los técnicos vinculados, con notificación push.
+    const btnHablarHoy = root.querySelector('#btn-hablar-hoy');
+    if (btnHablarHoy) btnHablarHoy.addEventListener('click', () => hablarResumenHoy());
+
     const btnAgendaTecnico = root.querySelector('#btn-agenda-tecnico');
     if (btnAgendaTecnico) btnAgendaTecnico.addEventListener('click', async () => {
       const msj = root.querySelector('#agenda-tecnico-msj');
