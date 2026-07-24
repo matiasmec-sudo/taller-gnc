@@ -5525,15 +5525,19 @@ Documentación para realizar la renovación:
       for (const f of paginas) {
         let img;
         try { img = await pecCargarImagen(f.dataUrl); } catch (e) { continue; }
-        doc.addPage();
+        // Si la foto es apaisada, la hoja también: antes una foto horizontal
+        // usaba media hoja vertical y el documento salía chico al imprimir.
+        doc.addPage('a4', img.width > img.height ? 'landscape' : 'portrait');
+        const pw = doc.internal.pageSize.getWidth();
+        const ph = doc.internal.pageSize.getHeight();
         const margen = 12;
         doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
         doc.text(`${f.titulo} — ${[cliente.nombre, cliente.patente].filter(Boolean).join(' · ')}`, margen, margen);
-        const maxW = pageW - margen * 2, maxH = pageH - margen * 2 - 6;
+        const maxW = pw - margen * 2, maxH = ph - margen * 2 - 6;
         const r = img.height / img.width;
         let fw = maxW, fh = maxW * r; if (fh > maxH) { fh = maxH; fw = maxH / r; }
         const formato = f.dataUrl.slice(0, 20).includes('png') ? 'PNG' : 'JPEG';
-        doc.addImage(f.dataUrl, formato, (pageW - fw) / 2, margen + 4, fw, fh);
+        doc.addImage(f.dataUrl, formato, (pw - fw) / 2, margen + 4, fw, fh);
       }
     }
 
@@ -5677,17 +5681,21 @@ Documentación para realizar la renovación:
           console.error(e);
           continue; // una foto ilegible no debe frenar el envío de la ficha
         }
-        doc.addPage();
+        // Si la foto es apaisada, la hoja también: antes una foto horizontal
+        // usaba media hoja vertical y el documento salía chico al imprimir.
+        doc.addPage('a4', img.width > img.height ? 'landscape' : 'portrait');
+        const pw = doc.internal.pageSize.getWidth();
+        const ph = doc.internal.pageSize.getHeight();
         const margen = 12;
         doc.setFontSize(11);
         doc.text(`${f.titulo} — ${[cliente.nombre, cliente.patente].filter(Boolean).join(' · ')}`, margen, margen);
-        const maxW = pageW - margen * 2;
-        const maxH = pageH - margen * 2 - 6;
+        const maxW = pw - margen * 2;
+        const maxH = ph - margen * 2 - 6;
         const r = img.height / img.width;
         let fw = maxW, fh = maxW * r;
         if (fh > maxH) { fh = maxH; fw = maxH / r; }
         const formato = f.dataUrl.slice(0, 20).includes('png') ? 'PNG' : 'JPEG';
-        doc.addImage(f.dataUrl, formato, (pageW - fw) / 2, margen + 4, fw, fh);
+        doc.addImage(f.dataUrl, formato, (pw - fw) / 2, margen + 4, fw, fh);
         fotosIncluidas++;
       }
 
@@ -6450,10 +6458,11 @@ Documentación para realizar la renovación:
   // Comprime y redimensiona la foto en el navegador antes de guardarla,
   // para que no pese demasiado (las fotos de celular sin comprimir son
   // varios MB y no entran cómodas en el almacenamiento del navegador).
-  // 1568 px es el máximo que aprovecha el modelo de visión; con 0.85 de
-  // calidad la letra chica (cédulas verdes viejas) se lee bastante mejor,
-  // y el peso del archivo sigue siendo razonable.
-  function compressImageFile(file, maxDim = 1568, quality = 0.85) {
+  // 2000 px con 0.90 de calidad: alcanza para IMPRIMIR la documentación en el
+  // PEC sin que se vea pixelada (a hoja llena da ~210 puntos por pulgada) y el
+  // peso sigue siendo manejable. Para leer con IA la imagen se achica a 1568 px
+  // antes de mandarla (ver redimensionarDataUrl), así no sube el costo.
+  function compressImageFile(file, maxDim = 2000, quality = 0.9) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -6477,6 +6486,30 @@ Documentación para realizar la renovación:
     });
   }
 
+  // Achica una foto YA guardada, solo para mandarla a leer con IA. Las fotos se
+  // guardan grandes (para imprimirlas bien en el PEC), pero el modelo de visión
+  // no aprovecha más de 1568 px: mandarla más grande solo haría el pedido más
+  // pesado. Si algo falla, devuelve la original (mejor mandar de más que nada).
+  function redimensionarDataUrl(dataUrl, maxDim = 1568, quality = 0.85) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width <= maxDim && height <= maxDim) { resolve(dataUrl); return; }
+        if (width > height) { height = Math.round(height * maxDim / width); width = maxDim; }
+        else { width = Math.round(width * maxDim / height); height = maxDim; }
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = width; canvas.height = height;
+          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } catch (e) { resolve(dataUrl); }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  }
+
   function cargarImagenDeFile(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -6493,7 +6526,7 @@ Documentación para realizar la renovación:
 
   // Une varias fotos en una sola imagen (una debajo de la otra), para cuando el
   // cliente manda la documentación en fotos separadas. Todo en el dispositivo.
-  async function unirFotosEnUna(files, maxDim = 1568, quality = 0.85) {
+  async function unirFotosEnUna(files, maxDim = 2000, quality = 0.9) {
     const imgs = [];
     for (const f of files) imgs.push(await cargarImagenDeFile(f));
     const sep = 8; // separación entre fotos
@@ -6501,7 +6534,7 @@ Documentación para realizar la renovación:
     const escaladas = imgs.map(i => ({ img: i, w: ancho, h: Math.round(i.height * ancho / i.width) }));
     let alto = escaladas.reduce((s, e) => s + e.h, 0) + sep * (escaladas.length - 1);
     // Si el total queda enorme, se achica todo para no pasar un límite razonable.
-    const ALTO_MAX = 4200;
+    const ALTO_MAX = 5400;
     const factor = alto > ALTO_MAX ? ALTO_MAX / alto : 1;
     const canvas = document.createElement('canvas');
     canvas.width = Math.round(ancho * factor);
@@ -7012,7 +7045,10 @@ Documentación para realizar la renovación:
       for (const slot of readableSlots) {
         const dataUrl = scanFiles[slot];
         if (!dataUrl) continue;
-        const parts = dataUrlParts(dataUrl);
+        // Se guarda grande para imprimir, pero a la IA se le manda a 1568 px:
+        // es lo que aprovecha el modelo y mantiene liviano el pedido.
+        const paraLeer = await redimensionarDataUrl(dataUrl, 1568, 0.85);
+        const parts = dataUrlParts(paraLeer);
         if (!parts) continue;
         content.push({
           type: 'image',
