@@ -1235,37 +1235,42 @@ Documentación para realizar la renovación:
 
   // ---- Abrir WhatsApp por el camino corto ----
   // El link clásico (wa.me) da una vuelta larga: abre el navegador, carga una
-  // página de WhatsApp y recién ahí salta a la app — varios segundos. En el
-  // celular usamos el enlace DIRECTO a la app, que no pasa por internet.
-  // - Android: intent:// con "browser_fallback_url", así si WhatsApp no está
-  //   instalado el propio Android abre el link de siempre (no queda colgado).
-  // - iPhone: whatsapp:// y, si en 1,5 s seguimos acá, se cae al link web.
-  // - Compu: el link de siempre (ahí WhatsApp Web es lo que corresponde).
+  // página de WhatsApp y recién ahí salta a la app — varios segundos. Acá se
+  // abre la app DIRECTO, sin pasar por internet.
+  // IMPORTANTE: no se fija ninguna app puntual, porque muchos talleres usan
+  // WhatsApp BUSINESS y no el común. Al no fijarla, el sistema abre la que
+  // tenga instalada (Business o normal, y la de escritorio en la compu).
+  // Si no hay ninguna, se cae solo al link de siempre.
   function waUrlWeb(phone, texto) {
     return `https://wa.me/${phone}?text=${encodeURIComponent(texto || '')}`;
   }
   function abrirWhatsapp(phone, texto) {
     const tel = cleanPhone(phone);
     const web = waUrlWeb(tel, texto);
-    const ua = navigator.userAgent || '';
-    const esAndroid = /Android/i.test(ua);
-    const esIos = /iPhone|iPad|iPod/i.test(ua);
-    if (!esAndroid && !esIos) { window.open(web, '_blank'); return; }
     const query = `phone=${tel}&text=${encodeURIComponent(texto || '')}`;
+    const esAndroid = /Android/i.test(navigator.userAgent || '');
+    // En Android el formato "intent://" trae respaldo incorporado: si no hay
+    // ninguna app de WhatsApp, el propio sistema abre el link web (sin fijar
+    // "package", así vale tanto para WhatsApp Business como para el común).
     const destino = esAndroid
-      ? `intent://send?${query}#Intent;scheme=whatsapp;package=com.whatsapp;S.browser_fallback_url=${encodeURIComponent(web)};end`
+      ? `intent://send?${query}#Intent;scheme=whatsapp;S.browser_fallback_url=${encodeURIComponent(web)};end`
       : `whatsapp://send?${query}`;
     if (!esAndroid) {
-      // iPhone: si en 1,5 s seguimos acá, WhatsApp no abrió → link de siempre.
+      // iPhone y compu: si al rato seguimos acá (con la ventana enfocada), es
+      // que no hay app de WhatsApp instalada → se abre el link de siempre.
       let saltoALaApp = false;
       const marcar = () => { saltoALaApp = true; };
       document.addEventListener('visibilitychange', marcar, { once: true });
       window.addEventListener('pagehide', marcar, { once: true });
+      window.addEventListener('blur', marcar, { once: true });
       setTimeout(() => {
         document.removeEventListener('visibilitychange', marcar);
         window.removeEventListener('pagehide', marcar);
-        if (!saltoALaApp && !document.hidden) window.location.href = web;
-      }, 1500);
+        window.removeEventListener('blur', marcar);
+        if (saltoALaApp || document.hidden || !document.hasFocus()) return;
+        const w = window.open(web, '_blank');
+        if (!w) window.location.href = web;
+      }, 2500);
     }
     // Se difiere un instante para que el código que viene después de llamar a
     // esta función (marcar el aviso como enviado y guardarlo) alcance a correr
