@@ -1265,6 +1265,17 @@ Documentación para realizar la renovación de oblea
 
 ¡Te esperamos! 😊`,
     },
+    recuperar: {
+      label: 'Recuperar cliente (renovó en otro taller)',
+      etiquetas: ['saludo', 'nombre', 'patente', 'taller', 'direccion', 'horario'],
+      texto: `{saludo}
+Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea de GNC y nos encantaría atenderte de nuevo.
+
+📅 Podés venir de {horario}
+📍 {taller} – {direccion}
+
+¡Te esperamos! 😊`,
+    },
     obleaLista: {
       label: 'Aviso "llegó tu oblea"',
       etiquetas: ['nombre', 'patente', 'taller', 'direccion', 'horario'],
@@ -1393,6 +1404,18 @@ Documentación para realizar la renovación de oblea
     return waLinkVencimiento(cliente, tipo === 'oblea' ? 'oblea' : 'ph', s.meses == null ? 0 : s.meses);
   }
 
+  // Mensaje para recuperar al que se fue a otro taller, cuando le vuelve a
+  // tocar la oblea (al año). El taller lo puede editar en Mi taller → Mensajes.
+  function waLinkRecuperar(cliente) {
+    const msg = renderMensaje('recuperar', {
+      ...varsTaller(),
+      saludo: saludoSegunHora(),
+      nombre: nombreFicha(cliente),
+      patente: cliente.patente || '',
+    });
+    return `https://wa.me/${cleanPhone(cliente.telefono)}?text=${encodeURIComponent(msg)}`;
+  }
+
   // Link de WhatsApp genérico (no atado a oblea/prueba) para contactar al
   // cliente por cualquier motivo desde su tarjeta.
   function waLinkGeneral(cliente) {
@@ -1474,10 +1497,38 @@ Documentación para realizar la renovación de oblea
     } catch (e) { /* algunos navegadores no soportan "new Notification" directo */ }
     localStorage.setItem(AVISO_PENDIENTES_KEY, hoyISO);
   }
+  // Arranca el mes: los primeros días avisa cuántos autos vencen y a cuántos
+  // clientes que se fueron a otro taller les vuelve a tocar la oblea. Una sola
+  // vez por mes (la app tiene que estar abierta, misma limitación que el de arriba).
+  const AVISO_MES_KEY = 'gnc_aviso_mes_notif';
+  function chequearAvisoMensual() {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const ahora = new Date();
+    if (ahora.getDate() > 3 || ahora.getHours() < 9) return;
+    const ym = currentYM();
+    if (localStorage.getItem(AVISO_MES_KEY) === ym) return;
+    const delMes = vencimientosPorAuto().esteMes.length;
+    const recuperables = paraRecuperarLista().ahora.length;
+    if (!delMes && !recuperables) return;
+    const partes = [];
+    if (delMes) partes.push(`${delMes} auto(s) con vencimiento este mes`);
+    if (recuperables) partes.push(`${recuperables} cliente(s) para recuperar`);
+    try {
+      new Notification('Estelita', {
+        body: 'Arranca ' + nombreMes(ym) + ': tenés ' + partes.join(' y '),
+        icon: 'icon-192.png',
+      });
+    } catch (e) { /* algunos navegadores no soportan "new Notification" directo */ }
+    localStorage.setItem(AVISO_MES_KEY, ym);
+  }
   function iniciarAvisoPendientesDiario() {
     if (avisoPendientesInterval) return;
     chequearAvisoPendientesDiario();
-    avisoPendientesInterval = setInterval(chequearAvisoPendientesDiario, 60000);
+    chequearAvisoMensual();
+    avisoPendientesInterval = setInterval(() => {
+      chequearAvisoPendientesDiario();
+      chequearAvisoMensual();
+    }, 60000);
   }
 
   // Suma campos nuevos (tramites, ultimoAvisoMes, notas) a clientes guardados
@@ -1637,6 +1688,57 @@ Documentación para realizar la renovación de oblea
       overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(null); });
       document.body.appendChild(overlay);
     });
+  }
+
+  // "¿Qué pasó con este auto?" — cierre de caso del que no vino nunca.
+  // Devuelve el motivo elegido, o null si lo dejan para después.
+  function mostrarModalCierre(cliente) {
+    return new Promise(resolve => {
+      const overlay = document.createElement('div');
+      overlay.className = 'gnc-modal-overlay';
+      overlay.innerHTML = `
+        <div class="gnc-modal-box">
+          <div class="gnc-modal-title" style="margin-bottom:4px;">¿Qué pasó con este auto?</div>
+          <p class="scan-sub" style="margin:0 0 12px;">${escapeHtml(nombreFicha(cliente))} · ${escapeHtml(cliente.patente || 's/d')} — le avisaste y no vino. No se borra nada: queda todo su historial.</p>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            ${MOTIVOS_CIERRE.map(m => `<button type="button" class="btn btn-ghost" data-motivo="${m.value}" style="text-align:left; justify-content:flex-start; align-items:flex-start; flex-direction:column; gap:2px; padding:10px 12px; height:auto;">
+              <span style="font-weight:800;">${m.label}</span>
+              <span style="font-size:11.5px; color:var(--text-muted); font-weight:600;">${m.ayuda}</span>
+            </button>`).join('')}
+          </div>
+          <div class="gnc-modal-actions">
+            <button type="button" class="btn btn-sm btn-ghost" id="modal-cierre-cancelar">Ahora no</button>
+          </div>
+        </div>`;
+      function cerrar(v) {
+        overlay.classList.add('closing');
+        setTimeout(() => { overlay.remove(); resolve(v); }, 150);
+      }
+      overlay.querySelectorAll('[data-motivo]').forEach(b =>
+        b.addEventListener('click', () => cerrar(b.getAttribute('data-motivo'))));
+      overlay.querySelector('#modal-cierre-cancelar').addEventListener('click', () => cerrar(null));
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(null); });
+      document.body.appendChild(overlay);
+    });
+  }
+  // Guarda el cierre en la ficha del cliente. No borra nada: solo lo saca de
+  // circulación con el motivo y la fecha.
+  async function cerrarCasoCliente(c, motivoValue, ymRef) {
+    const m = motivoCierre(motivoValue);
+    if (!c || !m) return;
+    c.estado = m.destino;
+    c.estadoMotivo = m.value;
+    c.estadoFecha = fechaLocalISO();
+    if (ymRef) c.estadoVencRef = ymRef;
+    if (m.destino === 'recuperar' && !Number(c.recuperarIntentos)) c.recuperarIntentos = 0;
+    await saveClientes();
+  }
+  // Vuelve a ponerlo en circulación (a mano, o solo cuando le cargás un trámite).
+  async function reactivarCliente(c) {
+    if (!c) return;
+    c.estado = null; c.estadoMotivo = null; c.estadoFecha = null;
+    c.recuperarIntentos = 0;
+    await saveClientes();
   }
 
   // Mensaje de confirmación al cliente (Nivel 2): editable antes de enviarlo,
@@ -2782,11 +2884,49 @@ Documentación para realizar la renovación de oblea
     const t = latestTramite(c);
     return !!t && (t.tipo === 'desmontaje' || t.tipo === 'baja');
   }
+
+  // ---- Cierre de casos: qué pasó con el que no vino ----
+  // Después del mes de aviso y un mes de segundo aviso, el auto pasa a
+  // "cerrá estos casos". Se elige el motivo y sale de circulación, pero NO se
+  // borra: queda todo su historial. El único recuperable de verdad es el que
+  // renovó en otro taller — vuelve a necesitar oblea al año siguiente, que es
+  // cuando conviene ofrecerle algo.
+  const MOTIVOS_CIERRE = [
+    { value: 'otro_taller', label: '🔧 Renovó en otro taller', destino: 'recuperar', ayuda: 'Al año vuelve a necesitar oblea: queda en "Para recuperar".' },
+    { value: 'vendio', label: '🚗 Vendió el vehículo', destino: 'inactivo', ayuda: 'Sale de las listas. Queda guardado por las dudas.' },
+    { value: 'sin_gnc', label: '⛔ No usa más el GNC', destino: 'inactivo', ayuda: 'Equipo sacado, auto parado o roto.' },
+    { value: 'no_contesta', label: '❓ No contesta / no sé', destino: 'inactivo', ayuda: 'Sale de las listas; lo podés reactivar cuando quieras.' },
+  ];
+  function motivoCierre(v) { return MOTIVOS_CIERRE.find(m => m.value === v) || null; }
+  function motivoCierreLabel(v) { const m = motivoCierre(v); return m ? m.label : (v || ''); }
+  // Fuera de circulación = no molesta en vencimientos (inactivo o para recuperar).
+  function fueraDeCirculacion(c) { return !!c && (c.estado === 'inactivo' || c.estado === 'recuperar'); }
+  // Mes en que a un "renovó en otro taller" le vuelve a tocar la oblea: un año
+  // después del vencimiento que no vino a hacer, más un año por cada intento
+  // fallido (así reaparece una vez por año hasta que lo pases a inactivo).
+  function mesObjetivoRecuperar(c) {
+    if (!c || !c.estadoVencRef) return null;
+    const intentos = Number(c.recuperarIntentos) || 0;
+    return ymMasMeses(c.estadoVencRef, 12 * (intentos + 1));
+  }
+  function paraRecuperarLista() {
+    const ymHoy = currentYM();
+    const items = clientes.filter(c => c.estado === 'recuperar').map(c => {
+      const objetivo = mesObjetivoRecuperar(c);
+      return { cliente: c, objetivo, toca: !objetivo || mesesEntre(ymHoy, objetivo) <= 0 };
+    });
+    items.sort((a, b) => String(a.objetivo || '').localeCompare(String(b.objetivo || '')));
+    return { ahora: items.filter(i => i.toca), despues: items.filter(i => !i.toca) };
+  }
+  function inactivosLista() {
+    return clientes.filter(c => c.estado === 'inactivo')
+      .sort((a, b) => String(b.estadoFecha || '').localeCompare(String(a.estadoFecha || '')));
+  }
   function vencimientosPorAuto() {
     const ymHoy = currentYM();
-    const grupos = { segundoAviso: [], esteMes: [], mesQueViene: [] };
+    const grupos = { paraCerrar: [], segundoAviso: [], esteMes: [], mesQueViene: [] };
     clientes.forEach(c => {
-      if (sinGnc(c)) return;
+      if (sinGnc(c) || fueraDeCirculacion(c)) return;
       const porMes = {};
       const sumar = (clave, iso) => {
         if (!iso) return;
@@ -2805,7 +2945,12 @@ Documentación para realizar la renovación de oblea
       sumar('ph', juntas ? obleaIso : phIso);
       Object.keys(porMes).forEach(ym => {
         const dif = mesesEntre(ymHoy, ym);
-        const grupo = dif === 0 ? 'esteMes' : (dif === 1 ? 'mesQueViene' : (dif < 0 ? 'segundoAviso' : null));
+        // Mes del vencimiento → avisás. Mes siguiente → segundo aviso. Después
+        // de eso ya no se insiste más: pasa a "cerrá estos casos".
+        const grupo = dif === 0 ? 'esteMes'
+          : dif === 1 ? 'mesQueViene'
+          : dif === -1 ? 'segundoAviso'
+          : dif < -1 ? 'paraCerrar' : null;
         if (!grupo) return;
         const tiene = porMes[ym];
         const que = (tiene.oblea && tiene.ph) ? 'ambas' : (tiene.oblea ? 'oblea' : 'ph');
@@ -2819,7 +2964,15 @@ Documentación para realizar la renovación de oblea
     });
     // Más viejo primero en los atrasados; dentro del mes, por fecha.
     const ordenar = arr => arr.sort((a, b) => (a.ym + a.iso).localeCompare(b.ym + b.iso));
-    ordenar(grupos.segundoAviso); ordenar(grupos.esteMes); ordenar(grupos.mesQueViene);
+    ordenar(grupos.paraCerrar); ordenar(grupos.segundoAviso); ordenar(grupos.esteMes); ordenar(grupos.mesQueViene);
+    // Para cerrar se decide UNA vez por auto (aunque tenga dos vencimientos
+    // viejos): queda el más antiguo, que es el que define desde cuándo no viene.
+    const vistos = {};
+    grupos.paraCerrar = grupos.paraCerrar.filter(i => {
+      if (vistos[i.cliente.id]) return false;
+      vistos[i.cliente.id] = true;
+      return true;
+    });
     return grupos;
   }
   // AUTOS para avisar (no vencimientos): los de este mes + los del segundo
@@ -2928,6 +3081,50 @@ Documentación para realizar la renovación de oblea
     synth.speak(u);
   }
 
+  // Pantalla "Recuperar": los que se fueron a otro taller (y vuelven a
+  // necesitar oblea al año) y los inactivos. Nada de esto se borra nunca.
+  function recuperarPanel(entrando) {
+    const r = paraRecuperarLista();
+    const inact = inactivosLista();
+    const filaRec = (it) => {
+      const c = it.cliente;
+      const intentos = Number(c.recuperarIntentos) || 0;
+      return `<div class="doc-row">
+        <div class="hist-tocable" data-ver-cliente="${c.id}" title="Ver la ficha del cliente">
+          <div class="doc-label">${escapeHtml(nombreFicha(c))} · ${escapeHtml(c.patente || 's/d')}</div>
+          <div class="doc-sub">Se fue en ${nombreMes(c.estadoVencRef || '')}${it.objetivo ? ' · le toca en ' + nombreMes(it.objetivo) : ''}${intentos ? ' · ' + intentos + (intentos === 1 ? ' intento' : ' intentos') : ''}</div>
+        </div>
+        ${cleanPhone(c.telefono)
+          ? `<a class="btn btn-wa btn-sm" target="_blank" rel="noopener" data-intento-recuperar="${c.id}" href="${waLinkRecuperar(c)}">Ofrecerle</a>`
+          : '<span class="badge badge-warn">Sin teléfono</span>'}
+        <button type="button" class="btn btn-ghost btn-sm" data-pasar-inactivo="${c.id}" title="No insistir más: pasarlo a inactivos">✕</button>
+      </div>`;
+    };
+    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="recuperar-panel">
+      ${panelVolver()}
+      <h2 style="margin-top:0;">🔄 Recuperar</h2>
+      <p class="scan-sub">Los clientes que dejaron de venir. No se borran nunca: si vuelven y les cargás un trámite, se reactivan solos.</p>
+
+      <h3 style="margin-top:14px;">Les toca este mes (${r.ahora.length})</h3>
+      ${r.ahora.length
+        ? `<p class="scan-sub">Se fueron a otro taller y ahora les vuelve a tocar la oblea. Es el momento de ofrecerles algo.</p><div class="docs">${r.ahora.map(filaRec).join('')}</div>`
+        : '<p class="scan-sub">Ninguno por ahora.</p>'}
+
+      ${r.despues.length ? `<h3>Más adelante (${r.despues.length})</h3>
+        <div class="docs">${r.despues.map(filaRec).join('')}</div>` : ''}
+
+      <h3>Inactivos (${inact.length})</h3>
+      ${inact.length ? `<div class="docs">${inact.map(c => `<div class="doc-row">
+          <div class="hist-tocable" data-ver-cliente="${c.id}" title="Ver la ficha del cliente">
+            <div class="doc-label">${escapeHtml(nombreFicha(c))} · ${escapeHtml(c.patente || 's/d')}</div>
+            <div class="doc-sub">${escapeHtml(motivoCierreLabel(c.estadoMotivo))}${c.estadoFecha ? ' · ' + fmtDate(c.estadoFecha) : ''}</div>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" data-reactivar="${c.id}">Reactivar</button>
+        </div>`).join('')}</div>`
+        : '<p class="scan-sub">No hay clientes inactivos.</p>'}
+    </div>`;
+  }
+
   function hoyPanel(entrando) {
     const turnos = turnosHoy();
     const v = vencimientosPorAuto();
@@ -2959,6 +3156,19 @@ Documentación para realizar la renovación de oblea
       ${(v.segundoAviso.length || v.esteMes.length || v.mesQueViene.length)
         ? `${seccionVenc('Segundo aviso', v.segundoAviso)}${seccionVenc(`Vencen este mes — ${nombreMes(currentYM())}`, v.esteMes)}${seccionVenc(`Vencen el mes que viene — ${nombreMes(ymMasMeses(currentYM(), 1))}`, v.mesQueViene)}`
         : '<p class="scan-sub">No hay vencimientos próximos para avisar. ¡Todo al día!</p>'}
+
+      ${v.paraCerrar.length ? `
+      <h3>Cerrá estos casos (${v.paraCerrar.length})</h3>
+      <p class="scan-sub">Les avisaste y no vinieron. Marcá qué pasó con cada uno para sacarlos de la lista — no se borra nada, queda todo su historial.</p>
+      <div class="docs">
+        ${v.paraCerrar.map(it => `<div class="doc-row">
+          <div class="hist-tocable" data-ver-cliente="${it.cliente.id}" title="Ver la ficha del cliente">
+            <div class="doc-label">${escapeHtml(nombreFicha(it.cliente))} · ${escapeHtml(it.cliente.patente || 's/d')}</div>
+            <div class="doc-sub">${QUE_LABEL[it.que]} · ${it.status.label}</div>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" data-cerrar-caso="${it.cliente.id}" data-cerrar-ym="${it.ym}">¿Qué pasó?</button>
+        </div>`).join('')}
+      </div>` : ''}
 
       <h3>Pendientes</h3>
       ${pend.length
@@ -4036,6 +4246,13 @@ Documentación para realizar la renovación de oblea
         </div>
         <div class="docs">
           ${sinGnc(c) ? `<div class="doc-row"><div><div class="doc-label">Sin GNC</div><div class="doc-sub">Se le hizo ${tramiteTipoLabel(latestTramite(c).tipo).toLowerCase()} del equipo, así que no figura en los vencimientos. Si vuelve a instalar, reaparece solo.</div></div></div>` : ''}
+          ${fueraDeCirculacion(c) ? `<div class="doc-row">
+            <div>
+              <div class="doc-label">${c.estado === 'recuperar' ? 'Para recuperar' : 'Cliente inactivo'}</div>
+              <div class="doc-sub">${escapeHtml(motivoCierreLabel(c.estadoMotivo))}${c.estadoFecha ? ' · marcado el ' + fmtDate(c.estadoFecha) : ''}. No aparece en los vencimientos. Si le cargás un trámite se reactiva solo.</div>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" data-reactivar="${c.id}">Reactivar</button>
+          </div>` : ''}
           ${docRowOblea(c)}
           ${docRowPH(c)}
           ${(() => {
@@ -6167,6 +6384,7 @@ Documentación para realizar la renovación de oblea
   let showHoy = false;
   // Panel de estadísticas (trámites por mes/tipo, totales, ingresos estimados).
   let showEstadisticas = false;
+  let showRecuperar = false;
   // Presupuestos: los guardados, y el que se está armando ahora.
   // presuDraft = null significa que se está viendo la lista, no el formulario.
   let showPresupuestos = false;
@@ -7438,7 +7656,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     // buscador y los botones Nuevo/ENARGAS y las tarjetas de clientes, que
     // abajo del panel no tenían sentido y confundían.
     const pendCount = pendientesItems().length;
-    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo || showTurnos || showHoy || showEstadisticas || !!verUltimoTramiteId;
+    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo || showTurnos || showHoy || showEstadisticas || showRecuperar || !!verUltimoTramiteId;
     const turnosAvisoCount = turnosParaAvisar().length;
 
     // Para que la animación de entrada de un panel se dispare solo cuando
@@ -7461,13 +7679,14 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       presupuestos: showPresupuestos && !prevPanelState.presupuestos,
       hoy: showHoy && !prevPanelState.hoy,
       estadisticas: showEstadisticas && !prevPanelState.estadisticas,
+      recuperar: showRecuperar && !prevPanelState.recuperar,
       ultimoTramite: !!verUltimoTramiteId && !prevPanelState.ultimoTramite,
     };
     prevPanelState = {
       wizard: wizardAbierto, wizardStep, fotos: !!showFotosFor, historial: showHistorial,
       pendientes: showPendientes, bulkImport: showBulkImport, tallerConfig: showTallerConfig,
       enargasPaste: enargasPasteOpen, quickAdd: showQuickAdd, respaldo: showRespaldo,
-      turnos: showTurnos, hoy: showHoy, estadisticas: showEstadisticas, ultimoTramite: !!verUltimoTramiteId,
+      turnos: showTurnos, hoy: showHoy, estadisticas: showEstadisticas, recuperar: showRecuperar, ultimoTramite: !!verUltimoTramiteId,
     };
 
     root.innerHTML = `
@@ -7480,6 +7699,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
                 <div class="menu-group-label">Gestión</div>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-turnos">${menuIco('calendar')}Turnos${turnosAvisoCount ? ` <span class="menu-badge-inline">${turnosAvisoCount}</span>` : ''}</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-presupuestos">${menuIco('presupuesto')}Presupuestos</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-recuperar">${menuIco('chart')}Recuperar${paraRecuperarLista().ahora.length ? ` <span class="menu-badge-inline">${paraRecuperarLista().ahora.length}</span>` : ''}</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-estadisticas">${menuIco('chart')}Estadísticas</button>
                 <div class="menu-sep"></div>
                 <div class="menu-group-label">Datos</div>
@@ -7514,6 +7734,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
 
         ${showHoy ? hoyPanel(entrando.hoy) : ''}
         ${showEstadisticas ? estadisticasPanel(entrando.estadisticas) : ''}
+        ${showRecuperar ? recuperarPanel(entrando.recuperar) : ''}
         ${showTallerConfig ? tallerConfigPanel(entrando.tallerConfig) : ''}
         ${reminderBanner()}
         ${showPendientes ? pendientesPanel(entrando.pendientes) : ''}
@@ -7605,6 +7826,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     showTurnos = false;
     showHoy = false;
     showEstadisticas = false;
+    showRecuperar = false;
     showBulkImport = false;
     showQuickAdd = false;
     showPresupuestos = false;
@@ -8123,6 +8345,62 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       menuOpen = false;
       showEstadisticas = !abierto;
       render();
+    });
+
+    const btnRecuperar = root.querySelector('#btn-recuperar');
+    if (btnRecuperar) btnRecuperar.addEventListener('click', () => {
+      const abierto = showRecuperar;
+      showForm = false; editingId = null;
+      cerrarPanelesConsulta();
+      menuOpen = false;
+      showRecuperar = !abierto;
+      render();
+    });
+
+    // "¿Qué pasó?" — cierre del caso de un auto que no vino nunca.
+    root.querySelectorAll('[data-cerrar-caso]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const c = clientes.find(x => x.id === btn.getAttribute('data-cerrar-caso'));
+        if (!c) return;
+        const motivo = await mostrarModalCierre(c);
+        if (!motivo) return;
+        await cerrarCasoCliente(c, motivo, btn.getAttribute('data-cerrar-ym'));
+        render();
+      });
+    });
+
+    // Se le ofreció volver: queda registrado el intento y vuelve a aparecer
+    // recién el año que viene (o lo pasás a inactivo con la ✕).
+    root.querySelectorAll('[data-intento-recuperar]').forEach(a => {
+      a.addEventListener('click', async () => {
+        const c = clientes.find(x => x.id === a.getAttribute('data-intento-recuperar'));
+        if (!c) return;
+        c.recuperarIntentos = (Number(c.recuperarIntentos) || 0) + 1;
+        c.recuperarUltimoIntento = fechaLocalISO();
+        await saveClientes();
+        render();
+      });
+    });
+
+    root.querySelectorAll('[data-pasar-inactivo]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const c = clientes.find(x => x.id === btn.getAttribute('data-pasar-inactivo'));
+        if (!c) return;
+        const ok = await customConfirm('¿Dejar de insistirle a este cliente? Pasa a inactivos — no se borra nada y lo podés reactivar cuando quieras.', { titulo: 'Pasar a inactivos', okLabel: 'Pasar a inactivos', cancelLabel: 'Ahora no' });
+        if (!ok) return;
+        c.estado = 'inactivo';
+        await saveClientes();
+        render();
+      });
+    });
+
+    root.querySelectorAll('[data-reactivar]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const c = clientes.find(x => x.id === btn.getAttribute('data-reactivar'));
+        if (!c) return;
+        await reactivarCliente(c);
+        render();
+      });
     });
 
     // "Cargar/editar precios" desde Estadísticas: abre Mi taller en la
@@ -9985,6 +10263,13 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         clientes[idx].fecha_oblea = (unAnio && phVenc && phVenc < unAnio) ? phVenc : unAnio;
       }
       if (primerCilindro && primerCilindro.periodicidad) clientes[idx].tipo_cilindro = primerCilindro.periodicidad;
+      // Volvió: si estaba en inactivos o en "para recuperar", se reactiva solo.
+      if (clientes[idx].estado) {
+        clientes[idx].estado = null;
+        clientes[idx].estadoMotivo = null;
+        clientes[idx].estadoFecha = null;
+        clientes[idx].recuperarIntentos = 0;
+      }
       clientes[idx].ultimoEquipoConocido = {
         regulador: { ...tramiteDraftEquipo.regulador },
         cilindros: tramiteDraftEquipo.cilindros.map(c => ({ ...c })),
