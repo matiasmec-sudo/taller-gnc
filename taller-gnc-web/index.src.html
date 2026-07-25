@@ -1128,24 +1128,60 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
     return Math.round((target - today) / 86400000);
   }
 
+  // ---- Los vencimientos se piensan por MES, no por día ----
+  // El taller trabaja "los de julio", sin importar si vence el 3 o el 28: el
+  // día 1 salen todos juntos a la lista del mes. Igual se guardan los días
+  // para poder ordenar de más urgente a menos dentro de cada grupo.
+  const MESES_ES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  function ymDe(iso) { return (iso || '').slice(0, 7); }
+  // Cuántos meses hay que sumarle a "desde" para llegar a "hasta" (puede dar
+  // negativo si ya pasó). Ambos en formato YYYY-MM.
+  function mesesEntre(desdeYM, hastaYM) {
+    const [ay, am] = desdeYM.split('-').map(Number);
+    const [by, bm] = hastaYM.split('-').map(Number);
+    return (by - ay) * 12 + (bm - am);
+  }
+  function ymMasMeses(ym, n) {
+    const [y, m] = ym.split('-').map(Number);
+    const d = new Date(y, m - 1 + n, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+  // "julio" si es de este año; "julio de 2031" si es de otro.
+  function nombreMes(ym) {
+    if (!ym) return '';
+    const [y, m] = ym.split('-').map(Number);
+    const nombre = MESES_ES[m - 1] || '';
+    return y === new Date().getFullYear() ? nombre : `${nombre} de ${y}`;
+  }
+
   function statusOf(iso) {
     const d = daysUntil(iso);
-    if (d === null) return { level: 'none', label: 'Sin fecha', days: null };
-    if (d < 0) return { level: 'danger', label: `Vencido hace ${Math.abs(d)}d`, days: d };
-    if (d <= WARN_DAYS) return { level: 'warn', label: d === 0 ? 'Vence hoy' : `Vence en ${d}d`, days: d };
-    return { level: 'ok', label: `Vence en ${d}d`, days: d };
+    if (d === null) return { level: 'none', label: 'Sin fecha', days: null, meses: null };
+    const dif = mesesEntre(currentYM(), ymDe(iso));
+    if (dif < 0) {
+      return {
+        level: 'danger', days: d, meses: dif,
+        label: dif === -1 ? 'Venció el mes pasado' : `Venció hace ${Math.abs(dif)} meses`,
+      };
+    }
+    if (dif === 0) return { level: 'warn', label: 'Vence este mes', days: d, meses: dif };
+    if (dif === 1) return { level: 'ok', label: 'Vence el mes que viene', days: d, meses: dif };
+    return { level: 'ok', label: `Vence en ${nombreMes(ymDe(iso))}`, days: d, meses: dif };
   }
 
   // Deriva el vencimiento de la Prueba Hidráulica (CRPC) a partir de la fecha
   // de revisión (mes/año) + la periodicidad del cilindro (3 o 5 años).
-  // Se aproxima al primer día del mes de vencimiento, ya que ENARGAS solo
-  // informa mes/año, no el día exacto.
+  // ENARGAS informa mes/año, sin día: vale hasta el ÚLTIMO día de ese mes.
+  // (Antes se tomaba el día 1 y figuraba vencida todo el mes que en realidad
+  // todavía estaba vigente.)
   function phVencimientoISO(fecha_crpc, tipo_cilindro) {
     if (!fecha_crpc) return null;
     const [y, m] = fecha_crpc.split('-').map(Number);
     const years = tipo_cilindro === '3' ? 3 : 5;
     const vencY = y + years;
-    return `${vencY}-${String(m).padStart(2,'0')}-01`;
+    const ultimoDia = new Date(vencY, m, 0).getDate(); // día 0 del mes siguiente
+    return `${vencY}-${String(m).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
   }
 
   function worstStatus(cliente) {
@@ -1184,16 +1220,16 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
   const MENSAJES_DEFAULT = {
     vencimiento: {
       label: 'Aviso de vencimiento (oblea / prueba hidráulica)',
-      etiquetas: ['nombre', 'patente', 'estado', 'que', 'taller', 'direccion', 'horario'],
-      texto: `¡Buen día! 😊
-Te recordamos que {estado} {que} de tu vehículo (patente {patente}).
+      etiquetas: ['saludo', 'nombre', 'patente', 'estado', 'que', 'taller', 'direccion', 'horario'],
+      texto: `{saludo}
+Te recordamos que {estado} {que} de GNC de tu vehículo!!!
 
-Documentación para realizar la renovación:
+Documentación para realizar la renovación de oblea
 ✅ Cédula del gas
 ✅ Cédula verde
 ✅ DNI
 
-📅 Podés venir a renovarla de {horario}
+📅 Podés venir a realizarla de {horario}
 📍 {taller} – {direccion}
 
 ¡Te esperamos! 😊`,
@@ -1289,26 +1325,41 @@ Documentación para realizar la renovación:
 
   // Mensaje de aviso de vencimiento. Por defecto NO incluye el nombre (a
   // veces no lo tenemos), pero el taller puede sumar {nombre} si quiere.
-  function waLink(cliente, tipo) {
+  // "que" indica qué le vence: 'oblea', 'ph' o 'ambas' (cuando las dos caen el
+  // mismo mes, que es lo normal cada 5 años porque la PH entrega oblea nueva).
+  function frasesVencimiento(que, dif) {
+    const plural = que === 'ambas';
+    const cosa = que === 'ambas' ? 'la oblea y la prueba hidráulica'
+      : que === 'ph' ? 'la prueba hidráulica'
+      : 'la oblea';
+    let estado;
+    if (dif < 0) estado = plural ? 'ya vencieron' : 'ya venció';
+    else if (dif === 0) estado = plural ? 'este mes vencen' : 'este mes vence';
+    else estado = plural ? 'el mes que viene vencen' : 'el mes que viene vence';
+    return { cosa, estado };
+  }
+  function saludoSegunHora() {
+    return new Date().getHours() < 13 ? '¡Buen día!' : '¡Buenas tardes!';
+  }
+  function waLinkVencimiento(cliente, que, dif) {
     const phone = cleanPhone(cliente.telefono);
-    let status, queVence;
-    if (tipo === 'oblea') {
-      status = statusOf(cliente.fecha_oblea);
-      queVence = 'la oblea de GNC';
-    } else {
-      const phIso = phVencimientoISO(cliente.fecha_crpc, cliente.tipo_cilindro);
-      status = statusOf(phIso);
-      queVence = 'la revisión periódica del cilindro (Prueba Hidráulica / CRPC)';
-    }
-    const vencida = status.days !== null && status.days < 0;
+    const f = frasesVencimiento(que || 'oblea', typeof dif === 'number' ? dif : 0);
     const msg = renderMensaje('vencimiento', {
       ...varsTaller(),
+      saludo: saludoSegunHora(),
       nombre: nombreFicha(cliente),
       patente: cliente.patente || '',
-      estado: vencida ? 'venció' : 'este mes vence',
-      que: queVence,
+      estado: f.estado,
+      que: f.cosa,
     });
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+  }
+  // Para un vencimiento suelto de la ficha del cliente (oblea o PH por separado).
+  function waLinkVencimientoSuelto(cliente, tipo) {
+    const iso = tipo === 'oblea' ? cliente.fecha_oblea
+      : phVencimientoISO(cliente.fecha_crpc, cliente.tipo_cilindro);
+    const s = statusOf(iso);
+    return waLinkVencimiento(cliente, tipo === 'oblea' ? 'oblea' : 'ph', s.meses == null ? 0 : s.meses);
   }
 
   // Link de WhatsApp genérico (no atado a oblea/prueba) para contactar al
@@ -1405,6 +1456,9 @@ Documentación para realizar la renovación:
     clientes.forEach(c => {
       if (!Array.isArray(c.tramites)) { c.tramites = []; changed = true; }
       if (!c.ultimoAvisoMes || typeof c.ultimoAvisoMes !== 'object') { c.ultimoAvisoMes = {}; changed = true; }
+      // avisoVenc: { '2026-07': '2026-07-03' } → por QUÉ vencimiento se avisó
+      // (reemplaza a ultimoAvisoMes, que guardaba solo el mes en que avisaste).
+      if (!c.avisoVenc || typeof c.avisoVenc !== 'object') { c.avisoVenc = {}; changed = true; }
       if (typeof c.notas !== 'string') { c.notas = ''; changed = true; }
       if (!Array.isArray(c.turnos)) { c.turnos = []; changed = true; }
       // El estado "incompleto" se eliminó: ahora un trámite es Pendiente
@@ -1850,20 +1904,12 @@ Documentación para realizar la renovación:
     return out;
   }
 
+  // Los AUTOS que hay que avisar: los que vencen este mes más los del segundo
+  // aviso, sin los ya avisados. Sale de la misma fuente que "Hoy" y que el
+  // badge, así los tres coinciden siempre.
   function reminderCandidates() {
-    const ym = currentYM();
-    const ventana = ventanaAvisoYMs();
-    const out = [];
-    clientes.forEach(c => {
-      if (c.fecha_oblea && ventana.includes(c.fecha_oblea.slice(0, 7)) && c.ultimoAvisoMes.oblea !== ym) {
-        out.push({ cliente: c, tipo: 'oblea' });
-      }
-      const phIso = phVencimientoISO(c.fecha_crpc, c.tipo_cilindro);
-      if (phIso && ventana.includes(phIso.slice(0, 7)) && c.ultimoAvisoMes.prueba !== ym) {
-        out.push({ cliente: c, tipo: 'prueba' });
-      }
-    });
-    return out;
+    const g = vencimientosPorAuto();
+    return [...g.segundoAviso, ...g.esteMes].filter(i => !i.avisado);
   }
 
   // ¿Está corriendo instalada (desde la pantalla de inicio) o dentro del navegador?
@@ -1920,23 +1966,12 @@ Documentación para realizar la renovación:
     if (!items.length) return '';
     return `<div class="panel reminder-banner">
       <div class="reminder-header">
-        <h2 style="margin:0;">📅 ${items.length} cliente(s) para avisar</h2>
+        <h2 style="margin:0;">📅 ${items.length} auto${items.length === 1 ? '' : 's'} para avisar</h2>
         <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-reminder">${reminderBannerOpen ? 'Ocultar' : 'Ver'}</button>
       </div>
       ${reminderBannerOpen ? `
-        <p class="scan-sub">Vencimientos de Oblea o Prueba Hidráulica ${mesesAviso() > 1 ? 'próximos' : 'de este mes'}. Tocá "Avisar por WhatsApp" para cada uno.</p>
-        <div class="docs">
-          ${items.map(({ cliente, tipo }) => `
-            <div class="doc-row">
-              <div>
-                <div class="doc-label">${escapeHtml(nombreFicha(cliente))} · ${escapeHtml(cliente.patente || 's/d')}</div>
-                <div class="doc-sub">${tipo === 'oblea' ? 'Oblea' : 'Prueba Hidráulica'}</div>
-              </div>
-              ${cleanPhone(cliente.telefono)
-                ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-mes="${cliente.id}" data-aviso-tipo="${tipo}" href="${waLink(cliente, tipo === 'oblea' ? 'oblea' : 'prueba')}">Avisar por WhatsApp</a>`
-                : '<span class="badge badge-warn">Sin teléfono</span>'}
-            </div>`).join('')}
-        </div>
+        <p class="scan-sub">Vencimientos de ${nombreMes(currentYM())} y los que quedaron para segundo aviso. Tocá "Avisar por WhatsApp" en cada uno.</p>
+        <div class="docs">${items.map(vencItemHtml).join('')}</div>
       ` : ''}
     </div>`;
   }
@@ -2699,36 +2734,68 @@ Documentación para realizar la renovación:
     items.sort((a, b) => (a.turno.hora || '').localeCompare(b.turno.hora || ''));
     return items;
   }
-  // Vencimientos (oblea + prueba hidráulica) agrupados para avisar: los que
-  // vencen este mes, el mes que viene, y los vencidos de los últimos 90 días.
-  function vencimientosAgenda() {
-    const ym = currentYM();
-    const ventana = ventanaAvisoYMs();
-    const buckets = { vencidos: [], esteMes: [], proximos: [] };
-    clientes.forEach(c => {
-      const considerar = (tipo, iso) => {
-        if (!iso) return;
-        const s = statusOf(iso);
-        if (s.days === null) return;
-        const avisado = c.ultimoAvisoMes && c.ultimoAvisoMes[tipo] === ym;
-        const item = { cliente: c, tipo, status: s, avisado };
-        const mo = iso.slice(0, 7);
-        if (mo === ym) buckets.esteMes.push(item);
-        else if (ventana.includes(mo)) buckets.proximos.push(item);
-        else if (s.days < 0 && s.days >= -90) buckets.vencidos.push(item);
-      };
-      considerar('oblea', c.fecha_oblea || null);
-      considerar('prueba', phVencimientoISO(c.fecha_crpc, c.tipo_cilindro));
-    });
-    const ordenar = arr => arr.sort((a, b) => (a.status.days || 0) - (b.status.days || 0));
-    ordenar(buckets.vencidos); ordenar(buckets.esteMes); ordenar(buckets.proximos);
-    return buckets;
+  // ---- Vencimientos agrupados POR AUTO ----
+  // Un auto aparece UNA sola vez por mes: si en el mismo mes le vencen la oblea
+  // y la prueba hidráulica, es una sola fila ("Oblea + PH") y un solo aviso.
+  // Que caigan juntas es lo normal cada 5 años, porque la PH entrega oblea nueva.
+  // Grupos: segundoAviso (ya vencieron y no vinieron) · esteMes · mesQueViene.
+  // Ésta es la ÚNICA fuente: la usan la pantalla principal, "Hoy" y el badge,
+  // así los tres siempre dicen lo mismo.
+  function vencimientoAvisado(c, ym) {
+    return !!(c.avisoVenc && c.avisoVenc[ym]);
   }
-  // Cantidad de vencimientos "para avisar" (vencidos + dentro de la ventana de
-  // anticipación) que todavía no se avisaron este mes — alimenta el badge "Hoy".
+  function vencimientosPorAuto() {
+    const ymHoy = currentYM();
+    const grupos = { segundoAviso: [], esteMes: [], mesQueViene: [] };
+    clientes.forEach(c => {
+      const porMes = {};
+      const sumar = (clave, iso) => {
+        if (!iso) return;
+        const ym = ymDe(iso);
+        if (!porMes[ym]) porMes[ym] = {};
+        porMes[ym][clave] = iso;
+      };
+      sumar('oblea', c.fecha_oblea || null);
+      sumar('ph', phVencimientoISO(c.fecha_crpc, c.tipo_cilindro));
+      Object.keys(porMes).forEach(ym => {
+        const dif = mesesEntre(ymHoy, ym);
+        const grupo = dif === 0 ? 'esteMes' : (dif === 1 ? 'mesQueViene' : (dif < 0 ? 'segundoAviso' : null));
+        if (!grupo) return;
+        const tiene = porMes[ym];
+        const que = (tiene.oblea && tiene.ph) ? 'ambas' : (tiene.oblea ? 'oblea' : 'ph');
+        grupos[grupo].push({
+          cliente: c, ym, que, dif,
+          iso: tiene.oblea || tiene.ph,
+          status: statusOf(tiene.oblea || tiene.ph),
+          avisado: vencimientoAvisado(c, ym),
+        });
+      });
+    });
+    // Más viejo primero en los atrasados; dentro del mes, por fecha.
+    const ordenar = arr => arr.sort((a, b) => (a.ym + a.iso).localeCompare(b.ym + b.iso));
+    ordenar(grupos.segundoAviso); ordenar(grupos.esteMes); ordenar(grupos.mesQueViene);
+    return grupos;
+  }
+  // AUTOS para avisar (no vencimientos): los de este mes + los del segundo
+  // aviso que todavía no se avisaron. Alimenta el badge "Hoy" y el cartel.
   function vencimientosParaAvisarCount() {
-    const b = vencimientosAgenda();
-    return [...b.vencidos, ...b.esteMes, ...b.proximos].filter(i => !i.avisado).length;
+    const g = vencimientosPorAuto();
+    return [...g.segundoAviso, ...g.esteMes].filter(i => !i.avisado).length;
+  }
+  const QUE_LABEL = { oblea: '🏷️ Oblea', ph: '🔧 Prueba hidráulica', ambas: '🏷️🔧 Oblea + Prueba hidráulica' };
+  // La MISMA fila en la pantalla principal y en "Hoy", así las dos muestran
+  // exactamente lo mismo (antes cada una armaba la suya con criterios distintos).
+  function vencItemHtml(it) {
+    const c = it.cliente;
+    return `<div class="doc-row">
+      <div>
+        <div class="doc-label">${escapeHtml(nombreFicha(c))} · ${escapeHtml(c.patente || 's/d')}</div>
+        <div class="doc-sub">${QUE_LABEL[it.que]} · ${it.status.label}${it.avisado ? ' · ya avisado' : ''}</div>
+      </div>
+      ${cleanPhone(c.telefono)
+        ? `<a class="btn btn-wa btn-sm" target="_blank" rel="noopener" data-aviso-venc="${c.id}" data-aviso-ym="${it.ym}" href="${waLinkVencimiento(c, it.que, it.dif)}">${it.avisado ? 'Avisar de nuevo' : 'Avisar'}</a>`
+        : '<span class="badge badge-warn">Sin teléfono</span>'}
+    </div>`;
   }
 
   // Arma la agenda del día para enviar a los técnicos: turnos de hoy y autos
@@ -2742,12 +2809,14 @@ Documentación para realizar la renovación:
       cliente: cliente.nombre || '',
       motivo: turno.motivo || '',
     }));
-    const v = vencimientosAgenda();
-    const revisiones = [...v.vencidos, ...v.esteMes, ...v.proximoMes].map(it => ({
+    // (Antes esto usaba un grupo inexistente y rompía el envío al técnico.)
+    const v = vencimientosPorAuto();
+    const revisiones = [...v.segundoAviso, ...v.esteMes, ...v.mesQueViene].map(it => ({
       patente: it.cliente.patente || '',
       vehiculo: [it.cliente.marca, it.cliente.modelo].filter(Boolean).join(' '),
       cliente: it.cliente.nombre || '',
-      tipo: it.tipo === 'oblea' ? 'Oblea (revisión anual)' : 'Prueba hidráulica',
+      tipo: it.que === 'oblea' ? 'Oblea (revisión anual)'
+        : it.que === 'ph' ? 'Prueba hidráulica' : 'Oblea + Prueba hidráulica',
       cuando: it.status.label,
     }));
     return { fecha: fechaLocalISO(), tallerNombre: tallerNombre || '', turnos, revisiones };
@@ -2813,22 +2882,11 @@ Documentación para realizar la renovación:
 
   function hoyPanel(entrando) {
     const turnos = turnosHoy();
-    const v = vencimientosAgenda();
+    const v = vencimientosPorAuto();
     const pend = pendientesItems();
-    const vencItem = (it) => {
-      const c = it.cliente;
-      const tipoTxt = it.tipo === 'oblea' ? 'Oblea' : 'Prueba Hidráulica';
-      return `<div class="doc-row">
-        <div>
-          <div class="doc-label">${escapeHtml(nombreFicha(c))} · ${escapeHtml(c.patente || 's/d')}</div>
-          <div class="doc-sub">${tipoTxt} · ${it.status.label}${it.avisado ? ' · ya avisado' : ''}</div>
-        </div>
-        ${cleanPhone(c.telefono)
-          ? `<a class="btn btn-wa btn-sm" target="_blank" rel="noopener" data-aviso-mes="${c.id}" data-aviso-tipo="${it.tipo}" href="${waLink(c, it.tipo)}">${it.avisado ? 'Avisar de nuevo' : 'Avisar'}</a>`
-          : '<span class="badge badge-warn">Sin teléfono</span>'}
-      </div>`;
-    };
-    const seccionVenc = (titulo, arr) => arr.length ? `<h4 class="hoy-sub">${titulo} (${arr.length})</h4><div class="docs">${arr.map(vencItem).join('')}</div>` : '';
+    const seccionVenc = (titulo, arr) => arr.length
+      ? `<h4 class="hoy-sub">${titulo} (${arr.length})</h4><div class="docs">${arr.map(vencItemHtml).join('')}</div>`
+      : '';
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="hoy-panel">
       ${panelVolver()}
       <h2 style="margin-top:0;">📅 Hoy — ${fmtDate(fechaLocalISO())}</h2>
@@ -2850,8 +2908,8 @@ Documentación para realizar la renovación:
         </div>`).join('')}</div>` : '<p class="scan-sub">No hay turnos para hoy.</p>'}
 
       <h3>Vencimientos para avisar</h3>
-      ${(v.vencidos.length || v.esteMes.length || v.proximos.length)
-        ? `${seccionVenc('Vencidos (últimos 90 días)', v.vencidos)}${seccionVenc('Vencen este mes', v.esteMes)}${seccionVenc('Próximos vencimientos', v.proximos)}`
+      ${(v.segundoAviso.length || v.esteMes.length || v.mesQueViene.length)
+        ? `${seccionVenc('Segundo aviso', v.segundoAviso)}${seccionVenc(`Vencen este mes — ${nombreMes(currentYM())}`, v.esteMes)}${seccionVenc(`Vencen el mes que viene — ${nombreMes(ymMasMeses(currentYM(), 1))}`, v.mesQueViene)}`
         : '<p class="scan-sub">No hay vencimientos próximos para avisar. ¡Todo al día!</p>'}
 
       <h3>Pendientes</h3>
@@ -3858,7 +3916,7 @@ Documentación para realizar la renovación:
     const s = statusOf(cliente.fecha_oblea);
     const badgeClass = s.level === 'danger' ? 'badge-danger' : s.level === 'warn' ? 'badge-warn' : s.level === 'ok' ? 'badge-ok' : '';
     const waBtn = (s.level === 'danger' || s.level === 'warn') && cleanPhone(cliente.telefono)
-      ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-mes="${cliente.id}" data-aviso-tipo="oblea" href="${waLink(cliente, 'oblea')}">Avisar por WhatsApp</a>`
+      ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-venc="${cliente.id}" data-aviso-ym="${ymDe(cliente.fecha_oblea)}" href="${waLinkVencimientoSuelto(cliente, 'oblea')}">Avisar por WhatsApp</a>`
       : '';
     return `<div class="doc-row">
       <div>
@@ -3875,7 +3933,7 @@ Documentación para realizar la renovación:
     const badgeClass = s.level === 'danger' ? 'badge-danger' : s.level === 'warn' ? 'badge-warn' : s.level === 'ok' ? 'badge-ok' : '';
     const vencMY = phIso ? `${phIso.slice(5,7)}/${phIso.slice(0,4)}` : '—';
     const waBtn = (s.level === 'danger' || s.level === 'warn') && cleanPhone(cliente.telefono)
-      ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-mes="${cliente.id}" data-aviso-tipo="prueba" href="${waLink(cliente, 'prueba')}">Avisar por WhatsApp</a>`
+      ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-venc="${cliente.id}" data-aviso-ym="${ymDe(phIso)}" href="${waLinkVencimientoSuelto(cliente, 'prueba')}">Avisar por WhatsApp</a>`
       : '';
     const sub = cliente.fecha_crpc
       ? `Últ. CRPC: ${fmtMonthYear(cliente.fecha_crpc)} · cada ${cliente.tipo_cilindro === '3' ? '3' : '5'} años`
@@ -7393,7 +7451,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
 
         ${algunPanelAbierto ? '' : `<div class="resumen-chips" id="resumen-chips" role="button" tabindex="0" title="Ver los vencimientos para avisar">
           <div class="chip chip-danger"><div class="chip-num">${counts.danger}</div><div class="chip-lbl">Vencidos</div></div>
-          <div class="chip chip-warn"><div class="chip-num">${counts.warn}</div><div class="chip-lbl">Por vencer (${WARN_DAYS}d)</div></div>
+          <div class="chip chip-warn"><div class="chip-num">${counts.warn}</div><div class="chip-lbl">Vencen este mes</div></div>
           <div class="chip chip-ok"><div class="chip-num">${counts.ok}</div><div class="chip-lbl">Al día</div></div>
         </div>`}
 
@@ -8583,13 +8641,16 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       });
     });
 
-    root.querySelectorAll('[data-aviso-mes]').forEach(a => {
+    // "Ya avisado" queda atado al VENCIMIENTO (el mes que vence), no al mes del
+    // calendario: si le avisás el 31 de julio por el vencimiento de julio, el 1°
+    // de agosto no vuelve a aparecer como pendiente.
+    root.querySelectorAll('[data-aviso-venc]').forEach(a => {
       a.addEventListener('click', async () => {
-        const id = a.getAttribute('data-aviso-mes');
-        const tipo = a.getAttribute('data-aviso-tipo');
-        const c = clientes.find(x => x.id === id);
-        if (!c) return;
-        c.ultimoAvisoMes[tipo] = currentYM();
+        const c = clientes.find(x => x.id === a.getAttribute('data-aviso-venc'));
+        const ym = a.getAttribute('data-aviso-ym');
+        if (!c || !ym) return;
+        if (!c.avisoVenc || typeof c.avisoVenc !== 'object') c.avisoVenc = {};
+        c.avisoVenc[ym] = fechaLocalISO();
         await saveClientes();
         render();
       });
@@ -9826,10 +9887,13 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         // aunque el trámite de hoy sea de otro tipo.
         clientes[idx].fecha_crpc = `${primerCilindro.revisadoAnio}-${String(primerCilindro.revisadoMes).padStart(2, '0')}`;
       }
-      // La Revisión Anual (y una Conversión, que también entrega oblea nueva)
-      // renuevan la habilitación por 1 año — antes esto no se reflejaba en la
-      // tarjeta del cliente y la fecha de vencimiento de Oblea quedaba vieja.
-      if (tipo === 'revision_anual' || tipo === 'conversion') clientes[idx].fecha_oblea = pecFechaMasUnAnio(fecha);
+      // La Revisión Anual, la Conversión y la Prueba Hidráulica entregan oblea
+      // nueva por 1 año — antes esto no se reflejaba en la tarjeta del cliente
+      // y la fecha de vencimiento de Oblea quedaba vieja. (En la PH el cilindro
+      // vuelve del centro de reprueba, se recoloca y sale con la oblea nueva.)
+      if (tipo === 'revision_anual' || tipo === 'conversion' || tipo === 'prueba_hidraulica') {
+        clientes[idx].fecha_oblea = pecFechaMasUnAnio(fecha);
+      }
       if (primerCilindro && primerCilindro.periodicidad) clientes[idx].tipo_cilindro = primerCilindro.periodicidad;
       clientes[idx].ultimoEquipoConocido = {
         regulador: { ...tramiteDraftEquipo.regulador },
