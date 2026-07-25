@@ -3967,7 +3967,8 @@ Documentación para realizar la renovación de oblea
     const topeada = !!(venc && cliente.fecha_oblea && venc !== cliente.fecha_oblea);
     const s = statusOf(venc);
     const badgeClass = s.level === 'danger' ? 'badge-danger' : s.level === 'warn' ? 'badge-warn' : s.level === 'ok' ? 'badge-ok' : '';
-    const waBtn = (s.level === 'danger' || s.level === 'warn') && cleanPhone(cliente.telefono)
+    // Si el auto ya no tiene GNC (desmontaje/baja) no se ofrece avisarle.
+    const waBtn = (s.level === 'danger' || s.level === 'warn') && cleanPhone(cliente.telefono) && !sinGnc(cliente)
       ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-venc="${cliente.id}" data-aviso-ym="${ymDe(venc)}" href="${waLinkVencimientoSuelto(cliente, 'oblea')}">Avisar por WhatsApp</a>`
       : '';
     return `<div class="doc-row">
@@ -3985,7 +3986,7 @@ Documentación para realizar la renovación de oblea
     const s = statusOf(phIso);
     const badgeClass = s.level === 'danger' ? 'badge-danger' : s.level === 'warn' ? 'badge-warn' : s.level === 'ok' ? 'badge-ok' : '';
     const vencMY = phIso ? `${phIso.slice(5,7)}/${phIso.slice(0,4)}` : '—';
-    const waBtn = (s.level === 'danger' || s.level === 'warn') && cleanPhone(cliente.telefono)
+    const waBtn = (s.level === 'danger' || s.level === 'warn') && cleanPhone(cliente.telefono) && !sinGnc(cliente)
       ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-venc="${cliente.id}" data-aviso-ym="${ymDe(phIso)}" href="${waLinkVencimientoSuelto(cliente, 'prueba')}">Avisar por WhatsApp</a>`
       : '';
     const sub = cliente.fecha_crpc
