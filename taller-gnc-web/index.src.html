@@ -1167,6 +1167,15 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
       || /^[A-Z]\d{3}[A-Z]{3}$/.test(s);    // moto Mercosur: A123BCD
   }
   function cuitValido(c) { return (c || '').replace(/\D/g, '').length === 11; }
+  // Si lo que se está buscando parece una patente, la devuelve normalizada
+  // (MAYÚSCULAS, sin espacios ni guiones); si parece un nombre, devuelve ''.
+  // Sirve para pre-cargar la patente al dar de alta un cliente que no estaba.
+  function patenteDeLaBusqueda() {
+    const s = (currentQuery || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (s.length < 5 || s.length > 8) return '';
+    if (!/[A-Z]/.test(s) || !/\d/.test(s)) return '';
+    return s;
+  }
 
   // --- Mensajes de WhatsApp editables por el taller ---
   // Cada taller puede reescribir estos textos en la configuración para
@@ -3440,7 +3449,7 @@ Documentación para realizar la renovación:
       <p class="scan-sub">Carga express: con patente y teléfono alcanza. El resto (documentación, fotos, equipo) se completa cuando haga su primer trámite.</p>
       <div class="form-grid">
         <label class="campo-obligatorio">Patente *
-          <input type="text" id="qa-patente" placeholder="Ej: AB123CD">
+          <input type="text" id="qa-patente" placeholder="Ej: AB123CD" autocapitalize="characters" autocorrect="off" autocomplete="off" spellcheck="false" style="text-transform:uppercase;">
           <span class="formato-hint" id="qa-patente-hint" style="display:none;">Formato de patente poco habitual — revisá que esté bien.</span>
         </label>
         <label class="campo-obligatorio">Teléfono (con código de país, sin +) *
@@ -4743,7 +4752,7 @@ Documentación para realizar la renovación:
       <h3 class="vehiculo-heading">Vehículo</h3>
       <div class="form-grid">
         <label class="campo-obligatorio">Patente *
-          <input type="text" id="f-patente" value="${escapeHtml(c.patente)}" placeholder="Ej: AB123CD">
+          <input type="text" id="f-patente" value="${escapeHtml(c.patente)}" placeholder="Ej: AB123CD" autocapitalize="characters" autocorrect="off" autocomplete="off" spellcheck="false" style="text-transform:uppercase;">
           <span class="formato-hint" id="f-patente-hint" style="display:none;">Formato de patente poco habitual — revisá que esté bien.</span>
         </label>
         ${(!modoSoloDatos && tramiteDraftCampos && tramiteDraftCampos.tipo === 'conversion')
@@ -7370,7 +7379,10 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
               clientes.length === 0
                 ? 'Todavía no cargaste clientes. Sumá el primero con "+ Nuevo cliente".'
                 : currentQuery.trim()
-                  ? 'No se encontraron clientes con esa búsqueda.'
+                  ? `No se encontraron clientes con esa búsqueda.
+                     <div class="form-actions" style="justify-content:center; margin-top:10px;">
+                       <button type="button" class="btn btn-primary btn-sm" id="btn-alta-desde-busqueda">+ Cargar ${patenteDeLaBusqueda() ? escapeHtml(patenteDeLaBusqueda()) + ' como ' : ''}cliente nuevo</button>
+                     </div>`
                   : 'Buscá por nombre o patente para ver los datos de un cliente.'
             }</div>`
           : list.map(clientCard).join('')}
@@ -7781,14 +7793,29 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     }
     // "+ Nuevo cliente" (arriba): alta rápida sin trámite. El botón
     // flotante de abajo es la puerta de entrada a los trámites nuevos.
-    const btnNew = root.querySelector('#btn-new');
-    if (btnNew) btnNew.addEventListener('click', () => {
+    // Alta rápida. Si venías de buscar una patente que no estaba, se pre-carga
+    // sola en el formulario y el cursor salta al teléfono (lo que falta cargar).
+    function abrirAltaRapida() {
+      const patente = patenteDeLaBusqueda();
       showQuickAdd = true;
       showBulkImport = false;
       render();
       const inp = root.querySelector('#qa-patente');
-      if (inp) inp.focus();
-    });
+      if (!inp) return;
+      if (patente) {
+        inp.value = patente;
+        inp.dispatchEvent(new Event('input')); // refresca el aviso de formato
+        const tel = root.querySelector('#qa-telefono');
+        (tel || inp).focus();
+      } else {
+        inp.focus();
+      }
+    }
+    const btnNew = root.querySelector('#btn-new');
+    if (btnNew) btnNew.addEventListener('click', abrirAltaRapida);
+    // Mismo alta, pero desde el cartel de "no se encontraron clientes".
+    const btnAltaBusqueda = root.querySelector('#btn-alta-desde-busqueda');
+    if (btnAltaBusqueda) btnAltaBusqueda.addEventListener('click', abrirAltaRapida);
     const btnFabNuevo = root.querySelector('#btn-fab-nuevo');
     if (btnFabNuevo) btnFabNuevo.addEventListener('click', async () => {
       await iniciarNuevoTramite();
