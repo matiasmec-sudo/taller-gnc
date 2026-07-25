@@ -1184,8 +1184,39 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
     return `${vencY}-${String(m).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`;
   }
 
+  // ---- La oblea no puede durar más que el cilindro habilitado ----
+  // La prueba hidráulica es requisito: con la prueba aprobada se emite la oblea
+  // por un año. Si la PH vence ANTES que la oblea, la oblea vence junto con la
+  // PH (no puede sobrevivirla). Esto se aplica también a lo ya cargado: un auto
+  // con la PH vencida no está habilitado, por más que tenga la oblea pegada.
+  function obleaVenceISO(cliente) {
+    const o = (cliente && cliente.fecha_oblea) || null;
+    const ph = phVencimientoISO(cliente && cliente.fecha_crpc, cliente && cliente.tipo_cilindro);
+    if (o && ph && ph < o) return ph;
+    return o;
+  }
+  // Meses mínimos que tiene que durar una oblea nueva. Si al vencer la oblea a
+  // la PH le quedan menos, no se renueva la oblea sola: se hace la PH en la
+  // misma visita (una oblea de 2 meses no le sirve a nadie).
+  const MIN_MESES_OBLEA = 7;
+
+  // Si se va a hacer una Revisión Anual y a la prueba hidráulica le quedan
+  // menos de 7 meses, NO corresponde emitir la oblea sola: hay que hacer la PH
+  // en la misma visita. Se avisa antes de arrancar el trámite, en el mostrador.
+  async function avisarSiCorrespondePh(cliente, tipo) {
+    if (tipo !== 'revision_anual') return;
+    const ph = phVencimientoISO(cliente && cliente.fecha_crpc, cliente && cliente.tipo_cilindro);
+    if (!ph) return;
+    const meses = mesesEntre(currentYM(), ymDe(ph));
+    if (meses >= MIN_MESES_OBLEA) return;
+    const detalle = meses < 0 ? `la prueba hidráulica está VENCIDA (${nombreMes(ymDe(ph))})`
+      : meses === 0 ? 'la prueba hidráulica vence este mes'
+      : `faltan ${meses} mes(es) para la prueba hidráulica (vence en ${nombreMes(ymDe(ph))})`;
+    await customAlert(`A este auto ${detalle}. Entre la oblea y el vencimiento del cilindro no puede haber menos de ${MIN_MESES_OBLEA} meses, así que no corresponde emitir la oblea sola: hay que hacer la prueba hidráulica en esta misma visita.`, 'Atención — corresponde prueba hidráulica');
+  }
+
   function worstStatus(cliente) {
-    const a = statusOf(cliente.fecha_oblea);
+    const a = statusOf(obleaVenceISO(cliente));
     const phIso = phVencimientoISO(cliente.fecha_crpc, cliente.tipo_cilindro);
     const b = statusOf(phIso);
     const order = { danger: 0, warn: 1, ok: 2, none: 3 };
@@ -1356,7 +1387,7 @@ Documentación para realizar la renovación de oblea
   }
   // Para un vencimiento suelto de la ficha del cliente (oblea o PH por separado).
   function waLinkVencimientoSuelto(cliente, tipo) {
-    const iso = tipo === 'oblea' ? cliente.fecha_oblea
+    const iso = tipo === 'oblea' ? obleaVenceISO(cliente)
       : phVencimientoISO(cliente.fecha_crpc, cliente.tipo_cilindro);
     const s = statusOf(iso);
     return waLinkVencimiento(cliente, tipo === 'oblea' ? 'oblea' : 'ph', s.meses == null ? 0 : s.meses);
@@ -2755,8 +2786,15 @@ Documentación para realizar la renovación de oblea
         if (!porMes[ym]) porMes[ym] = {};
         porMes[ym][clave] = iso;
       };
-      sumar('oblea', c.fecha_oblea || null);
-      sumar('ph', phVencimientoISO(c.fecha_crpc, c.tipo_cilindro));
+      // La oblea, ya topeada por la prueba hidráulica (no puede durar más).
+      const obleaIso = obleaVenceISO(c);
+      const phIso = phVencimientoISO(c.fecha_crpc, c.tipo_cilindro);
+      sumar('oblea', obleaIso);
+      // Si al vencer la oblea a la PH le quedan menos de 7 meses, la PH se
+      // ADELANTA a esa visita: van juntas y la PH no se lista por su cuenta
+      // más adelante. (Ej.: oblea julio, PH agosto → las dos en julio.)
+      const juntas = obleaIso && phIso && mesesEntre(ymDe(obleaIso), ymDe(phIso)) < MIN_MESES_OBLEA;
+      sumar('ph', juntas ? obleaIso : phIso);
       Object.keys(porMes).forEach(ym => {
         const dif = mesesEntre(ymHoy, ym);
         const grupo = dif === 0 ? 'esteMes' : (dif === 1 ? 'mesQueViene' : (dif < 0 ? 'segundoAviso' : null));
@@ -3913,15 +3951,20 @@ Documentación para realizar la renovación de oblea
   }
 
   function docRowOblea(cliente) {
-    const s = statusOf(cliente.fecha_oblea);
+    // Se muestra el vencimiento REAL: si la prueba hidráulica vence antes, la
+    // oblea vence con ella (y se aclara, para que no parezca un error).
+    const venc = obleaVenceISO(cliente);
+    const topeada = !!(venc && cliente.fecha_oblea && venc !== cliente.fecha_oblea);
+    const s = statusOf(venc);
     const badgeClass = s.level === 'danger' ? 'badge-danger' : s.level === 'warn' ? 'badge-warn' : s.level === 'ok' ? 'badge-ok' : '';
     const waBtn = (s.level === 'danger' || s.level === 'warn') && cleanPhone(cliente.telefono)
-      ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-venc="${cliente.id}" data-aviso-ym="${ymDe(cliente.fecha_oblea)}" href="${waLinkVencimientoSuelto(cliente, 'oblea')}">Avisar por WhatsApp</a>`
+      ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-venc="${cliente.id}" data-aviso-ym="${ymDe(venc)}" href="${waLinkVencimientoSuelto(cliente, 'oblea')}">Avisar por WhatsApp</a>`
       : '';
     return `<div class="doc-row">
       <div>
         <div class="doc-label">Oblea</div>
-        <div class="doc-date">${fmtDate(cliente.fecha_oblea)} ${cliente.fecha_oblea ? `<span class="badge ${badgeClass}">${s.label}</span>` : ''}</div>
+        <div class="doc-date">${fmtDate(venc)} ${venc ? `<span class="badge ${badgeClass}">${s.label}</span>` : ''}</div>
+        ${topeada ? `<div class="doc-sub">Vence junto con la prueba hidráulica (la oblea no puede durar más que el cilindro). En la oblea figura ${fmtDate(cliente.fecha_oblea)}.</div>` : ''}
       </div>
       ${waBtn}
     </div>`;
@@ -8889,6 +8932,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         if (!cliente) return;
         const elegido = await mostrarModalTipoFecha({ tipo: TRAMITE_TIPOS[0].value, fecha: new Date().toISOString().slice(0, 10) });
         if (!elegido) return;
+        await avisarSiCorrespondePh(cliente, elegido.tipo);
         cerrarWizard();
         editingId = id;
         showForm = false;
@@ -9892,7 +9936,12 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       // y la fecha de vencimiento de Oblea quedaba vieja. (En la PH el cilindro
       // vuelve del centro de reprueba, se recoloca y sale con la oblea nueva.)
       if (tipo === 'revision_anual' || tipo === 'conversion' || tipo === 'prueba_hidraulica') {
-        clientes[idx].fecha_oblea = pecFechaMasUnAnio(fecha);
+        // Un año, pero SIN pasarse del vencimiento de la prueba hidráulica: la
+        // oblea no puede durar más que el cilindro habilitado. (Se calcula
+        // después de actualizar fecha_crpc, así toma la PH que corresponde.)
+        const unAnio = pecFechaMasUnAnio(fecha);
+        const phVenc = phVencimientoISO(clientes[idx].fecha_crpc, clientes[idx].tipo_cilindro);
+        clientes[idx].fecha_oblea = (unAnio && phVenc && phVenc < unAnio) ? phVenc : unAnio;
       }
       if (primerCilindro && primerCilindro.periodicidad) clientes[idx].tipo_cilindro = primerCilindro.periodicidad;
       clientes[idx].ultimoEquipoConocido = {
