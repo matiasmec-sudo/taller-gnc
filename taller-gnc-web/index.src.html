@@ -1067,7 +1067,7 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
       const localidad = root.querySelector('#reg-localidad').value.trim();
       const nombre = root.querySelector('#reg-nombre').value.trim();
       const msg = `Hola! Quiero registrar mi taller en Estelita.\nTaller: ${taller || '-'}\nLocalidad: ${localidad || '-'}\nMi nombre: ${nombre || '-'}`;
-      window.open(`https://wa.me/${REGISTRO_WHATSAPP}?text=${encodeURIComponent(msg)}`, '_blank');
+      abrirWhatsapp(REGISTRO_WHATSAPP, msg);
     });
   }
 
@@ -1231,6 +1231,55 @@ Documentación para realizar la renovación:
       direccion: tallerConfig.direccion || '',
       horario: tallerConfig.horario || 'lunes a viernes de 9 a 17 hs',
     };
+  }
+
+  // ---- Abrir WhatsApp por el camino corto ----
+  // El link clásico (wa.me) da una vuelta larga: abre el navegador, carga una
+  // página de WhatsApp y recién ahí salta a la app — varios segundos. En el
+  // celular usamos el enlace DIRECTO a la app, que no pasa por internet.
+  // - Android: intent:// con "browser_fallback_url", así si WhatsApp no está
+  //   instalado el propio Android abre el link de siempre (no queda colgado).
+  // - iPhone: whatsapp:// y, si en 1,5 s seguimos acá, se cae al link web.
+  // - Compu: el link de siempre (ahí WhatsApp Web es lo que corresponde).
+  function waUrlWeb(phone, texto) {
+    return `https://wa.me/${phone}?text=${encodeURIComponent(texto || '')}`;
+  }
+  function abrirWhatsapp(phone, texto) {
+    const tel = cleanPhone(phone);
+    const web = waUrlWeb(tel, texto);
+    const ua = navigator.userAgent || '';
+    const esAndroid = /Android/i.test(ua);
+    const esIos = /iPhone|iPad|iPod/i.test(ua);
+    if (!esAndroid && !esIos) { window.open(web, '_blank'); return; }
+    const query = `phone=${tel}&text=${encodeURIComponent(texto || '')}`;
+    const destino = esAndroid
+      ? `intent://send?${query}#Intent;scheme=whatsapp;package=com.whatsapp;S.browser_fallback_url=${encodeURIComponent(web)};end`
+      : `whatsapp://send?${query}`;
+    if (!esAndroid) {
+      // iPhone: si en 1,5 s seguimos acá, WhatsApp no abrió → link de siempre.
+      let saltoALaApp = false;
+      const marcar = () => { saltoALaApp = true; };
+      document.addEventListener('visibilitychange', marcar, { once: true });
+      window.addEventListener('pagehide', marcar, { once: true });
+      setTimeout(() => {
+        document.removeEventListener('visibilitychange', marcar);
+        window.removeEventListener('pagehide', marcar);
+        if (!saltoALaApp && !document.hidden) window.location.href = web;
+      }, 1500);
+    }
+    // Se difiere un instante para que el código que viene después de llamar a
+    // esta función (marcar el aviso como enviado y guardarlo) alcance a correr
+    // antes de que el celular cambie de app.
+    setTimeout(() => { window.location.href = destino; }, 80);
+  }
+
+  // Toma un link wa.me ya armado (los que devuelven waLink, waLinkTurno, etc.)
+  // y lo abre por el camino corto.
+  function abrirWhatsappUrl(url) {
+    try {
+      const u = new URL(url);
+      abrirWhatsapp(u.pathname.replace(/\D/g, ''), u.searchParams.get('text') || '');
+    } catch (e) { window.open(url, '_blank'); }
   }
 
   // Mensaje de aviso de vencimiento. Por defecto NO incluye el nombre (a
@@ -2437,7 +2486,7 @@ Documentación para realizar la renovación:
       }
       descargarBlob(blob, nombre);
       const tel = cleanPhone(presuTelefonoDe(p));
-      window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg + ' (te adjunto el PDF que se acaba de descargar)')}`, '_blank');
+      abrirWhatsapp(tel, msg + ' (te adjunto el PDF que se acaba de descargar)');
     } catch (e) {
       if (e && e.name === 'AbortError') return;   // el usuario cerró el menú de compartir
       console.error(e);
@@ -5819,7 +5868,7 @@ Documentación para realizar la renovación:
     // (acá adjuntar a mano es fácil: arrastrás el PDF a la ventana).
     descargarBlob(blob, filename);
     const pecPhone = cleanPhone(pec && pec.telefono);
-    window.open(`https://wa.me/${pecPhone || ''}?text=${encodeURIComponent(mensaje + ' (adjuntá el PDF que se acaba de descargar)')}`, '_blank');
+    abrirWhatsapp(pecPhone || '', mensaje + ' (adjuntá el PDF que se acaba de descargar)');
   }
 
   function tramiteRow(clienteId, t) {
@@ -8519,6 +8568,16 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       await customAlert(`Se importaron ${importados} cliente(s). ${sinTelefono} sin teléfono reconocido, ${sinFecha} sin fecha de oblea reconocida — revisalos y completá lo que falte.`, 'Importación completa');
     });
 
+    // Todos los botones de WhatsApp que son links abren la app por el camino
+    // corto (ver abrirWhatsapp). Se frena la navegación del link, pero NO los
+    // demás listeners del mismo botón (ej. el que marca el aviso como enviado).
+    root.querySelectorAll('a[href^="https://wa.me/"]').forEach(a => {
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        abrirWhatsappUrl(a.getAttribute('href'));
+      });
+    });
+
     root.querySelectorAll('[data-aviso-mes]').forEach(a => {
       a.addEventListener('click', async () => {
         const id = a.getAttribute('data-aviso-mes');
@@ -9030,7 +9089,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         if (!c) return;
         const t = (c.turnos || []).find(x => x.id === btn.getAttribute('data-aviso-turno-id'));
         if (!t || t.avisoEnviado) return;
-        window.open(waLinkTurno(c, t), '_blank');
+        abrirWhatsappUrl(waLinkTurno(c, t));
         t.avisoEnviado = true;
         await saveClientes();
         render();
@@ -9067,7 +9126,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
           if (ok) {
             const nombre = c.nombre && c.nombre !== c.patente ? c.nombre : '';
             const msg = `¡Hola${nombre ? ' ' + nombre : ''}! Vimos que no pudiste venir a tu turno del ${fmtDate(t.fecha)}. ¿Reprogramamos? Decinos qué día te queda cómodo y te esperamos. ¡Saludos!`;
-            window.open(`https://wa.me/${cleanPhone(c.telefono)}?text=${encodeURIComponent(msg)}`, '_blank');
+            abrirWhatsapp(c.telefono, msg);
           }
         }
       });
@@ -9126,7 +9185,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         if (!c) return;
         const t = c.tramites.find(x => x.id === btn.getAttribute('data-aviso-oblea-tramite'));
         if (!t || t.avisoObleaEnviado) return;
-        window.open(waLinkObleaLista(c), '_blank');
+        abrirWhatsappUrl(waLinkObleaLista(c));
         t.avisoObleaEnviado = true;
         await saveClientes();
         render();
