@@ -2775,10 +2775,18 @@ Documentación para realizar la renovación de oblea
   function vencimientoAvisado(c, ym) {
     return !!(c.avisoVenc && c.avisoVenc[ym]);
   }
+  // Un auto al que se le hizo el DESMONTAJE (o la baja) del equipo ya no tiene
+  // GNC: deja de figurar en los vencimientos. Si más adelante se le hace una
+  // conversión, vuelve solo — porque pasa a ser el último trámite.
+  function sinGnc(c) {
+    const t = latestTramite(c);
+    return !!t && (t.tipo === 'desmontaje' || t.tipo === 'baja');
+  }
   function vencimientosPorAuto() {
     const ymHoy = currentYM();
     const grupos = { segundoAviso: [], esteMes: [], mesQueViene: [] };
     clientes.forEach(c => {
+      if (sinGnc(c)) return;
       const porMes = {};
       const sumar = (clave, iso) => {
         if (!iso) return;
@@ -2826,13 +2834,15 @@ Documentación para realizar la renovación de oblea
   function vencItemHtml(it) {
     const c = it.cliente;
     return `<div class="doc-row">
-      <div>
+      <div class="hist-tocable" data-ver-cliente="${c.id}" title="Ver la ficha del cliente">
         <div class="doc-label">${escapeHtml(nombreFicha(c))} · ${escapeHtml(c.patente || 's/d')}</div>
         <div class="doc-sub">${QUE_LABEL[it.que]} · ${it.status.label}${it.avisado ? ' · ya avisado' : ''}</div>
       </div>
       ${cleanPhone(c.telefono)
         ? `<a class="btn btn-wa btn-sm" target="_blank" rel="noopener" data-aviso-venc="${c.id}" data-aviso-ym="${it.ym}" href="${waLinkVencimiento(c, it.que, it.dif)}">${it.avisado ? 'Avisar de nuevo' : 'Avisar'}</a>`
         : '<span class="badge badge-warn">Sin teléfono</span>'}
+      <button type="button" class="btn btn-ghost btn-sm" data-omitir-venc="${c.id}" data-omitir-ym="${it.ym}"
+        title="${it.avisado ? 'Volver a ponerlo en la lista' : 'Sacarlo de la lista (ya le avisaste por otro lado o no querés avisarle)'}">${it.avisado ? '↩' : '✓'}</button>
     </div>`;
   }
 
@@ -4024,6 +4034,7 @@ Documentación para realizar la renovación de oblea
           </div>
         </div>
         <div class="docs">
+          ${sinGnc(c) ? `<div class="doc-row"><div><div class="doc-label">Sin GNC</div><div class="doc-sub">Se le hizo ${tramiteTipoLabel(latestTramite(c).tipo).toLowerCase()} del equipo, así que no figura en los vencimientos. Si vuelve a instalar, reaparece solo.</div></div></div>` : ''}
           ${docRowOblea(c)}
           ${docRowPH(c)}
           ${(() => {
@@ -8696,6 +8707,35 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         c.avisoVenc[ym] = fechaLocalISO();
         await saveClientes();
         render();
+      });
+    });
+
+    // Sacar (o volver a poner) un auto de la lista de "para avisar", sin mandar
+    // nada: para cuando ya le avisaste por otro lado o no querés avisarle.
+    root.querySelectorAll('[data-omitir-venc]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const c = clientes.find(x => x.id === btn.getAttribute('data-omitir-venc'));
+        const ym = btn.getAttribute('data-omitir-ym');
+        if (!c || !ym) return;
+        if (!c.avisoVenc || typeof c.avisoVenc !== 'object') c.avisoVenc = {};
+        if (c.avisoVenc[ym]) delete c.avisoVenc[ym];
+        else c.avisoVenc[ym] = fechaLocalISO();
+        await saveClientes();
+        render();
+      });
+    });
+
+    // Tocar el contacto en una lista de vencimientos abre su ficha.
+    root.querySelectorAll('[data-ver-cliente]').forEach(el => {
+      el.addEventListener('click', () => {
+        const c = clientes.find(x => x.id === el.getAttribute('data-ver-cliente'));
+        if (!c) return;
+        cerrarPanelesConsulta();
+        reminderBannerOpen = false;
+        currentQuery = c.patente || nombreFicha(c) || '';
+        render();
+        const card = root.querySelector('.client-card');
+        if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
 
