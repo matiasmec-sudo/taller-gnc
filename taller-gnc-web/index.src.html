@@ -638,16 +638,23 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 #gnc-app .ag-legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
 #gnc-app .ag-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 6px; }
 #gnc-app .ag-grid { min-width: 640px; }
-#gnc-app .ag-row, #gnc-app .ag-head { display: grid; grid-template-columns: 46px repeat(5, minmax(116px, 1fr)); }
-#gnc-app .ag-dhead { text-align: center; padding: 8px 4px; border-bottom: 2px solid var(--line); }
+#gnc-app .ag-row, #gnc-app .ag-head { display: grid; grid-template-columns: 58px repeat(5, minmax(116px, 1fr)); }
+#gnc-app .ag-dhead { text-align: center; padding: 8px 4px; background: var(--surface-alt); border-bottom: 2px solid var(--flame-dim); border-left: 1px solid var(--line); border-radius: 8px 8px 0 0; }
 #gnc-app .ag-dhead .dn { font-size: 11px; color: var(--text-muted); letter-spacing: .6px; font-weight: 700; }
 #gnc-app .ag-dhead .df { font-size: 19px; font-weight: 800; line-height: 1.1; }
 #gnc-app .ag-dhead .dc { font-size: 11px; color: var(--text-muted); }
-#gnc-app .ag-dhead.hoy { background: var(--surface-alt); border-radius: 10px 10px 0 0; border-bottom-color: var(--flame); }
-#gnc-app .ag-dhead.hoy .dn, #gnc-app .ag-dhead.hoy .df, #gnc-app .ag-dhead.hoy .dc { color: var(--flame); }
-#gnc-app .ag-hlabel { font-size: 11px; color: var(--text-muted); text-align: right; padding: 4px 6px 0 0; }
-#gnc-app .ag-cell { border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); min-height: 46px; padding: 3px; }
-#gnc-app .ag-cell.hoy { background: color-mix(in srgb, var(--flame) 6%, transparent); }
+#gnc-app .ag-dhead.hoy { background: var(--flame); border-bottom-color: var(--flame); }
+#gnc-app .ag-dhead.hoy .dn, #gnc-app .ag-dhead.hoy .df, #gnc-app .ag-dhead.hoy .dc { color: #fff; }
+/* Columna de horas: con fondo propio y un borde marcado, para que se lea como
+   una regla horaria y no como un número suelto perdido al costado. */
+#gnc-app .ag-hlabel { font-size: 12px; font-weight: 800; color: var(--text-muted); text-align: right; padding: 6px 8px 0 0; background: var(--surface-alt); border-right: 2px solid var(--line); border-bottom: 1px solid var(--line); }
+#gnc-app .ag-head .ag-hlabel { background: transparent; border: 0; }
+#gnc-app .ag-cell { border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); min-height: 48px; padding: 3px; cursor: pointer; }
+/* Franjas alternadas: ayudan a seguir la fila de una hora de punta a punta. */
+#gnc-app .ag-row-par .ag-cell { background: color-mix(in srgb, var(--surface-alt) 45%, transparent); }
+#gnc-app .ag-cell:hover { background: color-mix(in srgb, var(--flame) 10%, transparent); }
+#gnc-app .ag-cell.hoy { background: color-mix(in srgb, var(--flame) 7%, transparent); }
+#gnc-app .ag-row-par .ag-cell.hoy { background: color-mix(in srgb, var(--flame) 12%, transparent); }
 #gnc-app .ag-cell:last-child { border-right: 1px solid var(--line); }
 #gnc-app .ag-turno { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--flame); border-radius: 6px; padding: 5px 6px; margin-bottom: 4px; cursor: pointer; }
 #gnc-app .ag-turno:hover { border-color: var(--flame-dim); }
@@ -1637,6 +1644,66 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     });
     document.addEventListener('keydown', onKey);
     document.body.appendChild(overlay);
+  }
+
+  // Nuevo turno tocando una celda de la agenda: el día y la hora ya vienen
+  // dados, solo hay que elegir a quién. Devuelve { clienteId, motivo } o null.
+  function mostrarModalTurnoEnCelda(fechaISO, hora) {
+    return new Promise(resolve => {
+      let elegido = null;
+      const overlay = document.createElement('div');
+      overlay.className = 'gnc-modal-overlay';
+      const estiloInput = 'width:100%; padding:9px 10px; border-radius:10px; border:1.5px solid var(--line); font-family:inherit; font-size:14px;';
+      overlay.innerHTML = `
+        <div class="gnc-modal-box">
+          <div class="gnc-modal-title" style="margin-bottom:2px;">Nuevo turno</div>
+          <p class="scan-sub" style="margin:0 0 10px;">${escapeHtml(fmtDate(fechaISO))} a las ${escapeHtml(hora)} hs</p>
+          <label style="display:block; font-size:12px; font-weight:800; margin-bottom:4px;">Cliente</label>
+          <input type="text" id="mtc-busca" placeholder="Buscá por patente o nombre" autocapitalize="characters" autocorrect="off" autocomplete="off" spellcheck="false" style="${estiloInput}">
+          <div id="mtc-res" style="max-height:150px; overflow:auto; margin:6px 0 10px;"></div>
+          <label style="display:block; font-size:12px; font-weight:800; margin-bottom:4px;">Motivo (opcional)</label>
+          <input type="text" id="mtc-motivo" placeholder="Ej: oblea, prueba hidráulica, reparación" style="${estiloInput}">
+          <div class="gnc-modal-actions">
+            <button type="button" class="btn btn-sm btn-ghost" id="mtc-cancelar">Cancelar</button>
+            <button type="button" class="btn btn-sm btn-primary" id="mtc-guardar" disabled>Guardar turno</button>
+          </div>
+        </div>`;
+      const inp = overlay.querySelector('#mtc-busca');
+      const res = overlay.querySelector('#mtc-res');
+      const btnOk = overlay.querySelector('#mtc-guardar');
+      const pintar = () => {
+        const crudo = inp.value.trim().toLowerCase();
+        const q = crudo.replace(/\s+/g, '');
+        if (q.length < 2) { res.innerHTML = '<p class="scan-sub" style="margin:4px 0;">Escribí al menos dos letras.</p>'; return; }
+        const hits = clientes.filter(c =>
+          (c.patente || '').toLowerCase().replace(/\s+/g, '').includes(q)
+          || (nombreFicha(c) || '').toLowerCase().includes(crudo)
+        ).slice(0, 8);
+        if (!hits.length) { res.innerHTML = '<p class="scan-sub" style="margin:4px 0;">No encontré ese auto. Cargalo primero con "+ Nuevo cliente".</p>'; return; }
+        res.innerHTML = hits.map(c => `<button type="button" class="btn btn-ghost btn-sm" data-cli="${c.id}" style="width:100%; justify-content:flex-start; margin-bottom:4px;">${escapeHtml(c.patente || 's/d')} — ${escapeHtml(nombreFicha(c))}</button>`).join('');
+        res.querySelectorAll('[data-cli]').forEach(b => b.addEventListener('click', () => {
+          elegido = b.getAttribute('data-cli');
+          const c = clientes.find(x => x.id === elegido);
+          inp.value = (c && c.patente) || '';
+          res.innerHTML = `<p class="scan-sub" style="margin:4px 0; color:var(--flame); font-weight:800;">Elegido: ${escapeHtml(nombreFicha(c))} · ${escapeHtml(c.patente || '')}</p>`;
+          btnOk.disabled = false;
+        }));
+      };
+      inp.addEventListener('input', () => { elegido = null; btnOk.disabled = true; pintar(); });
+      function cerrar(v) {
+        overlay.classList.add('closing');
+        setTimeout(() => { overlay.remove(); resolve(v); }, 150);
+      }
+      overlay.querySelector('#mtc-cancelar').addEventListener('click', () => cerrar(null));
+      btnOk.addEventListener('click', () => {
+        if (!elegido) return;
+        cerrar({ clienteId: elegido, motivo: overlay.querySelector('#mtc-motivo').value.trim() });
+      });
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(null); });
+      document.body.appendChild(overlay);
+      pintar();
+      setTimeout(() => inp.focus(), 60);
+    });
   }
 
   // Modal para dar/cambiar un turno (calendario nativo + hora + motivo).
@@ -2892,10 +2959,10 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   // renovó en otro taller — vuelve a necesitar oblea al año siguiente, que es
   // cuando conviene ofrecerle algo.
   const MOTIVOS_CIERRE = [
-    { value: 'otro_taller', label: '🔧 Renovó en otro taller', destino: 'recuperar', ayuda: 'Al año vuelve a necesitar oblea: queda en "Para recuperar".' },
-    { value: 'vendio', label: '🚗 Vendió el vehículo', destino: 'inactivo', ayuda: 'Sale de las listas. Queda guardado por las dudas.' },
-    { value: 'sin_gnc', label: '⛔ No usa más el GNC', destino: 'inactivo', ayuda: 'Equipo sacado, auto parado o roto.' },
-    { value: 'no_contesta', label: '❓ No contesta / no sé', destino: 'inactivo', ayuda: 'Sale de las listas; lo podés reactivar cuando quieras.' },
+    { value: 'otro_taller', label: 'Renovó en otro taller', destino: 'recuperar', ayuda: 'Al año vuelve a necesitar oblea: queda en "Para recuperar".' },
+    { value: 'vendio', label: 'Vendió el vehículo', destino: 'inactivo', ayuda: 'Sale de las listas. Queda guardado por las dudas.' },
+    { value: 'sin_gnc', label: 'No usa más el GNC', destino: 'inactivo', ayuda: 'Equipo sacado, auto parado o roto.' },
+    { value: 'no_contesta', label: 'No contesta / no sé', destino: 'inactivo', ayuda: 'Sale de las listas; lo podés reactivar cuando quieras.' },
   ];
   function motivoCierre(v) { return MOTIVOS_CIERRE.find(m => m.value === v) || null; }
   function motivoCierreLabel(v) { const m = motivoCierre(v); return m ? m.label : (v || ''); }
@@ -2981,7 +3048,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     const g = vencimientosPorAuto();
     return [...g.segundoAviso, ...g.esteMes].filter(i => !i.avisado).length;
   }
-  const QUE_LABEL = { oblea: '🏷️ Oblea', ph: '🔧 Prueba hidráulica', ambas: '🏷️🔧 Oblea + Prueba hidráulica' };
+  const QUE_LABEL = { oblea: 'Oblea', ph: 'Prueba hidráulica', ambas: 'Oblea + Prueba hidráulica' };
   // La MISMA fila en la pantalla principal y en "Hoy", así las dos muestran
   // exactamente lo mismo (antes cada una armaba la suya con criterios distintos).
   function vencItemHtml(it) {
@@ -3102,7 +3169,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     };
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="recuperar-panel">
       ${panelVolver()}
-      <h2 style="margin-top:0;">🔄 Recuperar</h2>
+      <h2 style="margin-top:0;">Recuperar</h2>
       <p class="scan-sub">Los clientes que dejaron de venir. No se borran nunca: si vuelven y les cargás un trámite, se reactivan solos.</p>
 
       <h3 style="margin-top:14px;">Les toca este mes (${r.ahora.length})</h3>
@@ -3149,13 +3216,13 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       : '';
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="hoy-panel">
       ${panelVolver()}
-      <h2 style="margin-top:0;">📅 Hoy — ${fmtDate(fechaLocalISO())}</h2>
+      <h2 style="margin-top:0;">Hoy — ${fmtDate(fechaLocalISO())}</h2>
 
       <div class="form-actions" style="margin:2px 0 12px;">
-        <button type="button" class="btn btn-primary" id="btn-hablar-hoy">🔊 Escuchá qué tenés que hacer hoy</button>
+        <button type="button" class="btn btn-primary" id="btn-hablar-hoy">Escuchá qué tenés que hacer hoy</button>
       </div>
 
-      ${hoySeccion('turnos', '🚗 Turnos de hoy', turnos.length, turnos.length ? `<div class="docs">${turnos.map(({ cliente, turno }) => `
+      ${hoySeccion('turnos', 'Turnos de hoy', turnos.length, turnos.length ? `<div class="docs">${turnos.map(({ cliente, turno }) => `
         <div class="doc-row">
           <div class="hist-tocable" data-ver-cliente="${cliente.id}" title="Ver la ficha del cliente">
             <div class="doc-label">${escapeHtml(nombreFicha(cliente))} · ${escapeHtml(cliente.patente || 's/d')}</div>
@@ -3166,12 +3233,12 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
             : `<button type="button" class="btn btn-wa btn-sm" data-aviso-turno-cliente="${cliente.id}" data-aviso-turno-id="${turno.id}">Recordar</button>`) : ''}
         </div>`).join('')}</div>` : '')}
 
-      ${hoySeccion('vencimientos', '📅 Vencimientos para avisar', vencCount,
+      ${hoySeccion('vencimientos', 'Vencimientos para avisar', vencCount,
         (v.segundoAviso.length || v.esteMes.length || v.mesQueViene.length)
           ? `${seccionVenc('Segundo aviso', v.segundoAviso)}${seccionVenc(`Vencen este mes — ${nombreMes(currentYM())}`, v.esteMes)}${seccionVenc(`Vencen el mes que viene — ${nombreMes(ymMasMeses(currentYM(), 1))}`, v.mesQueViene)}`
           : '')}
 
-      ${hoySeccion('cerrar', '❓ Cerrá estos casos', v.paraCerrar.length, v.paraCerrar.length ? `
+      ${hoySeccion('cerrar', 'Cerrá estos casos', v.paraCerrar.length, v.paraCerrar.length ? `
         <p class="scan-sub">Les avisaste y no vinieron. Marcá qué pasó con cada uno para sacarlos de la lista — no se borra nada, queda todo su historial.</p>
         <div class="docs">
           ${v.paraCerrar.map(it => `<div class="doc-row">
@@ -3183,11 +3250,11 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
           </div>`).join('')}
         </div>` : '')}
 
-      ${hoySeccion('pendientes', '📋 Pendientes de enviar al PEC', pend.length, pend.length
+      ${hoySeccion('pendientes', 'Pendientes de enviar al PEC', pend.length, pend.length
         ? `<p class="scan-sub">Tenés ${pend.length} trámite(s) sin enviar.</p><div class="form-actions"><button type="button" class="btn btn-ghost btn-sm" data-nav="pendientes">Ver pendientes</button></div>`
         : '')}
 
-      ${hoySeccion('tecnico', '👷 Coordinación con el técnico', null, `
+      ${hoySeccion('tecnico', 'Coordinación con el técnico', null, `
         <p class="scan-sub">Enviales a los técnicos vinculados la agenda de hoy: los turnos y los autos para revisión anual. Les llega una notificación al celular.</p>
         <div class="form-actions"><button type="button" class="btn btn-primary btn-sm" id="btn-agenda-tecnico">Avisar al técnico</button></div>
         <div id="agenda-tecnico-msj" class="scan-sub" style="margin-top:8px;"></div>`)}
@@ -3639,7 +3706,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   function pedidosWaStripAgenda() {
     if (!pedidosWa.length) return '';
     return `<div class="ag-wa-strip">
-      <div class="titulo">📱 Pedidos por WhatsApp sin cargar (${pedidosWa.length})</div>
+      <div class="titulo">Pedidos por WhatsApp sin cargar (${pedidosWa.length})</div>
       <div class="ag-wa-cards">
         ${pedidosWa.map(p => `<div class="ag-wa-card">
           <div class="pill">SIN CARGAR</div>
@@ -3686,15 +3753,17 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       <div class="ag-hlabel">s/h</div>
       ${dias.map(x => `<div class="ag-cell ${x.esHoy ? 'hoy' : ''}">${x.items.filter(i => !i.t.hora).map(bloque).join('')}</div>`).join('')}
     </div>` : '';
-    const filas = HORAS.map(h => `<div class="ag-row">
-      <div class="ag-hlabel">${h}</div>
+    const filas = HORAS.map((h, iFila) => `<div class="ag-row ${iFila % 2 ? 'ag-row-par' : ''}">
+      <div class="ag-hlabel">${String(h).padStart(2, '0')}:00</div>
       ${dias.map(x => {
         const enHora = x.items.filter(i => {
           const hh = parseInt((i.t.hora || '').slice(0, 2), 10);
           if (isNaN(hh)) return false;
           return Math.min(18, Math.max(8, hh)) === h;
         });
-        return `<div class="ag-cell ${x.esHoy ? 'hoy' : ''}">${enHora.map(bloque).join('')}</div>`;
+        // La celda vacía (o el espacio libre de la celda) sirve para cargar un
+        // turno ahí mismo, con el día y la hora ya puestos.
+        return `<div class="ag-cell ${x.esHoy ? 'hoy' : ''}" data-ag-celda="${x.iso}|${String(h).padStart(2, '0')}" title="Cargar un turno acá">${enHora.map(bloque).join('')}</div>`;
       }).join('')}
     </div>`).join('');
     return `
@@ -3750,7 +3819,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       </div>
       ${agendaSemana ? agendaSemanalHtml() : `
       ${pedidosWa.length ? `
-        <div class="hist-dia" style="color:var(--flame);">📱 Pedidos por WhatsApp (${pedidosWa.length})</div>
+        <div class="hist-dia" style="color:var(--flame);">Pedidos por WhatsApp (${pedidosWa.length})</div>
         <div class="tramites-list">
           ${pedidosWa.map(p => `
             <div class="tramite-row">
@@ -9441,6 +9510,28 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
     if (btnAgNext) btnAgNext.addEventListener('click', () => { agendaOffset += 1; render(); });
     const btnAgHoy = root.querySelector('#ag-hoy');
     if (btnAgHoy) btnAgHoy.addEventListener('click', () => { agendaOffset = 0; render(); });
+    // Tocar una celda libre de la agenda carga un turno ahí mismo, con el día y
+    // la hora ya puestos (si se tocó un turno, no: eso abre la ficha).
+    root.querySelectorAll('[data-ag-celda]').forEach(celda => {
+      celda.addEventListener('click', async (e) => {
+        if (e.target.closest('.ag-turno')) return;
+        const partes = (celda.getAttribute('data-ag-celda') || '').split('|');
+        const fecha = partes[0], hora = (partes[1] || '') + ':00';
+        if (!fecha) return;
+        const r = await mostrarModalTurnoEnCelda(fecha, hora);
+        if (!r) return;
+        const c = clientes.find(x => x.id === r.clienteId);
+        if (!c) return;
+        if (!Array.isArray(c.turnos)) c.turnos = [];
+        c.turnos.push({
+          id: 't' + Date.now() + Math.random().toString(36).slice(2, 7),
+          fecha, hora, motivo: r.motivo, presupuesto: '', avisoEnviado: false,
+        });
+        await saveClientes();
+        render();
+      });
+    });
+
     // Tocar un turno de la agenda abre la ficha del cliente (lo busca por patente).
     root.querySelectorAll('[data-agenda-turno]').forEach(el => {
       el.addEventListener('click', () => {
