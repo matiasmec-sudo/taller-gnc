@@ -3125,10 +3125,25 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     </div>`;
   }
 
+  // La pantalla "Hoy" se arma con secciones plegables, para ver de un vistazo
+  // cuánto hay de cada cosa sin scrollear medio kilómetro. Arranca con los
+  // turnos del día abiertos (es lo primero que se mira a la mañana).
+  let hoySecciones = { turnos: true, vencimientos: false, cerrar: false, pendientes: false, tecnico: false };
+  function hoySeccion(clave, titulo, cantidad, contenido) {
+    if (!contenido) return ''; // sección vacía: no se muestra
+    const abierto = !!hoySecciones[clave];
+    return `<div class="hist-dia-toggle ${abierto ? 'abierto' : ''}" data-hoy-sec="${clave}" role="button" tabindex="0">
+        <span>${titulo}${cantidad != null ? ` <span class="hist-dia-count">(${cantidad})</span>` : ''}</span>
+        <span class="hist-dia-caret">${abierto ? '▾' : '▸'}</span>
+      </div>
+      ${abierto ? contenido : ''}`;
+  }
+
   function hoyPanel(entrando) {
     const turnos = turnosHoy();
     const v = vencimientosPorAuto();
     const pend = pendientesItems();
+    const vencCount = v.segundoAviso.length + v.esteMes.length + v.mesQueViene.length;
     const seccionVenc = (titulo, arr) => arr.length
       ? `<h4 class="hoy-sub">${titulo} (${arr.length})</h4><div class="docs">${arr.map(vencItemHtml).join('')}</div>`
       : '';
@@ -3140,45 +3155,45 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         <button type="button" class="btn btn-primary" id="btn-hablar-hoy">🔊 Escuchá qué tenés que hacer hoy</button>
       </div>
 
-      <h3 style="margin-top:6px;">Turnos de hoy</h3>
-      ${turnos.length ? `<div class="docs">${turnos.map(({ cliente, turno }) => `
+      ${hoySeccion('turnos', '🚗 Turnos de hoy', turnos.length, turnos.length ? `<div class="docs">${turnos.map(({ cliente, turno }) => `
         <div class="doc-row">
-          <div>
-            <div class="doc-label">${escapeHtml(cliente.nombre)} · ${escapeHtml(cliente.patente || 's/d')}</div>
+          <div class="hist-tocable" data-ver-cliente="${cliente.id}" title="Ver la ficha del cliente">
+            <div class="doc-label">${escapeHtml(nombreFicha(cliente))} · ${escapeHtml(cliente.patente || 's/d')}</div>
             <div class="doc-sub">${turno.hora ? escapeHtml(turno.hora) + ' hs' : 'sin hora'}${turno.motivo ? ' — ' + escapeHtml(turno.motivo) : ''}</div>
           </div>
           ${cleanPhone(cliente.telefono) ? (turno.avisoEnviado
             ? '<button type="button" class="btn btn-ghost btn-sm" disabled>Aviso enviado</button>'
             : `<button type="button" class="btn btn-wa btn-sm" data-aviso-turno-cliente="${cliente.id}" data-aviso-turno-id="${turno.id}">Recordar</button>`) : ''}
-        </div>`).join('')}</div>` : '<p class="scan-sub">No hay turnos para hoy.</p>'}
+        </div>`).join('')}</div>` : '')}
 
-      <h3>Vencimientos para avisar</h3>
-      ${(v.segundoAviso.length || v.esteMes.length || v.mesQueViene.length)
-        ? `${seccionVenc('Segundo aviso', v.segundoAviso)}${seccionVenc(`Vencen este mes — ${nombreMes(currentYM())}`, v.esteMes)}${seccionVenc(`Vencen el mes que viene — ${nombreMes(ymMasMeses(currentYM(), 1))}`, v.mesQueViene)}`
-        : '<p class="scan-sub">No hay vencimientos próximos para avisar. ¡Todo al día!</p>'}
+      ${hoySeccion('vencimientos', '📅 Vencimientos para avisar', vencCount,
+        (v.segundoAviso.length || v.esteMes.length || v.mesQueViene.length)
+          ? `${seccionVenc('Segundo aviso', v.segundoAviso)}${seccionVenc(`Vencen este mes — ${nombreMes(currentYM())}`, v.esteMes)}${seccionVenc(`Vencen el mes que viene — ${nombreMes(ymMasMeses(currentYM(), 1))}`, v.mesQueViene)}`
+          : '')}
 
-      ${v.paraCerrar.length ? `
-      <h3>Cerrá estos casos (${v.paraCerrar.length})</h3>
-      <p class="scan-sub">Les avisaste y no vinieron. Marcá qué pasó con cada uno para sacarlos de la lista — no se borra nada, queda todo su historial.</p>
-      <div class="docs">
-        ${v.paraCerrar.map(it => `<div class="doc-row">
-          <div class="hist-tocable" data-ver-cliente="${it.cliente.id}" title="Ver la ficha del cliente">
-            <div class="doc-label">${escapeHtml(nombreFicha(it.cliente))} · ${escapeHtml(it.cliente.patente || 's/d')}</div>
-            <div class="doc-sub">${QUE_LABEL[it.que]} · ${it.status.label}</div>
-          </div>
-          <button type="button" class="btn btn-primary btn-sm" data-cerrar-caso="${it.cliente.id}" data-cerrar-ym="${it.ym}">¿Qué pasó?</button>
-        </div>`).join('')}
-      </div>` : ''}
+      ${hoySeccion('cerrar', '❓ Cerrá estos casos', v.paraCerrar.length, v.paraCerrar.length ? `
+        <p class="scan-sub">Les avisaste y no vinieron. Marcá qué pasó con cada uno para sacarlos de la lista — no se borra nada, queda todo su historial.</p>
+        <div class="docs">
+          ${v.paraCerrar.map(it => `<div class="doc-row">
+            <div class="hist-tocable" data-ver-cliente="${it.cliente.id}" title="Ver la ficha del cliente">
+              <div class="doc-label">${escapeHtml(nombreFicha(it.cliente))} · ${escapeHtml(it.cliente.patente || 's/d')}</div>
+              <div class="doc-sub">${QUE_LABEL[it.que]} · ${it.status.label}</div>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" data-cerrar-caso="${it.cliente.id}" data-cerrar-ym="${it.ym}">¿Qué pasó?</button>
+          </div>`).join('')}
+        </div>` : '')}
 
-      <h3>Pendientes</h3>
-      ${pend.length
+      ${hoySeccion('pendientes', '📋 Pendientes de enviar al PEC', pend.length, pend.length
         ? `<p class="scan-sub">Tenés ${pend.length} trámite(s) sin enviar.</p><div class="form-actions"><button type="button" class="btn btn-ghost btn-sm" data-nav="pendientes">Ver pendientes</button></div>`
-        : '<p class="scan-sub">No hay trámites pendientes.</p>'}
+        : '')}
 
-      <h3>Coordinación con el técnico</h3>
-      <p class="scan-sub">Enviales a los técnicos vinculados la agenda de hoy: los turnos y los autos para revisión anual. Les llega una notificación al celular.</p>
-      <div class="form-actions"><button type="button" class="btn btn-primary btn-sm" id="btn-agenda-tecnico">Avisar al técnico</button></div>
-      <div id="agenda-tecnico-msj" class="scan-sub" style="margin-top:8px;"></div>
+      ${hoySeccion('tecnico', '👷 Coordinación con el técnico', null, `
+        <p class="scan-sub">Enviales a los técnicos vinculados la agenda de hoy: los turnos y los autos para revisión anual. Les llega una notificación al celular.</p>
+        <div class="form-actions"><button type="button" class="btn btn-primary btn-sm" id="btn-agenda-tecnico">Avisar al técnico</button></div>
+        <div id="agenda-tecnico-msj" class="scan-sub" style="margin-top:8px;"></div>`)}
+
+      ${(!turnos.length && !vencCount && !v.paraCerrar.length && !pend.length)
+        ? '<p class="scan-sub" style="margin-top:14px;">No hay turnos, ni vencimientos para avisar, ni trámites pendientes. ¡Todo al día! 👌</p>' : ''}
     </div>`;
   }
 
@@ -7658,6 +7673,9 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     const pendCount = pendientesItems().length;
     const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo || showTurnos || showHoy || showEstadisticas || showRecuperar || !!verUltimoTramiteId;
     const turnosAvisoCount = turnosParaAvisar().length;
+    // Globito de Turnos en la barra: recordatorios sin mandar + pedidos que
+    // entraron por WhatsApp y todavía no se agendaron.
+    const turnosBadgeCount = turnosAvisoCount + pedidosWa.length;
 
     // Para que la animación de entrada de un panel se dispare solo cuando
     // recién se abre — no en cada re-render mientras sigue abierto (ej. al
@@ -7694,10 +7712,10 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         <div class="topbar">
           <div class="brand">
             <div class="menu-wrap">
-              <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-menu" style="position:relative;">☰${turnosAvisoCount ? `<span class="menu-badge">${turnosAvisoCount}</span>` : ''}</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-toggle-menu" style="position:relative;">☰${pendCount ? `<span class="menu-badge">${pendCount}</span>` : ''}</button>
               ${menuOpen ? `<div class="menu-dropdown">
                 <div class="menu-group-label">Gestión</div>
-                <button type="button" class="btn btn-ghost btn-sm" id="btn-turnos">${menuIco('calendar')}Turnos${turnosAvisoCount ? ` <span class="menu-badge-inline">${turnosAvisoCount}</span>` : ''}</button>
+                <button type="button" class="btn btn-ghost btn-sm" data-nav="pendientes">${menuIco('clipboard')}Pendientes${pendCount ? ` <span class="menu-badge-inline">${pendCount}</span>` : ''}</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-presupuestos">${menuIco('presupuesto')}Presupuestos</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-recuperar">${menuIco('chart')}Recuperar${paraRecuperarLista().ahora.length ? ` <span class="menu-badge-inline">${paraRecuperarLista().ahora.length}</span>` : ''}</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-estadisticas">${menuIco('chart')}Estadísticas</button>
@@ -7716,9 +7734,9 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
             <span class="taller-name-top">${escapeHtml(tallerNombre)}</span>
           </div>
           <nav class="top-nav" aria-label="Navegación">
-            <button type="button" class="tn-item ${!showPendientes && !showHistorial && !showTallerConfig && !showHoy ? 'activo' : ''}" data-nav="inicio">${navIco('home')}Inicio</button>
+            <button type="button" class="tn-item ${!showPendientes && !showHistorial && !showTallerConfig && !showHoy && !showTurnos ? 'activo' : ''}" data-nav="inicio">${navIco('home')}Inicio</button>
             <button type="button" class="tn-item ${showHoy ? 'activo' : ''}" data-nav="hoy">${navIco('calendar')}Hoy${(turnosHoy().length + vencimientosParaAvisarCount()) ? `<span class="tn-badge">${turnosHoy().length + vencimientosParaAvisarCount()}</span>` : ''}</button>
-            <button type="button" class="tn-item ${showPendientes ? 'activo' : ''}" data-nav="pendientes">${navIco('clipboard')}Pendientes${pendCount ? `<span class="tn-badge">${pendCount}</span>` : ''}</button>
+            <button type="button" class="tn-item ${showTurnos ? 'activo' : ''}" data-nav="turnos">${navIco('calendar')}Turnos${turnosBadgeCount ? `<span class="tn-badge">${turnosBadgeCount}</span>` : ''}</button>
             <button type="button" class="tn-item ${showHistorial ? 'activo' : ''}" data-nav="historial">${navIco('history')}Historial</button>
             <button type="button" class="tn-item ${showTallerConfig ? 'activo' : ''}" data-nav="config">${navIco('settings')}Mi taller</button>
           </nav>
@@ -7736,7 +7754,6 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         ${showEstadisticas ? estadisticasPanel(entrando.estadisticas) : ''}
         ${showRecuperar ? recuperarPanel(entrando.recuperar) : ''}
         ${showTallerConfig ? tallerConfigPanel(entrando.tallerConfig) : ''}
-        ${reminderBanner()}
         ${showPendientes ? pendientesPanel(entrando.pendientes) : ''}
 
         ${algunPanelAbierto ? '' : `<div class="controls">
@@ -7777,9 +7794,9 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       </div>
       ${algunPanelAbierto ? '' : '<button type="button" class="fab-nuevo-tramite" id="btn-fab-nuevo" aria-label="Nuevo trámite">+ Nuevo trámite</button>'}
       <div class="bottom-nav">
-        <button type="button" class="bn-item ${!showPendientes && !showHistorial && !showTallerConfig && !showHoy ? 'activo' : ''}" data-nav="inicio"><span class="bn-ico">${navIco('home')}</span>Inicio</button>
+        <button type="button" class="bn-item ${!showPendientes && !showHistorial && !showTallerConfig && !showHoy && !showTurnos ? 'activo' : ''}" data-nav="inicio"><span class="bn-ico">${navIco('home')}</span>Inicio</button>
         <button type="button" class="bn-item ${showHoy ? 'activo' : ''}" data-nav="hoy">${(turnosHoy().length + vencimientosParaAvisarCount()) ? `<span class="bn-badge">${turnosHoy().length + vencimientosParaAvisarCount()}</span>` : ''}<span class="bn-ico">${navIco('calendar')}</span>Hoy</button>
-        <button type="button" class="bn-item ${showPendientes ? 'activo' : ''}" data-nav="pendientes">${pendCount ? `<span class="bn-badge">${pendCount}</span>` : ''}<span class="bn-ico">${navIco('clipboard')}</span>Pendientes</button>
+        <button type="button" class="bn-item ${showTurnos ? 'activo' : ''}" data-nav="turnos">${turnosBadgeCount ? `<span class="bn-badge">${turnosBadgeCount}</span>` : ''}<span class="bn-ico">${navIco('calendar')}</span>Turnos</button>
         <button type="button" class="bn-item ${showHistorial ? 'activo' : ''}" data-nav="historial"><span class="bn-ico">${navIco('history')}</span>Historial</button>
         <button type="button" class="bn-item ${showTallerConfig ? 'activo' : ''}" data-nav="config"><span class="bn-ico">${navIco('settings')}</span>Mi taller</button>
       </div>
@@ -7886,6 +7903,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         const yaAbierto = (destino === 'pendientes' && showPendientes)
           || (destino === 'historial' && showHistorial)
           || (destino === 'config' && showTallerConfig)
+          || (destino === 'turnos' && showTurnos)
           || (destino === 'hoy' && showHoy);
         cerrarPanelesConsulta();
         menuOpen = false;
@@ -7893,6 +7911,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
           if (destino === 'pendientes') showPendientes = true;
           else if (destino === 'historial') showHistorial = true;
           else if (destino === 'config') showTallerConfig = true;
+          else if (destino === 'turnos') { showTurnos = true; fetchPedidosWa(); }
           else if (destino === 'hoy') showHoy = true;
         }
         render();
@@ -9563,6 +9582,15 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
 
     // "Avisar al técnico": manda la agenda del día (turnos + autos para
     // revisión) a los técnicos vinculados, con notificación push.
+    // Abrir/cerrar las secciones de la pantalla Hoy.
+    root.querySelectorAll('[data-hoy-sec]').forEach(el => {
+      el.addEventListener('click', () => {
+        const k = el.getAttribute('data-hoy-sec');
+        hoySecciones[k] = !hoySecciones[k];
+        render();
+      });
+    });
+
     const btnHablarHoy = root.querySelector('#btn-hablar-hoy');
     if (btnHablarHoy) btnHablarHoy.addEventListener('click', () => hablarResumenHoy());
 
