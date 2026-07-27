@@ -1107,7 +1107,7 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
       // El código de vinculación del técnico (6 números) no es una licencia
       // de Estelita — redirigir a la app correcta antes de molestar al server.
       if (/^\d{6}$/.test(code)) {
-        errorEl.textContent = 'Ese parece el código de vinculación del técnico. La app del técnico es otra: abrí taller-gnc.vercel.app/tecnico.html y ponelo ahí.';
+        errorEl.textContent = 'Ese parece el código de vinculación del técnico. La app del técnico es otra: abrí estelita.net.ar/tecnico.html y ponelo ahí.';
         return;
       }
       // Validación REAL contra el servidor: sin esto, cualquier texto
@@ -2831,7 +2831,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   // ============================================================
   // La clave 'fact_url' en localStorage permite apuntar a otro facturador
   // (pruebas locales, o el dominio definitivo cuando esté).
-  const FACTURADOR_URL = localStorage.getItem('fact_url') || 'https://estelitacrm.duckdns.org/facturador';
+  const FACTURADOR_URL = localStorage.getItem('fact_url') || 'https://facturas.estelita.net.ar';
 
   function factB64ABlob(b64) {
     const bin = atob(b64);
@@ -5541,7 +5541,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
 
     const revsTecnico = revisionesDelTecnico();
     const secTecnico = `
-      <div class="agent-hint" style="margin-top:0;">El técnico instala la app "Estelita Técnico" en su celular (taller-gnc.vercel.app/tecnico.html) y la vincula con un código de 6 números que generás acá — de un solo uso y con 15 minutos de validez. El técnico nunca ve tu código de licencia y su app solo sirve para responder revisiones. Cuando le envíes una revisión desde el paso 1 de un trámite, le llega una notificación al celular aunque tenga la app cerrada.</div>
+      <div class="agent-hint" style="margin-top:0;">El técnico instala la app "Estelita Técnico" en su celular (estelita.net.ar/tecnico.html) y la vincula con un código de 6 números que generás acá — de un solo uso y con 15 minutos de validez. El técnico nunca ve tu código de licencia y su app solo sirve para responder revisiones. Cuando le envíes una revisión desde el paso 1 de un trámite, le llega una notificación al celular aunque tenga la app cerrada.</div>
       <div class="form-grid">
         <label>Nombre del técnico
           <input type="text" id="tc-tecnico-nombre" value="${escapeHtml(t.tecnicoNombre)}" placeholder="Ej: Leandro Di Lenarda">
@@ -8814,7 +8814,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         const r = await apiTecnicoTaller({ accion: 'vincular-generar' });
         if (caja) caja.innerHTML = `<div style="border:2px dashed var(--flame); border-radius:12px; text-align:center; padding:14px; margin-top:8px;">
           <div style="font-size:32px; font-weight:800; letter-spacing:8px; color:var(--flame);">${escapeHtml(r.codigo)}</div>
-          <div class="agent-hint" style="margin-top:4px;">El técnico tiene que abrir <b>taller-gnc.vercel.app/tecnico.html</b> en su celular y escribir este código. Vence en ${r.minutos} minutos y sirve una sola vez.</div>
+          <div class="agent-hint" style="margin-top:4px;">El técnico tiene que abrir <b>estelita.net.ar/tecnico.html</b> en su celular y escribir este código. Vence en ${r.minutos} minutos y sirve una sola vez.</div>
         </div>`;
       } catch (e) {
         if (caja) caja.innerHTML = `<div class="agent-result err">No se pudo generar el código: ${escapeHtml(e.message || String(e))}</div>`;
@@ -10336,7 +10336,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
           const textoDef = '¡Listo! Te confirmamos el turno para el ' + cuando + '. Te esperamos. 🔧';
           const texto = await mostrarModalConfirmacionWa(textoDef);
           if (texto) {
-            fetch('https://estelitacrm.duckdns.org/api/turno-confirmado', {
+            fetch('https://crm.estelita.net.ar/api/turno-confirmado', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
