@@ -2671,7 +2671,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         <button type="button" class="btn btn-primary" id="btn-presu-guardar">Guardar</button>
         <button type="button" class="btn btn-ghost" id="btn-presu-imprimir">Imprimir</button>
         <button type="button" class="btn btn-wa" id="btn-presu-wa">Enviar por WhatsApp</button>
-        <button type="button" class="btn btn-ghost" id="btn-presu-facturar">Facturar</button>
+        <button type="button" class="btn btn-ghost" id="btn-presu-facturar">Emitir comprobante</button>
       </div>
     </div>`;
   }
@@ -2768,9 +2768,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   async function abrirPresupuestoPdf(p) {
     try {
       const blob = await generarPresupuestoPdf(p);
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      await abrirOCompartirPdf(blob, `Presupuesto_${p.numero || ''}.pdf`, 'Te paso el presupuesto.');
     } catch (e) {
       console.error(e);
       await customAlert('No se pudo generar el presupuesto: ' + (e.message || e));
@@ -3472,7 +3470,11 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       if (!(await guardar())) return;
       render();
       const p = presuDraft;
+      // Mismas opciones que en el historial y en la ficha: fiscal o no fiscal.
+      const tipo = await mostrarModalTipoComprobante();
+      if (!tipo) return;
       facturarAbrir({
+        noFiscal: tipo === 'nofiscal',
         items: factItemsDePresupuesto(p),
         nombre: p.nombre || '',
         telefono: presuTelefonoDe(p),
@@ -4883,7 +4885,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
             <button class="btn btn-ghost" data-fotos="${c.id}" ${tieneFotos ? '' : 'disabled title="Este cliente todavía no tiene fotos de documentación guardadas"'}>Documentación</button>
             <button class="btn btn-ghost" data-actualizar="${c.id}">Actualizar datos</button>
             <button class="btn btn-ghost" data-turno="${c.id}">Turno</button>
-            <button class="btn btn-ghost" data-facturar="${c.id}">Facturar</button>
+            <button class="btn btn-ghost" data-facturar="${c.id}">Emitir comprobante</button>
             ${c.tramites.length ? `<button class="btn btn-ghost" data-ultimo-tramite="${c.id}">Último trámite</button>` : ''}
             <button class="btn btn-agent" data-tramite="${c.id}">Inicio de trámite</button>
           </div>
@@ -8640,9 +8642,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       btnGrillaCalibracion.disabled = true;
       try {
         const blob = await generarGrillaCalibracion();
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        await abrirOCompartirPdf(blob, 'Grilla_de_calibracion.pdf', 'Grilla para calibrar la impresión.');
       } catch (e) {
         console.error(e);
         await customAlert('No se pudo generar la grilla: ' + (e.message || e));
@@ -9495,9 +9495,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
           await customAlert('Se abre un PDF con SOLO los datos, ubicados donde caen los casilleros de la planilla. Poné la planilla ya impresa en la impresora e imprimí al 100% (tamaño real). La firma del cliente va a mano sobre el papel.', 'Imprimir solo los datos');
         }
         const blob = await generarPecPdfSoloDatos(c, t);
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        await abrirOCompartirPdf(blob, `Ficha_${(c.patente || 'tramite').toString().replace(/\s+/g, '_')}.pdf`, `Ficha del trámite de GNC — patente ${c.patente || 's/d'}`);
       } catch (e) {
         console.error(e);
         if (st) { st.className = 'agent-result err'; st.textContent = 'No se pudo generar la impresión: ' + (e.message || e); }
@@ -10151,12 +10149,16 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       });
     });
 
-    // Facturar desde la tarjeta del cliente (carga manual del detalle).
+    // Emitir comprobante desde la tarjeta del cliente (carga manual del
+    // detalle). Mismas opciones que en el historial: fiscal o no fiscal.
     root.querySelectorAll('[data-facturar]').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const c = clientes.find(x => x.id === btn.getAttribute('data-facturar'));
         if (!c) return;
+        const tipo = await mostrarModalTipoComprobante();
+        if (!tipo) return;
         facturarAbrir({
+          noFiscal: tipo === 'nofiscal',
           items: [],
           nombre: nombreFicha(c) || '',
           dni: (c.dni || '').replace(/\D/g, ''),
@@ -11080,15 +11082,17 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         equipo: tramiteDraftEquipo || blankEquipo(null),
       };
       try {
-        if (!localStorage.getItem('gnc_hint_imprimir_v1')) {
-          localStorage.setItem('gnc_hint_imprimir_v1', '1');
-          await customAlert('Se abre un PDF con SOLO los datos, ubicados donde caen los casilleros de la planilla. Poné la planilla ya impresa en la impresora e imprimí al 100% (tamaño real, sin "ajustar a la página"). La firma del cliente va a mano sobre el papel. Si los datos salen corridos, en "Configurar datos del taller" está el ajuste de impresión en milímetros.', 'Imprimir solo los datos');
+        if (!localStorage.getItem('gnc_hint_imprimir_v2')) {
+          localStorage.setItem('gnc_hint_imprimir_v2', '1');
+          const puedeCompartir = navigator.canShare && navigator.canShare({ files: [new File([new Blob()], 'x.pdf', { type: 'application/pdf' })] });
+          await customAlert((puedeCompartir
+            ? 'Se abre el menú de compartir con el PDF ya adjunto: elegí "Imprimir", o mandalo por WhatsApp / guardalo. Trae SOLO los datos, ubicados donde caen los casilleros de la planilla: '
+            : 'Se abre un PDF con SOLO los datos, ubicados donde caen los casilleros de la planilla. Poné la planilla ya impresa en la impresora y ')
+            + 'imprimí al 100% (tamaño real, sin "ajustar a la página"). La firma del cliente va a mano sobre el papel. Si los datos salen corridos, en "Configurar datos del taller" está el ajuste de impresión en milímetros.', 'Imprimir solo los datos');
         }
         btnImprimirDatos.disabled = true;
         const blob = await generarPecPdfSoloDatos(clienteTmp, tramiteTmp);
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        await abrirOCompartirPdf(blob, `Ficha_${(clienteTmp.patente || 'tramite').toString().replace(/\s+/g, '_')}.pdf`, `Ficha del trámite de GNC — patente ${clienteTmp.patente || 's/d'}`);
       } catch (e) {
         console.error(e);
         await customAlert('No se pudo generar el PDF de impresión: ' + (e.message || e));
@@ -11118,9 +11122,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         }
         btnImprimirCrpc.disabled = true;
         const blob = await generarCrpcPdfSoloDatos(clienteTmp, tramiteTmp);
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        await abrirOCompartirPdf(blob, `Planilla_reprueba_${(clienteTmp.patente || '').toString().replace(/\s+/g, '_')}.pdf`, 'Planilla del centro de reprueba.');
       } catch (e) {
         console.error(e);
         await customAlert('No se pudo generar la planilla de reprueba: ' + (e.message || e));
