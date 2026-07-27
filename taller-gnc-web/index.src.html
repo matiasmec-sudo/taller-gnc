@@ -902,12 +902,21 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
     const capas = document.querySelectorAll('.gnc-modal-overlay:not(.closing), .gnc-foto-overlay:not(.closing)');
     return capas.length ? capas[capas.length - 1] : null;
   }
+  let consumiendoAtras = false;
   function sincronizarAtras() {
-    if ((capaAbiertaArriba() || panelAbiertoAhora) && !atrasPusheado) {
+    const hayAlgo = !!capaAbiertaArriba() || panelAbiertoAhora;
+    if (hayAlgo && !atrasPusheado) {
       try { history.pushState({ gncCapa: 1 }, ''); atrasPusheado = true; } catch (e) { /* sin historial, ok */ }
+    } else if (!hayAlgo && atrasPusheado) {
+      // Se cerró desde la app (botón "Volver"): se saca la entrada que habíamos
+      // puesto, así el próximo atrás sale de la app y no se pierde un toque.
+      atrasPusheado = false;
+      consumiendoAtras = true;
+      try { history.back(); } catch (e) { consumiendoAtras = false; }
     }
   }
   window.addEventListener('popstate', () => {
+    if (consumiendoAtras) { consumiendoAtras = false; return; }
     atrasPusheado = false;
     const capa = capaAbiertaArriba();
     if (capa) {
