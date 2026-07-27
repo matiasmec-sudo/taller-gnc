@@ -4,7 +4,7 @@
 import crypto from 'crypto';
 import { PLAN_PRECIOS, PLAN_NOMBRES, crearSignup, leerSignups } from './_licencias.js';
 
-const BASE = 'https://taller-gnc.vercel.app';
+const BASE = 'https://estelita.net.ar';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
