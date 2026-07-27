@@ -889,6 +889,45 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
     if (typeof render === 'function' && ready) render();
   });
 
+  // ---- Botón "atrás" del celular ----
+  // Mientras haya un panel o un cuadro abierto se mantiene UNA entrada falsa en
+  // el historial del navegador: así el botón físico de atrás CIERRA lo que está
+  // abierto en vez de salirse de la app. Cuando no queda nada abierto no hay
+  // ninguna entrada puesta, y el atrás vuelve a funcionar normal (sale).
+  // El asistente de trámite queda afuera a propósito: ahí un atrás sin querer
+  // cerraría una carga a medio hacer.
+  let panelAbiertoAhora = false;
+  let atrasPusheado = false;
+  function capaAbiertaArriba() {
+    const capas = document.querySelectorAll('.gnc-modal-overlay:not(.closing), .gnc-foto-overlay:not(.closing)');
+    return capas.length ? capas[capas.length - 1] : null;
+  }
+  function sincronizarAtras() {
+    if ((capaAbiertaArriba() || panelAbiertoAhora) && !atrasPusheado) {
+      try { history.pushState({ gncCapa: 1 }, ''); atrasPusheado = true; } catch (e) { /* sin historial, ok */ }
+    }
+  }
+  window.addEventListener('popstate', () => {
+    atrasPusheado = false;
+    const capa = capaAbiertaArriba();
+    if (capa) {
+      capa.click(); // los cuadros se cierran al tocar el fondo
+    } else if (panelAbiertoAhora) {
+      cerrarPanelesConsulta();
+      showFotosFor = null;
+      verUltimoTramiteId = null;
+      render();
+    }
+    // Si todavía quedó algo abierto (ej. un cuadro sobre un panel), se vuelve a
+    // dejar una entrada para que el próximo atrás también cierre y no salga.
+    setTimeout(sincronizarAtras, 220);
+  });
+  // Los cuadros (modales) se crean fuera del render(), así que se vigila el
+  // body para dejar puesta la entrada de "atrás" apenas aparece uno.
+  try {
+    new MutationObserver(() => sincronizarAtras()).observe(document.body, { childList: true });
+  } catch (e) { /* navegador sin MutationObserver: sigue andando sin esto */ }
+
   // Tocar en cualquier lado fuera de la tarjeta deslizada (swipe para
   // eliminar) la cierra — mismo patrón que las apps de mail en el celular.
   // Se registra una sola vez acá (no en cada render) para no acumular
@@ -6769,6 +6808,25 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   // vez queda arriba de la lista) y sale todo junto. El mensaje va con el
   // nombre del PEC para encontrarlo fácil. En escritorio (sin hoja de
   // compartir) se descarga el PDF y se abre el chat directo del PEC.
+  // Abre un PDF de la mejor forma según el aparato. En el celular abre el menú
+  // de compartir CON el archivo adjunto: desde ahí se imprime, se manda por
+  // WhatsApp o se guarda. (Antes se abría en una pestaña nueva, que en el
+  // celular queda en blanco o directamente no deja imprimir ni mandar nada.)
+  // En la compu: pestaña nueva y, si el navegador la bloquea, se descarga.
+  async function abrirOCompartirPdf(blob, filename, texto) {
+    const file = new File([blob], filename, { type: 'application/pdf' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: filename, text: texto || '' });
+        return;
+      } catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if (!win) descargarBlob(blob, filename);
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+
   async function compartirPecPdf(blob, filename, cliente, fotosIncluidas, pec) {
     const notaFotos = fotosIncluidas ? ' Incluye las fotos de la documentación.' : '';
     const nombrePec = (pec && pec.razonSocial) ? pec.razonSocial : 'el PEC';
@@ -8247,6 +8305,11 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     // abajo del panel no tenían sentido y confundían.
     const pendCount = pendientesItems().length;
     const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo || showTurnos || showHoy || showEstadisticas || showRecuperar || showFacturacion || !!verUltimoTramiteId;
+    // Para el botón "atrás" del celular: qué paneles cuentan como "algo abierto
+    // que hay que cerrar". El asistente de trámite queda afuera a propósito.
+    panelAbiertoAhora = showHistorial || showPendientes || showBulkImport || showTallerConfig
+      || showQuickAdd || showRespaldo || showTurnos || showHoy || showEstadisticas
+      || showRecuperar || showFacturacion || showPresupuestos || !!showFotosFor || !!verUltimoTramiteId;
     const turnosAvisoCount = turnosParaAvisar().length;
     // Globito de Turnos en la barra: recordatorios sin mandar + pedidos que
     // entraron por WhatsApp y todavía no se agendaron.
@@ -8385,6 +8448,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     setupScanBox();
     setupTramiteBox();
     animarReacomodoClientes(rectsAntes);
+    sincronizarAtras();
 
     if (focusInfo) {
       const toFocus = root.querySelector('#' + focusInfo.id);
@@ -9287,14 +9351,16 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       const t = c && (c.tramites || []).find(x => x.id === tramiteId);
       if (!c || !t) return;
       try {
-        if (cual === 'ficha' && !localStorage.getItem('gnc_hint_imprimir_v1')) {
-          localStorage.setItem('gnc_hint_imprimir_v1', '1');
-          await customAlert('Se abre un PDF con SOLO los datos, ubicados donde caen los casilleros de la planilla. Poné la planilla ya impresa en la impresora e imprimí al 100% (tamaño real).', 'Imprimir solo los datos');
+        const enCelular = navigator.canShare && navigator.canShare({ files: [new File([new Blob()], 'x.pdf', { type: 'application/pdf' })] });
+        if (cual === 'ficha' && !localStorage.getItem('gnc_hint_imprimir_v2')) {
+          localStorage.setItem('gnc_hint_imprimir_v2', '1');
+          await customAlert(enCelular
+            ? 'Se abre el menú de compartir con el PDF ya adjunto: elegí "Imprimir" si tenés la impresora a mano, o mandalo por WhatsApp / guardalo. Trae SOLO los datos, ubicados donde caen los casilleros: imprimí al 100% (tamaño real) sobre la planilla.'
+            : 'Se abre un PDF con SOLO los datos, ubicados donde caen los casilleros de la planilla. Poné la planilla ya impresa en la impresora e imprimí al 100% (tamaño real).', 'Imprimir solo los datos');
         }
         const blob = await generarPecPdfSoloDatos(c, t);
-        const url = URL.createObjectURL(blob);
-        window.open(url, '_blank');
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        const filename = `Ficha_${(c.patente || c.nombre || 'tramite').toString().replace(/\s+/g, '_')}_${t.fecha || ''}.pdf`;
+        await abrirOCompartirPdf(blob, filename, `Ficha del trámite de GNC — patente ${c.patente || 's/d'}`);
       } catch (e) {
         console.error(e);
         await customAlert('No se pudo generar el PDF: ' + (e.message || e));
