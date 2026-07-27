@@ -6897,9 +6897,23 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   // WhatsApp o se guarda. (Antes se abría en una pestaña nueva, que en el
   // celular queda en blanco o directamente no deja imprimir ni mandar nada.)
   // En la compu: pestaña nueva y, si el navegador la bloquea, se descarga.
+  // OJO: el menú de compartir SOLO va en el celular. En Chrome de Windows
+  // también existe, pero abre el compartir de Windows (Bluetooth, correo...),
+  // que NO tiene imprimir — y ahí no había forma de mandar el PDF a la
+  // impresora. En la compu se abre el PDF en una pestaña, que trae su propio
+  // botón de imprimir.
+  function esCelular() {
+    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  }
+  function puedeCompartirPdf() {
+    if (!esCelular()) return false;
+    try {
+      return !!(navigator.canShare && navigator.canShare({ files: [new File([new Blob()], 'x.pdf', { type: 'application/pdf' })] }));
+    } catch (e) { return false; }
+  }
   async function abrirOCompartirPdf(blob, filename, texto) {
-    const file = new File([blob], filename, { type: 'application/pdf' });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    if (puedeCompartirPdf()) {
+      const file = new File([blob], filename, { type: 'application/pdf' });
       try {
         await navigator.share({ files: [file], title: filename, text: texto || '' });
         return;
@@ -9455,7 +9469,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       const t = c && (c.tramites || []).find(x => x.id === tramiteId);
       if (!c || !t) return;
       try {
-        const enCelular = navigator.canShare && navigator.canShare({ files: [new File([new Blob()], 'x.pdf', { type: 'application/pdf' })] });
+        const enCelular = puedeCompartirPdf();
         if (cual === 'ficha' && !localStorage.getItem('gnc_hint_imprimir_v2')) {
           localStorage.setItem('gnc_hint_imprimir_v2', '1');
           await customAlert(enCelular
@@ -11200,7 +11214,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       try {
         if (!localStorage.getItem('gnc_hint_imprimir_v2')) {
           localStorage.setItem('gnc_hint_imprimir_v2', '1');
-          const puedeCompartir = navigator.canShare && navigator.canShare({ files: [new File([new Blob()], 'x.pdf', { type: 'application/pdf' })] });
+          const puedeCompartir = puedeCompartirPdf();
           await customAlert((puedeCompartir
             ? 'Se abre el menú de compartir con el PDF ya adjunto: elegí "Imprimir", o mandalo por WhatsApp / guardalo. Trae SOLO los datos, ubicados donde caen los casilleros de la planilla: '
             : 'Se abre un PDF con SOLO los datos, ubicados donde caen los casilleros de la planilla. Poné la planilla ya impresa en la impresora y ')
