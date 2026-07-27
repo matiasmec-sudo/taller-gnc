@@ -689,7 +689,14 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 #gnc-app .hist-modelo { font-family: var(--sans); font-size: 13px; font-weight: 600; letter-spacing: 0; color: var(--text-muted); }
 /* Zona tocable de la fila del historial: al tocarla se despliega el
    detalle del cliente hacia abajo (los botones de la derecha quedan aparte). */
-#gnc-app .hist-tocable { cursor: pointer; flex: 1; min-width: 0; }
+/* La info pide un ancho mínimo razonable: si no entra junto con los botones,
+   estos bajan a un renglón propio en vez de aplastar el texto (antes la
+   patente y el modelo quedaban partidos en varias líneas). */
+#gnc-app .hist-tocable { cursor: pointer; flex: 1 1 210px; min-width: 0; }
+/* Estado del PEC: es un DATO, no una acción. Va discreto para que el único
+   verde que salte sea el botón de WhatsApp. "Pendiente" sí llama la atención. */
+#gnc-app .hist-estado { font-size: 11.5px; font-weight: 700; color: var(--text-muted); margin-top: 2px; }
+#gnc-app .hist-estado.pend { color: var(--warn); }
 #gnc-app .hist-tocable:hover .hist-patente { color: var(--flame); }
 #gnc-app .hist-row-abierto { background: var(--surface-alt); border-radius: 12px 12px 0 0; }
 #gnc-app .hist-detalle { background: var(--surface-alt); border-radius: 0 0 12px 12px; padding: 4px 12px 12px; margin: -6px 0 8px; }
@@ -4021,9 +4028,9 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
             <div class="hist-tocable" data-hist-toggle="${tramite.id}">
               <div class="hist-patente">${escapeHtml(cliente.patente || 'SIN PATENTE')}${modelo ? ` <span class="hist-modelo">${escapeHtml(modelo)}</span>` : ''}</div>
               <div class="hist-tipo">${tramiteTipoLabel(tramite.tipo)}${hora ? ` · <span class="hist-hora">${hora}</span>` : ''}</div>
-              <div class="hist-nombre">${escapeHtml(nombreFicha(cliente))}${cliente.telefono ? ` · Tel: ${escapeHtml(cliente.telefono)}` : ''}</div>
+              <div class="hist-nombre">${escapeHtml(nombreFicha(cliente))}</div>
+              <div class="hist-estado ${tramite.estadoPec === 'enviado' ? '' : 'pend'}">${ESTADO_PEC_LABELS[tramite.estadoPec]}</div>
             </div>
-            <span class="badge ${tramite.estadoPec === 'enviado' ? 'badge-ok' : 'badge-warn'}">${ESTADO_PEC_LABELS[tramite.estadoPec]}</span>
             ${tramite.estadoPec !== 'enviado' ? `<button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${cliente.id}" data-editar-tramite-id="${tramite.id}">Editar</button>` : ''}
             ${tramite.estadoPec === 'enviado' && cliente.telefono ? (
               tramite.avisoObleaEnviado
@@ -4934,7 +4941,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   function clienteDatosBlock(c) {
     const cli = clienteDatos(c);
     return `<div class="client-detalle-grid">
-        ${cli.propio ? `<div><span class="doc-label">Cliente (paga / factura)</span><div>${escapeHtml(cli.nombre) || '—'}${cli.dni ? ' · ' + escapeHtml(cli.tipoDoc + ' ' + cli.dni) : ''}</div></div>` : ''}
+        ${cli.propio ? `<div><span class="doc-label">Cliente</span><div>${escapeHtml(cli.nombre) || '—'}${cli.dni ? ' · ' + escapeHtml(cli.tipoDoc + ' ' + cli.dni) : ''}</div></div>` : ''}
         <div><span class="doc-label">${cli.propio ? 'Titular s/ cédula' : 'Nombre'}</span><div>${escapeHtml(c.nombre) || '—'}</div></div>
         <div><span class="doc-label">Teléfono</span><div>${escapeHtml(c.telefono) || '—'}</div></div>
         <div><span class="doc-label">Documento</span><div>${escapeHtml([c.tipo_documento, c.dni].filter(Boolean).join(' ')) || '—'}</div></div>
