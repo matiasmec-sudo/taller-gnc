@@ -471,6 +471,24 @@
 }
 .gnc-modal-msg { font-size: 12.5px; color: #6B7688; line-height: 1.5; }
 .gnc-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+/* Modal de facturación (usa la app Facturador, aparte de Estelita) */
+.fact-campo { margin-bottom: 8px; }
+.fact-campo label { display: block; font-size: 11px; font-weight: 700; color: #6B7688; margin-bottom: 3px; }
+.fact-campo input, .fact-campo select {
+  width: 100%; box-sizing: border-box; padding: 8px 10px; font-size: 13px;
+  border: 1px solid #E3E8F0; border-radius: 10px; background: #fff; color: #1A2333;
+}
+.fact-fila2 { display: flex; gap: 8px; }
+.fact-fila2 > .fact-campo { flex: 1; min-width: 0; }
+.fact-item { display: flex; gap: 6px; margin-bottom: 6px; }
+.fact-item input { padding: 8px 10px; font-size: 13px; border: 1px solid #E3E8F0; border-radius: 10px; }
+.fact-item .fact-desc { flex: 3; min-width: 0; }
+.fact-item .fact-precio { flex: 1.2; min-width: 70px; }
+.fact-item .fact-quitar { border: 0; background: none; color: #C0281A; font-size: 15px; cursor: pointer; padding: 0 4px; }
+.fact-total { text-align: right; font-weight: 800; font-size: 15px; color: #1D5BD8; margin: 6px 0 2px; }
+.fact-aviso { font-size: 12px; margin-top: 8px; line-height: 1.4; }
+.fact-aviso.err { color: #C0281A; }
+.fact-aviso.ok { color: #157A44; }
 /* Los modales viven fuera de #gnc-app, así que sus botones necesitan
    estilos propios (si no, quedan con el look gris nativo del navegador). */
 .gnc-modal-box .btn {
@@ -2605,6 +2623,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         <button type="button" class="btn btn-primary" id="btn-presu-guardar">Guardar</button>
         <button type="button" class="btn btn-ghost" id="btn-presu-imprimir">Imprimir</button>
         <button type="button" class="btn btn-wa" id="btn-presu-wa">Enviar por WhatsApp</button>
+        <button type="button" class="btn btn-ghost" id="btn-presu-facturar">Facturar</button>
       </div>
     </div>`;
   }
@@ -2736,6 +2755,190 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   function presuTelefonoDe(p) {
     const c = p.clienteId ? clientes.find(x => x.id === p.clienteId) : null;
     return c ? (c.telefono || '') : '';
+  }
+
+  // ============================================================
+  // --- Facturación electrónica (app Facturador, separada) ---
+  // El Facturador corre en el servidor y pide el CAE a ARCA con el CUIT del
+  // taller. Se autentica con el MISMO código de licencia de Estelita: si el
+  // taller no tiene la facturación dada de alta (certificado + punto de
+  // venta), el servidor contesta con un error claro y acá se muestra tal cual.
+  // ============================================================
+  const FACTURADOR_URL = 'https://estelitacrm.duckdns.org/facturador';
+
+  function factB64ABlob(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: 'application/pdf' });
+  }
+
+  // Compartir el PDF de la factura igual que el presupuesto: menú nativo en el
+  // celular; en la compu se descarga y se abre el chat.
+  async function factCompartirPdf(resp, telefono, nombreCliente) {
+    const blob = factB64ABlob(resp.pdfBase64);
+    const file = new File([blob], resp.nombrePdf, { type: 'application/pdf' });
+    const msg = `¡Hola${nombreCliente ? ' ' + nombreCliente : ''}! Te mando la factura por ${presuMoney(resp.comprobante.imp_total)}. ¡Gracias!`;
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: resp.nombrePdf, text: msg });
+        return;
+      } catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    descargarBlob(blob, resp.nombrePdf);
+    if (telefono) abrirWhatsapp(cleanPhone(telefono), msg + ' (te adjunto el PDF que se acaba de descargar)');
+  }
+
+  // Modal de facturación. Vive fuera del render() de la app (como los alert),
+  // así ningún redibujo le pisa lo tipeado.
+  // datos = { items: [{descripcion, precio}], nombre, dni, domicilio, telefono }
+  function facturarAbrir(datos) {
+    const overlay = document.createElement('div');
+    overlay.className = 'gnc-modal-overlay';
+    const filaItem = (it) => `<div class="fact-item">
+        <input class="fact-desc" placeholder="Descripción" value="${escapeHtml(it.descripcion || '')}">
+        <input class="fact-precio" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Precio final" value="${it.precio || ''}">
+        <button type="button" class="fact-quitar" title="Quitar">✕</button>
+      </div>`;
+    overlay.innerHTML = `
+      <div class="gnc-modal-box" style="max-width:430px; max-height:92vh; overflow:auto;">
+        <div class="gnc-modal-head">
+          <div class="gnc-modal-icon">$</div>
+          <div>
+            <div class="gnc-modal-title">Emitir factura</div>
+            <div class="gnc-modal-msg">Los precios son los finales que paga el cliente: si tu taller discrimina IVA, se desglosa solo, adentro del precio.</div>
+          </div>
+        </div>
+        <div class="fact-campo"><label>Nombre del cliente</label>
+          <input id="fact-nombre" value="${escapeHtml(datos.nombre || '')}" placeholder="Consumidor Final"></div>
+        <div class="fact-fila2">
+          <div class="fact-campo"><label>Documento</label>
+            <select id="fact-doctipo">
+              <option value="99">Sin identificar</option>
+              <option value="96" ${datos.dni ? 'selected' : ''}>DNI</option>
+              <option value="80">CUIT</option>
+              <option value="86">CUIL</option>
+            </select></div>
+          <div class="fact-campo"><label>Número</label>
+            <input id="fact-docnro" inputmode="numeric" value="${escapeHtml(datos.dni || '')}" placeholder="Sólo números"></div>
+        </div>
+        <div class="fact-fila2">
+          <div class="fact-campo"><label>Condición IVA del cliente</label>
+            <select id="fact-condiva">
+              <option value="5">Consumidor Final</option>
+              <option value="1">IVA Responsable Inscripto</option>
+              <option value="6">Responsable Monotributo</option>
+              <option value="4">IVA Sujeto Exento</option>
+            </select></div>
+          <div class="fact-campo"><label>Domicilio (opcional)</label>
+            <input id="fact-domicilio" value="${escapeHtml(datos.domicilio || '')}"></div>
+        </div>
+        <div class="fact-campo" style="margin-top:4px;"><label>Detalle</label>
+          <div id="fact-items">${(datos.items && datos.items.length ? datos.items : [{}]).map(filaItem).join('')}</div>
+          <button type="button" class="btn btn-ghost btn-sm" id="fact-agregar">+ Agregar renglón</button>
+        </div>
+        <div class="fact-total" id="fact-total"></div>
+        <div class="fact-aviso" id="fact-aviso"></div>
+        <div class="gnc-modal-actions">
+          <button type="button" class="btn btn-ghost" id="fact-cancelar">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="fact-emitir">Emitir y pedir CAE</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const q = s => overlay.querySelector(s);
+
+    const leerItems = () => [...overlay.querySelectorAll('.fact-item')].map(f => ({
+      descripcion: f.querySelector('.fact-desc').value.trim(),
+      cantidad: 1,
+      precioUnitario: parseFloat(f.querySelector('.fact-precio').value) || 0,
+    })).filter(i => i.descripcion && i.precioUnitario > 0);
+
+    const totalizar = () => {
+      const items = leerItems();
+      q('#fact-total').textContent = items.length
+        ? 'Total: ' + presuMoney(items.reduce((s, i) => s + i.precioUnitario, 0)) : '';
+    };
+    const engancharFila = (fila) => {
+      fila.querySelectorAll('input').forEach(i => i.addEventListener('input', totalizar));
+      fila.querySelector('.fact-quitar').addEventListener('click', () => { fila.remove(); totalizar(); });
+    };
+    overlay.querySelectorAll('.fact-item').forEach(engancharFila);
+    q('#fact-agregar').addEventListener('click', () => {
+      const cont = q('#fact-items');
+      cont.insertAdjacentHTML('beforeend', filaItem({}));
+      engancharFila(cont.lastElementChild);
+    });
+    totalizar();
+
+    const cerrar = () => {
+      overlay.classList.add('closing');
+      setTimeout(() => overlay.remove(), 150);
+    };
+    q('#fact-cancelar').addEventListener('click', cerrar);
+
+    q('#fact-emitir').addEventListener('click', async () => {
+      const aviso = q('#fact-aviso');
+      const items = leerItems();
+      if (!items.length) {
+        aviso.className = 'fact-aviso err';
+        aviso.textContent = 'Cargá al menos un renglón con descripción y precio.';
+        return;
+      }
+      const btn = q('#fact-emitir');
+      btn.disabled = true;
+      aviso.className = 'fact-aviso ok';
+      aviso.textContent = 'Pidiendo autorización (CAE) a ARCA…';
+      try {
+        const r = await fetch(FACTURADOR_URL + '/api/facturar', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Licencia': localStorage.getItem(LICENSE_KEY) || '',
+          },
+          body: JSON.stringify({
+            clase: 'FACTURA',
+            docTipo: Number(q('#fact-doctipo').value),
+            docNro: (q('#fact-docnro').value || '0').replace(/\D/g, '') || '0',
+            receptorNombre: q('#fact-nombre').value.trim(),
+            receptorDomicilio: q('#fact-domicilio').value.trim(),
+            receptorCondicionIva: Number(q('#fact-condiva').value),
+            items,
+          }),
+        });
+        const resp = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(resp.error || 'No se pudo emitir la factura.');
+        aviso.textContent = `✔ Factura autorizada. CAE: ${resp.comprobante.cae}. Abriendo para compartir…`;
+        await factCompartirPdf(resp, datos.telefono, datos.nombre);
+        cerrar();
+      } catch (e) {
+        aviso.className = 'fact-aviso err';
+        aviso.textContent = (e && e.message) || 'Error de conexión con el facturador.';
+        btn.disabled = false;
+      }
+    });
+  }
+
+  // Ítems de factura a partir de un presupuesto. Respeta la filosofía del PDF
+  // de presupuesto: en GNC no se abre el precio por renglón (va un solo ítem
+  // con el total); en mecánica se itemiza. Los montos van con el IVA del
+  // presupuesto ya incluido (precio final) y el descuento aplicado.
+  function factItemsDePresupuesto(p) {
+    const t = presuTotales(p);
+    if (p.modo === 'gnc') {
+      const detalle = presuAgrupar(p.items).map(g => g.nom + (g.cant > 1 ? ' × ' + g.cant : '')).join(', ');
+      return [{
+        descripcion: ('Servicio de GNC' + (p.vehiculo ? ' — ' + p.vehiculo : '') + (detalle ? ': ' + detalle : '') + '. Incluye mano de obra.').slice(0, 200),
+        precio: Math.round(t.total * 100) / 100,
+      }];
+    }
+    const f = p.iva ? 1.21 : 1;
+    const items = presuAgrupar(p.items.filter(i => i.tipo !== 'trabajo')).map(g => ({
+      descripcion: g.nom + (g.cant > 1 ? ' × ' + g.cant : ''),
+      precio: Math.round(g.neto * g.cant * f * 100) / 100,
+    }));
+    const mo = t.mo - t.descMonto;
+    if (mo > 0) items.push({ descripcion: 'Mano de obra' + (t.d > 0 ? ` (con ${t.d}% de descuento)` : ''), precio: Math.round(mo * 100) / 100 });
+    return items;
   }
 
   // --- Eventos de presupuestos (se llama desde attachEvents) ---
@@ -2918,6 +3121,16 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     });
     if (q('#btn-presu-wa')) q('#btn-presu-wa').addEventListener('click', async () => {
       if (await guardar()) { render(); await enviarPresupuestoWa(presuDraft); }
+    });
+    if (q('#btn-presu-facturar')) q('#btn-presu-facturar').addEventListener('click', async () => {
+      if (!(await guardar())) return;
+      render();
+      const p = presuDraft;
+      facturarAbrir({
+        items: factItemsDePresupuesto(p),
+        nombre: p.nombre || '',
+        telefono: presuTelefonoDe(p),
+      });
     });
   }
 
@@ -4324,6 +4537,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
             <button class="btn btn-ghost" data-fotos="${c.id}" ${tieneFotos ? '' : 'disabled title="Este cliente todavía no tiene fotos de documentación guardadas"'}>Documentación</button>
             <button class="btn btn-ghost" data-actualizar="${c.id}">Actualizar datos</button>
             <button class="btn btn-ghost" data-turno="${c.id}">Turno</button>
+            <button class="btn btn-ghost" data-facturar="${c.id}">Facturar</button>
             ${c.tramites.length ? `<button class="btn btn-ghost" data-ultimo-tramite="${c.id}">Último trámite</button>` : ''}
             <button class="btn btn-agent" data-tramite="${c.id}">Inicio de trámite</button>
           </div>
@@ -9542,6 +9756,21 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         render();
         const card = root.querySelector('.client-card');
         if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    // Facturar desde la tarjeta del cliente (carga manual del detalle).
+    root.querySelectorAll('[data-facturar]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const c = clientes.find(x => x.id === btn.getAttribute('data-facturar'));
+        if (!c) return;
+        facturarAbrir({
+          items: [],
+          nombre: nombreFicha(c) || '',
+          dni: (c.dni || '').replace(/\D/g, ''),
+          domicilio: [c.domicilio, c.numero, c.ciudad].filter(Boolean).join(' '),
+          telefono: c.telefono || '',
+        });
       });
     });
 
