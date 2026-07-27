@@ -1614,6 +1614,18 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       // avisoVenc: { '2026-07': '2026-07-03' } → por QUÉ vencimiento se avisó
       // (reemplaza a ultimoAvisoMes, que guardaba solo el mes en que avisaste).
       if (!c.avisoVenc || typeof c.avisoVenc !== 'object') { c.avisoVenc = {}; changed = true; }
+      // El viejo campo "titular" guardaba, confusamente, a QUIEN VINO CON EL DNI
+      // (o sea, el que NO era titular). Pasa a ser el nombre del cliente.
+      if (typeof c.titular === 'string') {
+        const quienVino = c.titular.trim();
+        if (quienVino && quienVino !== (c.nombre || '').trim()) {
+          c.cliMismo = false;
+          if (!c.cliNombre) c.cliNombre = quienVino;
+        }
+        delete c.titular;
+        changed = true;
+      }
+      if (typeof c.cliMismo !== 'boolean') { c.cliMismo = true; changed = true; }
       if (typeof c.notas !== 'string') { c.notas = ''; changed = true; }
       if (!Array.isArray(c.turnos)) { c.turnos = []; changed = true; }
       // El estado "incompleto" se eliminó: ahora un trámite es Pendiente
@@ -3947,7 +3959,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       if (histTipo && tramite.tipo !== histTipo) return false;
       if (histEstado && (tramite.estadoPec || 'pendiente') !== histEstado) return false;
       if (q) {
-        const hay = `${cliente.nombre || ''} ${cliente.titular || ''} ${cliente.patente || ''} ${cliente.marca || ''} ${cliente.modelo || ''}`.toLowerCase();
+        const hay = `${cliente.nombre || ''} ${cliente.cliNombre || ''} ${cliente.patente || ''} ${cliente.marca || ''} ${cliente.modelo || ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -4546,7 +4558,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       const q = query.toLowerCase();
       list = list.filter(c =>
         (c.nombre || '').toLowerCase().includes(q) ||
-        (c.titular || '').toLowerCase().includes(q) ||
+        (c.cliNombre || '').toLowerCase().includes(q) ||
         (c.patente || '').toLowerCase().includes(q)
       );
     }
@@ -4878,7 +4890,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
             <div class="client-patente">${escapeHtml(c.patente || 'SIN PATENTE')}</div>
             <div class="client-modelo">${escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) || 'Sin marca/modelo'}${c.anio ? ' · ' + escapeHtml(c.anio) : ''}</div>
             <div class="client-name">${escapeHtml(nombreFicha(c))}${c.telefono ? ' · ' + escapeHtml(c.telefono) : ''}</div>
-            ${(c.titular || '').trim() && (c.titular || '').trim() !== (c.nombre || '').trim() ? `<div class="doc-sub" style="font-size:11px; color:var(--text-muted);">Titular s/ cédula: ${escapeHtml(c.nombre)}</div>` : ''}
+            ${clienteDatos(c).propio && (c.nombre || '').trim() ? `<div class="doc-sub" style="font-size:11px; color:var(--text-muted);">Titular s/ cédula: ${escapeHtml(c.nombre)}</div>` : ''}
           </div>
           <div class="client-actions">
             ${c.telefono ? `<a class="btn btn-wa" target="_blank" rel="noopener" href="${waLinkGeneral(c)}">WhatsApp</a>` : ''}
@@ -4920,8 +4932,10 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   // Grilla de datos personales/vehículo del cliente (sin el historial de
   // trámites) — compartida por la tarjeta expandida y el historial.
   function clienteDatosBlock(c) {
+    const cli = clienteDatos(c);
     return `<div class="client-detalle-grid">
-        <div><span class="doc-label">Nombre</span><div>${escapeHtml(c.nombre) || '—'}</div></div>
+        ${cli.propio ? `<div><span class="doc-label">Cliente (paga / factura)</span><div>${escapeHtml(cli.nombre) || '—'}${cli.dni ? ' · ' + escapeHtml(cli.tipoDoc + ' ' + cli.dni) : ''}</div></div>` : ''}
+        <div><span class="doc-label">${cli.propio ? 'Titular s/ cédula' : 'Nombre'}</span><div>${escapeHtml(c.nombre) || '—'}</div></div>
         <div><span class="doc-label">Teléfono</span><div>${escapeHtml(c.telefono) || '—'}</div></div>
         <div><span class="doc-label">Documento</span><div>${escapeHtml([c.tipo_documento, c.dni].filter(Boolean).join(' ')) || '—'}</div></div>
         <div><span class="doc-label">Vehículo</span><div>${escapeHtml([c.marca, c.modelo, c.anio].filter(Boolean).join(' ')) || '—'}</div></div>
@@ -5358,7 +5372,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     ];
     return `<div class="scan-box" id="scan-box">
       <h3 style="margin-top:0; border-top:none; padding-top:0;">Fotos del cliente ${infoAyuda('ayuda-fotos-cliente')}</h3>
-      ${ayudaBloque('ayuda-fotos-cliente', 'Colocá el DNI, la Cédula Verde y la Tarjeta de GNC juntos sobre una mesa y tomá una sola foto con todo (Frente). Luego dalos vuelta y tomá otra (Dorso). Las dos fotos quedan guardadas junto con el cliente. Al tocar "Leer datos", los datos personales se toman del titular de la Cédula Verde (nombre, documento y domicilio) y de ahí también la patente; el resto de los datos del vehículo y del equipo se completan con la consulta a ENARGAS. El DNI y la Tarjeta de GNC quedan solo de respaldo, no se leen sus datos. Si el cliente te mandó la documentación en fotos separadas, en "Galería" podés elegir varias a la vez y Estelita las une en una sola imagen.')}
+      ${ayudaBloque('ayuda-fotos-cliente', 'Colocá el DNI, la Cédula Verde y la Tarjeta de GNC juntos sobre una mesa y tomá una sola foto con todo (Frente). Luego dalos vuelta y tomá otra (Dorso). Las dos fotos quedan guardadas junto con el cliente. Al tocar "Leer datos", los datos del TITULAR (nombre, documento y domicilio) y la patente se toman de la Cédula Verde — eso es lo que exige ENARGAS. Del DNI se toman aparte los datos de quien trajo el auto: si no es el titular, queda cargado como cliente del taller y es a quien se le factura. La Tarjeta de GNC no se lee, queda de respaldo. Si el cliente te mandó la documentación en fotos separadas, en "Galería" podés elegir varias a la vez y Estelita las une en una sola imagen.')}
       <div class="scan-grid scan-grid-2">
         ${slots.map(s => `
         <div class="scan-slot">
@@ -5744,18 +5758,47 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     }
   }
 
-  // Nombre para la FICHA DEL TALLER (tarjeta, búsqueda, historial, WhatsApp).
-  // Si se cargó "Titular" (quien vino con el DNI), se usa ese; si no, el nombre
-  // de la cédula verde (cliente.nombre). OJO: el PEC SIEMPRE usa cliente.nombre
-  // (titular de la cédula, exigencia ENARGAS), nunca cliente.titular.
+  // ---- Titular del vehículo vs. cliente del taller ----
+  // Son dos personas distintas cuando el que trae el auto no es el titular de
+  // la cédula. El TITULAR (cliente.nombre/dni/domicilio) es el que exige
+  // ENARGAS y va a la ficha del PEC. El CLIENTE (cli*) es al que se le factura,
+  // al que se le manda WhatsApp y el que aparece en la tarjeta y el historial.
+  // Si cliMismo no es false, son la misma persona y se usan los del titular.
+  function clienteDatos(c) {
+    if (!c) return { nombre: '', dni: '', tipoDoc: 'DNI', domicilio: '', propio: false };
+    if (c.cliMismo === false) {
+      return {
+        nombre: (c.cliNombre || '').trim(),
+        dni: (c.cliDni || '').trim(),
+        tipoDoc: c.cliTipoDoc || 'DNI',
+        domicilio: (c.cliDomicilio || '').trim(),
+        propio: true,
+      };
+    }
+    return {
+      nombre: (c.nombre || '').trim(),
+      dni: (c.dni || '').trim(),
+      tipoDoc: c.tipo_documento || 'DNI',
+      domicilio: [c.domicilio, c.numero, c.ciudad].filter(Boolean).join(' '),
+      propio: false,
+    };
+  }
+  // Nombre para la FICHA DEL TALLER (tarjeta, búsqueda, historial, WhatsApp):
+  // el del cliente. OJO: el PEC SIEMPRE usa cliente.nombre (titular de la
+  // cédula, exigencia de ENARGAS), nunca el del cliente del taller.
   function nombreFicha(c) {
-    const t = ((c && c.titular) || '').trim();
-    return t || (c && c.nombre) || '';
+    const d = clienteDatos(c);
+    return d.nombre || (c && c.nombre) || '';
   }
 
   function blankClienteBase() {
     return {
-      nombre:'', titular:'', dni:'', tipo_documento:'DNI', domicilio:'', numero:'', piso:'', cpa:'', provincia:'', ciudad:'', telefono:'',
+      // nombre/dni/domicilio = TITULAR de la cédula verde (lo que exige ENARGAS).
+      nombre:'', dni:'', tipo_documento:'DNI', domicilio:'', numero:'', piso:'', cpa:'', provincia:'', ciudad:'',
+      // cli* = CLIENTE del taller: el que trae el auto y al que se le factura.
+      // Si cliMismo es true (lo normal), es la misma persona que el titular.
+      cliMismo:true, cliNombre:'', cliDni:'', cliTipoDoc:'DNI', cliDomicilio:'',
+      telefono:'',
       patente:'', marca:'', modelo:'', anio:'', inyeccion:'no', tipo_vehiculo:'', uso:'',
       fecha_oblea:'', fecha_crpc:'', tipo_cilindro:'5'
     };
@@ -5787,14 +5830,11 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     }
     return `${scanBox()}
       ${botonDocGuardada}
-      <h3 style="margin-top:0;">Datos personales</h3>
+      <h3 style="margin-top:0;">Titular del vehículo <span style="font-weight:600; font-size:12px; color:var(--text-muted);">(según la cédula verde)</span></h3>
+      <p class="scan-sub" style="margin:0 0 8px;">Estos datos son los que van a la ficha de ENARGAS. Salen de la cédula verde.</p>
       <div class="form-grid">
         <label>Nombre y apellido
           <input type="text" id="f-nombre" value="${escapeHtml(c.nombre)}" placeholder="Ej: Juan Pérez">
-        </label>
-        <label>Titular
-          <input type="text" id="f-titular" value="${escapeHtml(c.titular || '')}" placeholder="Quien vino con el DNI">
-          <span style="display:block; margin-top:3px; font-size:11px; color:var(--text-muted);">Solo para la ficha del taller. Dejalo vacío si es el mismo de la cédula.</span>
         </label>
         <label>Tipo de documento
           <select id="f-tipo-documento">
@@ -5804,11 +5844,37 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         <label>N° de Documento
           <input type="text" id="f-dni" value="${escapeHtml(c.dni)}" placeholder="Ej: 30123456">
         </label>
-        <label class="campo-obligatorio">Teléfono (con código de país, sin +) *
-          <input type="tel" id="f-telefono" value="${escapeHtml(c.telefono)}" placeholder="Ej: 5492235551234">
+      </div>
+
+      <h3>Cliente del taller <span style="font-weight:600; font-size:12px; color:var(--text-muted);">(quien trae el auto y paga)</span></h3>
+      <label class="check-linea" style="display:flex; align-items:center; gap:8px; margin:2px 0 8px; cursor:pointer;">
+        <input type="checkbox" id="f-cli-mismo" ${c.cliMismo === false ? '' : 'checked'} style="width:18px; height:18px;">
+        <span>Es el mismo titular de la cédula</span>
+      </label>
+      <div class="form-grid" id="f-cli-datos" style="${c.cliMismo === false ? '' : 'display:none;'}">
+        <label>Nombre y apellido
+          <input type="text" id="f-cli-nombre" value="${escapeHtml(c.cliNombre || '')}" placeholder="Quien vino con el DNI">
+        </label>
+        <label>Tipo de documento
+          <select id="f-cli-tipodoc">
+            ${['DNI','LC','LE','Pasaporte','CUIT'].map(t => `<option value="${t}" ${(c.cliTipoDoc || 'DNI') === t ? 'selected' : ''}>${t}</option>`).join('')}
+          </select>
+        </label>
+        <label>N° de Documento
+          <input type="text" id="f-cli-dni" value="${escapeHtml(c.cliDni || '')}" placeholder="Ej: 30123456">
+        </label>
+        <label style="grid-column:1/-1;">Domicilio (opcional)
+          <input type="text" id="f-cli-domicilio" value="${escapeHtml(c.cliDomicilio || '')}" placeholder="Para la factura, si hace falta">
         </label>
       </div>
-      <h3>Domicilio</h3>
+      <div class="form-grid">
+        <label class="campo-obligatorio">Teléfono del cliente (con código de país, sin +) *
+          <input type="tel" id="f-telefono" value="${escapeHtml(c.telefono)}" placeholder="Ej: 5492235551234">
+          <span style="display:block; margin-top:3px; font-size:11px; color:var(--text-muted);">Es al que se le mandan los avisos de vencimiento y los turnos.</span>
+        </label>
+      </div>
+
+      <h3>Domicilio del titular</h3>
       <div class="form-grid">
         <label>Domicilio
           <input type="text" id="f-domicilio" value="${escapeHtml(c.domicilio)}" placeholder="Ej: Perez Bulnes 3752, 2° B">
@@ -7196,7 +7262,11 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
 
     const data = {
       nombre, telefono, patente,
-      titular: (clienteDraft.titular || '').trim(),
+      cliMismo: clienteDraft.cliMismo !== false,
+      cliNombre: (clienteDraft.cliNombre || '').trim(),
+      cliDni: (clienteDraft.cliDni || '').trim(),
+      cliTipoDoc: clienteDraft.cliTipoDoc || 'DNI',
+      cliDomicilio: (clienteDraft.cliDomicilio || '').trim(),
       dni: (clienteDraft.dni || '').trim(),
       tipo_documento: clienteDraft.tipo_documento,
       domicilio: (clienteDraft.domicilio || '').trim(),
@@ -7457,10 +7527,11 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   // y lo tipeado todavía no guardado (nombre, DNI, domicilio...) desaparecía.
   let clienteDraft = null;
   const CLIENTE_DRAFT_CAMPOS = {
-    nombre: 'f-nombre', titular: 'f-titular', dni: 'f-dni', tipo_documento: 'f-tipo-documento', telefono: 'f-telefono',
+    nombre: 'f-nombre', dni: 'f-dni', tipo_documento: 'f-tipo-documento', telefono: 'f-telefono',
     domicilio: 'f-domicilio', cpa: 'f-cpa',
     provincia: 'f-provincia', ciudad: 'f-ciudad', patente: 'f-patente',
     marca: 'f-marca', modelo: 'f-modelo', anio: 'f-anio', inyeccion: 'f-inyeccion', uso: 'f-uso',
+    cliNombre: 'f-cli-nombre', cliDni: 'f-cli-dni', cliTipoDoc: 'f-cli-tipodoc', cliDomicilio: 'f-cli-domicilio',
   };
   function syncClienteDraftFromDOM() {
     if (!clienteDraft) return;
@@ -7468,6 +7539,9 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       const el = root.querySelector('#' + id);
       if (el) clienteDraft[key] = el.value;
     });
+    // El tilde de "es el mismo titular" va aparte (no es un campo de texto).
+    const chk = root.querySelector('#f-cli-mismo');
+    if (chk) clienteDraft.cliMismo = chk.checked;
   }
 
   const OTROS_EQUIPOS_CAMPOS = [
@@ -8172,8 +8246,8 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       }
       content.push({
         type: 'text',
-        text: `Estas imágenes muestran varios documentos argentinos fotografiados juntos sobre una mesa (probablemente Cédula Verde del automotor, DNI, y a veces una Tarjeta de Identificación de Equipo de GNC), una foto de un lado y otra del lado opuesto. Los DATOS PERSONALES (nombre y apellido, documento, domicilio, ciudad y provincia) extraelos del TITULAR que figura en la CÉDULA VERDE del automotor. IMPORTANTE: NO uses el DNI para los datos personales, aunque aparezca en la foto — puede ser de otra persona; los datos personales SIEMPRE son los del titular de la Cédula Verde. De la misma Cédula Verde extraé también la patente/dominio del vehículo. La patente argentina tiene EXACTAMENTE uno de estos dos formatos: AAA111 (3 letras y 3 números, autos viejos) o AA111BB (2 letras, 3 números y 2 letras, Mercosur). Devolvela en MAYÚSCULAS, sin espacios ni guiones ni ningún otro carácter, con la cantidad EXACTA de caracteres (6 o 7): no agregues ni quites letras o números. Corregí confusiones típicas de lectura (O↔0, I↔1, S↔5, B↔8, Z↔2, G↔6, Q↔0) SOLO lo necesario para que encaje en uno de esos dos formatos, sin cambiar el resto. Si no se lee con confianza, poné null. Pero NO extraigas marca, modelo, tipo ni uso, esos datos se completan después con una consulta aparte. Si aparece una Tarjeta de GNC, ignorala por completo — no extraigas nada de ella. Respondé SOLO con un objeto JSON válido, sin texto adicional, sin markdown, con esta forma exacta:
-{"nombre": "nombre y apellido del titular o null", "dni": "numero de documento del titular sin puntos o null", "domicilio": "calle y numero del titular o null", "provincia": "provincia o null", "ciudad": "ciudad o localidad o null", "patente": "dominio/patente del vehiculo o null"}
+        text: `Estas imágenes muestran varios documentos argentinos fotografiados juntos sobre una mesa (probablemente Cédula Verde del automotor, DNI, y a veces una Tarjeta de Identificación de Equipo de GNC), una foto de un lado y otra del lado opuesto. Los DATOS PERSONALES (nombre y apellido, documento, domicilio, ciudad y provincia) extraelos del TITULAR que figura en la CÉDULA VERDE del automotor. IMPORTANTE: NO uses el DNI para los datos personales, aunque aparezca en la foto — puede ser de otra persona; los datos personales SIEMPRE son los del titular de la Cédula Verde. De la misma Cédula Verde extraé también la patente/dominio del vehículo. La patente argentina tiene EXACTAMENTE uno de estos dos formatos: AAA111 (3 letras y 3 números, autos viejos) o AA111BB (2 letras, 3 números y 2 letras, Mercosur). Devolvela en MAYÚSCULAS, sin espacios ni guiones ni ningún otro carácter, con la cantidad EXACTA de caracteres (6 o 7): no agregues ni quites letras o números. Corregí confusiones típicas de lectura (O↔0, I↔1, S↔5, B↔8, Z↔2, G↔6, Q↔0) SOLO lo necesario para que encaje en uno de esos dos formatos, sin cambiar el resto. Si no se lee con confianza, poné null. Pero NO extraigas marca, modelo, tipo ni uso, esos datos se completan después con una consulta aparte. Si aparece una Tarjeta de GNC, ignorala por completo — no extraigas nada de ella. APARTE, si en las fotos hay un DNI, extraé TAMBIÉN los datos de esa persona en los campos "dni_nombre", "dni_numero" y "dni_domicilio" (esa persona es la que trajo el auto al taller y puede NO ser el titular). Si no hay DNI legible, poné null en los tres. No mezcles: los campos "nombre"/"dni"/"domicilio" son SIEMPRE los de la Cédula Verde, y los "dni_*" son SIEMPRE los del DNI. Respondé SOLO con un objeto JSON válido, sin texto adicional, sin markdown, con esta forma exacta:
+{"nombre": "nombre y apellido del titular o null", "dni": "numero de documento del titular sin puntos o null", "domicilio": "calle y numero del titular o null", "provincia": "provincia o null", "ciudad": "ciudad o localidad o null", "patente": "dominio/patente del vehiculo o null", "dni_nombre": "nombre y apellido que figura en el DNI o null", "dni_numero": "numero del DNI sin puntos o null", "dni_domicilio": "domicilio que figura en el DNI o null"}
 El domicilio del titular puede venir junto con la localidad y la provincia; separalos en los campos correspondientes. Si algún dato no aparece en las imágenes o no se puede leer con confianza, poné null en ese campo. No inventes datos.`
       });
 
@@ -8232,6 +8306,20 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         if (parsed.ciudad && !String(clienteDraft.cpa || '').trim()) {
           const cpa = cpaDeCiudad(parsed.ciudad);
           if (cpa) clienteDraft.cpa = cpa;
+        }
+        // Si en la foto había un DNI de OTRA persona (no el titular de la
+        // cédula), se carga como cliente del taller: es al que se le factura.
+        const dniNro = String(parsed.dni_numero || '').replace(/\D/g, '');
+        const dniNom = String(parsed.dni_nombre || '').trim();
+        const titularNro = String(parsed.dni || '').replace(/\D/g, '');
+        const distinto = (dniNro && titularNro && dniNro !== titularNro)
+          || (!dniNro && dniNom && dniNom.toLowerCase() !== String(parsed.nombre || '').trim().toLowerCase());
+        if (distinto) {
+          clienteDraft.cliMismo = false;
+          if (dniNom) clienteDraft.cliNombre = dniNom;
+          if (dniNro) clienteDraft.cliDni = dniNro;
+          clienteDraft.cliTipoDoc = 'DNI';
+          if (parsed.dni_domicilio) clienteDraft.cliDomicilio = String(parsed.dni_domicilio).trim();
         }
       }
 
@@ -9388,12 +9476,15 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         if (!c) return;
         const tipo = await mostrarModalTipoComprobante();
         if (!tipo) return;
+        // Nombre, documento y domicilio SIEMPRE de la misma persona: el cliente
+        // del taller. (Antes salía el nombre de uno con el documento del otro.)
+        const cli = clienteDatos(c);
         facturarAbrir({
           noFiscal: tipo === 'nofiscal',
           items: t ? [{ descripcion: tramiteTipoLabel(t.tipo), precio: '' }] : [],
-          nombre: nombreFicha(c) || '',
-          dni: (c.dni || '').replace(/\D/g, ''),
-          domicilio: [c.domicilio, c.numero, c.ciudad].filter(Boolean).join(' '),
+          nombre: cli.nombre,
+          dni: (cli.dni || '').replace(/\D/g, ''),
+          domicilio: cli.domicilio,
           telefono: c.telefono || '',
         });
       });
@@ -9707,6 +9798,19 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         const card = root.querySelector('.client-card');
         if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
+    });
+
+    // "Es el mismo titular": muestra u oculta los datos del cliente del taller.
+    // No se re-dibuja la pantalla para no perder lo que ya esté tipeado.
+    const chkCliMismo = root.querySelector('#f-cli-mismo');
+    if (chkCliMismo) chkCliMismo.addEventListener('change', () => {
+      const caja = root.querySelector('#f-cli-datos');
+      if (caja) caja.style.display = chkCliMismo.checked ? 'none' : '';
+      if (clienteDraft) clienteDraft.cliMismo = chkCliMismo.checked;
+      if (!chkCliMismo.checked) {
+        const inp = root.querySelector('#f-cli-nombre');
+        if (inp) inp.focus();
+      }
     });
 
     const ciudadInput = root.querySelector('#f-ciudad');
@@ -10157,12 +10261,13 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         if (!c) return;
         const tipo = await mostrarModalTipoComprobante();
         if (!tipo) return;
+        const cli = clienteDatos(c);
         facturarAbrir({
           noFiscal: tipo === 'nofiscal',
           items: [],
-          nombre: nombreFicha(c) || '',
-          dni: (c.dni || '').replace(/\D/g, ''),
-          domicilio: [c.domicilio, c.numero, c.ciudad].filter(Boolean).join(' '),
+          nombre: cli.nombre,
+          dni: (cli.dni || '').replace(/\D/g, ''),
+          domicilio: cli.domicilio,
           telefono: c.telefono || '',
         });
       });
@@ -10878,7 +10983,11 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
 
       const data = {
         nombre, telefono, patente,
-        titular: (clienteDraft.titular || '').trim(),
+        cliMismo: clienteDraft.cliMismo !== false,
+        cliNombre: (clienteDraft.cliNombre || '').trim(),
+        cliDni: (clienteDraft.cliDni || '').trim(),
+        cliTipoDoc: clienteDraft.cliTipoDoc || 'DNI',
+        cliDomicilio: (clienteDraft.cliDomicilio || '').trim(),
         dni: (clienteDraft.dni || '').trim(),
         tipo_documento: clienteDraft.tipo_documento,
         domicilio: (clienteDraft.domicilio || '').trim(),
