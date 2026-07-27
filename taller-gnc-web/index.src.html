@@ -2764,7 +2764,9 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   // taller no tiene la facturación dada de alta (certificado + punto de
   // venta), el servidor contesta con un error claro y acá se muestra tal cual.
   // ============================================================
-  const FACTURADOR_URL = 'https://estelitacrm.duckdns.org/facturador';
+  // La clave 'fact_url' en localStorage permite apuntar a otro facturador
+  // (pruebas locales, o el dominio definitivo cuando esté).
+  const FACTURADOR_URL = localStorage.getItem('fact_url') || 'https://estelitacrm.duckdns.org/facturador';
 
   function factB64ABlob(b64) {
     const bin = atob(b64);
@@ -2910,6 +2912,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         aviso.textContent = `✔ Factura autorizada. CAE: ${resp.comprobante.cae}. Abriendo para compartir…`;
         await factCompartirPdf(resp, datos.telefono, datos.nombre);
         cerrar();
+        if (datos.alTerminar) datos.alTerminar();
       } catch (e) {
         aviso.className = 'fact-aviso err';
         aviso.textContent = (e && e.message) || 'Error de conexión con el facturador.';
@@ -2939,6 +2942,181 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     const mo = t.mo - t.descMonto;
     if (mo > 0) items.push({ descripcion: 'Mano de obra' + (t.d > 0 ? ` (con ${t.d}% de descuento)` : ''), precio: Math.round(mo * 100) / 100 });
     return items;
+  }
+
+  const FACT_NOMBRES = {
+    1: 'FACTURA A', 2: 'NOTA DÉB. A', 3: 'NOTA CRÉD. A',
+    6: 'FACTURA B', 7: 'NOTA DÉB. B', 8: 'NOTA CRÉD. B',
+    11: 'FACTURA C', 12: 'NOTA DÉB. C', 13: 'NOTA CRÉD. C',
+  };
+  const factNroCbte = (c) => `${String(c.punto_venta).padStart(5, '0')}-${String(c.numero).padStart(8, '0')}`;
+
+  async function factApi(ruta, opciones = {}) {
+    opciones.headers = {
+      ...(opciones.headers || {}),
+      'X-Licencia': localStorage.getItem(LICENSE_KEY) || '',
+    };
+    const r = await fetch(FACTURADOR_URL + ruta, opciones);
+    const datos = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(datos.error || 'No se pudo conectar con el facturador.');
+    return datos;
+  }
+
+  // Trae el estado del taller y los comprobantes; redibuja al terminar.
+  async function cargarFacturacion() {
+    if (factCargando) return;
+    factCargando = true;
+    factErrorCarga = null;
+    render();
+    try {
+      factEstadoTaller = await factApi('/api/facturar/taller');
+      factComprobantes = factEstadoTaller.vinculado ? await factApi('/api/facturar/comprobantes') : [];
+    } catch (e) {
+      factErrorCarga = e.message;
+    } finally {
+      factCargando = false;
+      render();
+    }
+  }
+
+  function factEstadoLinea() {
+    if (factCargando) return '<div class="agent-hint">Consultando el estado de la facturación…</div>';
+    if (factErrorCarga) return `<div class="agent-hint" style="color:var(--danger);">⚠️ ${escapeHtml(factErrorCarga)}</div>`;
+    const e = factEstadoTaller;
+    if (!e) return '';
+    if (!e.vinculado) {
+      return '<div class="agent-hint">⚠️ Tu licencia todavía no tiene un taller de facturación asociado. Cargá tus datos fiscales en <b>Mi taller → ARCA (facturación)</b> y quedás vinculado al instante.</div>';
+    }
+    const t = e.taller;
+    if (!e.puede_facturar) {
+      return `<div class="agent-hint">🕐 Taller <b>${escapeHtml(t.nombre_fantasia || t.razon_social)}</b> (CUIT ${escapeHtml(t.cuit)}) registrado. Falta ${t.tiene_certificado ? 'configurar el punto de venta' : 'el trámite del certificado digital en ARCA'} — escribinos desde Mi taller → ARCA para activarlo.</div>`;
+    }
+    return `<div class="agent-hint">✅ Facturando como <b>${escapeHtml(t.nombre_fantasia || t.razon_social)}</b> — CUIT ${escapeHtml(t.cuit)}, ${t.condicion_iva === 'RI' ? 'Responsable Inscripto' : 'Monotributo'}, punto de venta ${String(t.punto_venta).padStart(5, '0')}.</div>`;
+  }
+
+  // --- Panel: Facturación (menú de la izquierda) ---
+  function facturacionPanel(entrando) {
+    const lista = factComprobantes || [];
+    const puede = factEstadoTaller && factEstadoTaller.puede_facturar;
+    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="facturacion-panel">
+      ${panelVolver()}
+      <h2 style="margin-top:0;">Facturación ${infoAyuda('ayuda-fact')}</h2>
+      ${ayudaBloque('ayuda-fact', 'Todas las facturas electrónicas que emitiste con Estelita, autorizadas por ARCA con CAE. Podés volver a compartir el PDF de cualquiera, emitir una nueva o anular una con su nota de crédito. También podés facturar directo desde la tarjeta de un cliente o desde un presupuesto.')}
+      ${factEstadoLinea()}
+      <div class="form-actions" style="margin-top:8px;">
+        <button type="button" class="btn btn-primary" id="btn-fact-emitir" ${puede ? '' : 'disabled title="Primero configurá la facturación en Mi taller → ARCA"'}>+ Emitir factura</button>
+        <button type="button" class="btn btn-ghost" id="btn-fact-actualizar">Actualizar</button>
+      </div>
+      ${factComprobantes === null && !factErrorCarga ? '' : lista.length ? `<div class="tramites-list" style="margin-top:14px;">${lista.map(c => {
+        const anulada = lista.some(x => x.cbte_asociado_id === c.id && [3, 8, 13].includes(x.cbte_tipo));
+        const esFactura = [1, 6, 11].includes(c.cbte_tipo);
+        return `<div class="tramite-row">
+          <div>
+            <div class="hist-tipo">${FACT_NOMBRES[c.cbte_tipo] || c.cbte_tipo} ${factNroCbte(c)}${anulada ? ' · <b style="color:var(--danger);">ANULADA</b>' : ''}</div>
+            <div class="hist-nombre">${c.fecha.slice(6, 8)}/${c.fecha.slice(4, 6)}/${c.fecha.slice(0, 4)} · ${escapeHtml(c.receptor_nombre || 'Consumidor Final')}${c.ambiente !== 'produccion' ? ' · <span style="color:var(--warn);">PRUEBA</span>' : ''}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <b>${presuMoney(c.imp_total)}</b>
+            <button type="button" class="btn btn-ghost btn-sm" data-fact-pdf="${c.id}">PDF</button>
+            ${esFactura && !anulada ? `<button type="button" class="btn btn-ghost btn-sm" data-fact-anular="${c.id}" title="Emite la nota de crédito que la anula">Anular</button>` : ''}
+          </div>
+        </div>`;
+      }).join('')}</div>`
+      : `<div class="empty" style="margin-top:14px;">${emptyIconSvg()}Todavía no emitiste ninguna factura desde Estelita.</div>`}
+    </div>`;
+  }
+
+  function attachFacturacion() {
+    const q = s => root.querySelector(s);
+    const btnPanel = q('#btn-facturacion');
+    if (btnPanel) btnPanel.addEventListener('click', () => {
+      const abierto = showFacturacion;
+      cerrarPanelesConsulta();
+      menuOpen = false;
+      showFacturacion = !abierto;
+      render();
+      if (showFacturacion && factComprobantes === null) cargarFacturacion();
+      const panel = root.querySelector('#facturacion-panel');
+      if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    if (q('#btn-fact-emitir')) q('#btn-fact-emitir').addEventListener('click', () => {
+      facturarAbrir({ items: [], alTerminar: cargarFacturacion });
+    });
+    if (q('#btn-fact-actualizar')) q('#btn-fact-actualizar').addEventListener('click', cargarFacturacion);
+
+    root.querySelectorAll('[data-fact-pdf]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const lic = encodeURIComponent(localStorage.getItem(LICENSE_KEY) || '');
+        window.open(`${FACTURADOR_URL}/api/comprobantes/${btn.getAttribute('data-fact-pdf')}/pdf?licencia=${lic}`, '_blank');
+      });
+    });
+
+    root.querySelectorAll('[data-fact-anular]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const c = (factComprobantes || []).find(x => x.id === Number(btn.getAttribute('data-fact-anular')));
+        if (!c) return;
+        const ok = await customConfirm(`Se va a emitir la nota de crédito que anula la ${FACT_NOMBRES[c.cbte_tipo]} ${factNroCbte(c)} por ${presuMoney(c.imp_total)}. Esto queda registrado en ARCA. ¿Seguro?`);
+        if (!ok) return;
+        btn.disabled = true;
+        try {
+          const resp = await factApi('/api/facturar/anular', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ comprobanteId: c.id }),
+          });
+          await customAlert(`Nota de crédito ${factNroCbte(resp.comprobante)} emitida. CAE: ${resp.comprobante.cae}`);
+          await cargarFacturacion();
+        } catch (e) {
+          await customAlert('No se pudo anular: ' + e.message);
+          btn.disabled = false;
+        }
+      });
+    });
+
+    // --- Sección ARCA de "Mi taller" ---
+    if (q('#btn-arca-guardar')) q('#btn-arca-guardar').addEventListener('click', async () => {
+      const v = id => (q('#' + id) ? q('#' + id).value.trim() : '');
+      const aviso = q('#arca-aviso');
+      const btn = q('#btn-arca-guardar');
+      btn.disabled = true;
+      aviso.textContent = 'Guardando…';
+      aviso.style.color = '';
+      try {
+        factEstadoTaller = await factApi('/api/facturar/alta', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cuit: v('tc-arca-cuit'),
+            razon_social: v('tc-arca-razon'),
+            nombre_fantasia: v('tc-arca-fantasia'),
+            domicilio: v('tc-arca-domicilio'),
+            condicion_iva: q('#tc-arca-condiva').value,
+            iibb: v('tc-arca-iibb'),
+            inicio_actividades: v('tc-arca-inicio'),
+            punto_venta: v('tc-arca-ptovta'),
+          }),
+        });
+        factComprobantes = null; // se recarga la próxima vez que se abra el panel
+        aviso.style.color = 'var(--ok, #157A44)';
+        aviso.textContent = '✔ Datos guardados. Tu licencia quedó vinculada al taller.';
+        render();
+      } catch (e) {
+        aviso.style.color = 'var(--danger, #C0281A)';
+        aviso.textContent = e.message;
+        btn.disabled = false;
+      }
+    });
+
+    if (q('#btn-arca-wa')) q('#btn-arca-wa').addEventListener('click', () => {
+      const lic = localStorage.getItem(LICENSE_KEY) || '(sin licencia)';
+      const t = factEstadoTaller && factEstadoTaller.taller;
+      abrirWhatsapp(REGISTRO_WHATSAPP,
+        `¡Hola! Quiero activar la facturación electrónica de mi taller en Estelita.\n` +
+        `Licencia: ${lic}\n` +
+        (t ? `Taller: ${t.razon_social} — CUIT ${t.cuit}\n` : '') +
+        `Ya cargué mis datos en Mi taller → ARCA. ¿Coordinamos el trámite del certificado?`);
+    });
   }
 
   // --- Eventos de presupuestos (se llama desde attachEvents) ---
@@ -5127,6 +5305,49 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       <div class="form-actions" style="margin-top:4px;">
         <button type="button" class="btn btn-ghost btn-sm" id="btn-add-pec">+ Agregar PEC</button>
       </div>`;
+    // Sección ARCA: los datos fiscales viven en el facturador (servidor),
+    // vinculados al código de licencia. Acá solo se muestran y se editan.
+    const at = (factEstadoTaller && factEstadoTaller.taller) || {};
+    const puedeFact = factEstadoTaller && factEstadoTaller.puede_facturar;
+    const secArca = `
+      <div class="agent-hint" style="margin-top:0;">Con estos datos salen tus <b>facturas electrónicas</b>. Al guardar, tu código de licencia queda vinculado al taller. Para empezar a facturar hace falta además un trámite de 15 minutos en ARCA (certificado digital + punto de venta) — lo coordinamos por WhatsApp.</div>
+      <div class="agent-hint">Tu código de licencia: <b>${escapeHtml(localStorage.getItem(LICENSE_KEY) || '—')}</b></div>
+      ${factEstadoLinea()}
+      <div class="form-grid">
+        <label>CUIT del taller
+          <input type="text" id="tc-arca-cuit" inputmode="numeric" value="${escapeHtml(at.cuit || t.cuit || '')}" placeholder="11 dígitos, sin guiones">
+        </label>
+        <label>Razón social (como figura en ARCA)
+          <input type="text" id="tc-arca-razon" value="${escapeHtml(at.razon_social || t.razonSocial || '')}" placeholder="Ej: Juan Pérez">
+        </label>
+        <label>Nombre de fantasía (el grande en la factura)
+          <input type="text" id="tc-arca-fantasia" value="${escapeHtml(at.nombre_fantasia || tallerNombre || '')}" placeholder="Ej: GENESUR">
+        </label>
+        <label>Domicilio comercial
+          <input type="text" id="tc-arca-domicilio" value="${escapeHtml(at.domicilio || t.direccion || '')}" placeholder="Ej: Av. Edison 2143, Mar del Plata">
+        </label>
+        <label>Condición frente al IVA
+          <select id="tc-arca-condiva">
+            <option value="MONO" ${(at.condicion_iva || 'MONO') === 'MONO' ? 'selected' : ''}>Monotributo (factura C)</option>
+            <option value="RI" ${at.condicion_iva === 'RI' ? 'selected' : ''}>Responsable Inscripto (facturas A y B)</option>
+          </select>
+        </label>
+        <label>Ingresos Brutos (opcional)
+          <input type="text" id="tc-arca-iibb" value="${escapeHtml(at.iibb || '')}" placeholder="Ej: 123-456789-0">
+        </label>
+        <label>Inicio de actividades (opcional)
+          <input type="text" id="tc-arca-inicio" value="${escapeHtml(at.inicio_actividades || '')}" placeholder="Ej: 01/03/2015">
+        </label>
+        <label>Punto de venta de webservice
+          <input type="text" id="tc-arca-ptovta" inputmode="numeric" value="${Number(at.punto_venta) > 0 ? at.punto_venta : ''}" placeholder="Lo da el trámite en ARCA — dejalo vacío si aún no lo tenés">
+        </label>
+      </div>
+      <div class="form-actions" style="margin-top:8px;">
+        <button type="button" class="btn btn-primary" id="btn-arca-guardar">Guardar datos de facturación</button>
+        ${puedeFact ? '' : `<button type="button" class="btn btn-wa" id="btn-arca-wa">Activar facturación por WhatsApp</button>`}
+      </div>
+      <div id="arca-aviso" class="agent-hint"></div>`;
+
     const revsTecnico = revisionesDelTecnico();
     const secTecnico = `
       <div class="agent-hint" style="margin-top:0;">El técnico instala la app "Estelita Técnico" en su celular (taller-gnc.vercel.app/tecnico.html) y la vincula con un código de 6 números que generás acá — de un solo uso y con 15 minutos de validez. El técnico nunca ve tu código de licencia y su app solo sirve para responder revisiones. Cuando le envíes una revisión desde el paso 1 de un trámite, le llega una notificación al celular aunque tenga la app cerrada.</div>
@@ -5260,6 +5481,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       <h2>Configuración del taller</h2>
       <p class="scan-sub">Tocá cada sección para abrirla y editarla. Al terminar, tocá "Guardar configuración".</p>
       ${configSeccionCard('datos', 'Datos del taller', secDatos)}
+      ${configSeccionCard('arca', 'ARCA (facturación electrónica)', secArca)}
       ${configSeccionCard('pec', 'Productores de Equipos Completos (PEC)', secPec)}
       ${configSeccionCard('tecnico', 'App del técnico', secTecnico)}
       ${configSeccionCard('mensajes', 'Mensajes de WhatsApp', secMensajes)}
@@ -6686,6 +6908,12 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   // Presupuestos: los guardados, y el que se está armando ahora.
   // presuDraft = null significa que se está viendo la lista, no el formulario.
   let showPresupuestos = false;
+  // Facturación electrónica: panel del menú + datos traídos del facturador.
+  let showFacturacion = false;
+  let factComprobantes = null;   // null = sin cargar; [] = cargado y vacío
+  let factEstadoTaller = null;   // respuesta de GET /api/facturar/taller
+  let factCargando = false;
+  let factErrorCarga = null;
   let presupuestos = [];
   let presuDraft = null;
   // Id del trámite cuyo detalle de cliente está desplegado en el historial.
@@ -7954,7 +8182,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     // buscador y los botones Nuevo/ENARGAS y las tarjetas de clientes, que
     // abajo del panel no tenían sentido y confundían.
     const pendCount = pendientesItems().length;
-    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo || showTurnos || showHoy || showEstadisticas || showRecuperar || !!verUltimoTramiteId;
+    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo || showTurnos || showHoy || showEstadisticas || showRecuperar || showFacturacion || !!verUltimoTramiteId;
     const turnosAvisoCount = turnosParaAvisar().length;
     // Globito de Turnos en la barra: recordatorios sin mandar + pedidos que
     // entraron por WhatsApp y todavía no se agendaron.
@@ -7978,6 +8206,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       respaldo: showRespaldo && !prevPanelState.respaldo,
       turnos: showTurnos && !prevPanelState.turnos,
       presupuestos: showPresupuestos && !prevPanelState.presupuestos,
+      facturacion: showFacturacion && !prevPanelState.facturacion,
       hoy: showHoy && !prevPanelState.hoy,
       estadisticas: showEstadisticas && !prevPanelState.estadisticas,
       recuperar: showRecuperar && !prevPanelState.recuperar,
@@ -7988,6 +8217,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       pendientes: showPendientes, bulkImport: showBulkImport, tallerConfig: showTallerConfig,
       enargasPaste: enargasPasteOpen, quickAdd: showQuickAdd, respaldo: showRespaldo,
       turnos: showTurnos, hoy: showHoy, estadisticas: showEstadisticas, recuperar: showRecuperar, ultimoTramite: !!verUltimoTramiteId,
+      facturacion: showFacturacion,
     };
 
     root.innerHTML = `
@@ -8000,6 +8230,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
                 <div class="menu-group-label">Gestión</div>
                 <button type="button" class="btn btn-ghost btn-sm" data-nav="pendientes">${menuIco('clipboard')}Pendientes${pendCount ? ` <span class="menu-badge-inline">${pendCount}</span>` : ''}</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-presupuestos">${menuIco('presupuesto')}Presupuestos</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-facturacion">${menuIco('presupuesto')}Facturación</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-recuperar">${menuIco('chart')}Recuperar${paraRecuperarLista().ahora.length ? ` <span class="menu-badge-inline">${paraRecuperarLista().ahora.length}</span>` : ''}</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-estadisticas">${menuIco('chart')}Estadísticas</button>
                 <div class="menu-sep"></div>
@@ -8057,6 +8288,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         ${showRespaldo ? respaldoPanel(entrando.respaldo) : ''}
         ${showTurnos ? turnosPanel(entrando.turnos) : ''}
         ${showPresupuestos ? (presuDraft ? presuFormPanel(entrando.presupuestos) : presupuestosPanel(entrando.presupuestos)) : ''}
+        ${showFacturacion ? facturacionPanel(entrando.facturacion) : ''}
         ${verUltimoTramiteId ? ultimoTramitePanel(entrando.ultimoTramite) : ''}
 
         ${showForm || editing ? tramiteWizardPanel(editing, entrando.wizard, entrando.wizardPaso, entrando.enargasPaste) : ''}
@@ -8131,6 +8363,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     showQuickAdd = false;
     showPresupuestos = false;
     presuDraft = null;
+    showFacturacion = false;
   }
 
   function attachEvents() {
@@ -8245,6 +8478,8 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         const key = btn.getAttribute('data-config-sec');
         tallerConfigSeccion = (tallerConfigSeccion === key) ? null : key;
         render();
+        // Al abrir la sección ARCA se consulta el estado real en el facturador.
+        if (tallerConfigSeccion === 'arca' && !factEstadoTaller && !factCargando) cargarFacturacion();
         if (tallerConfigSeccion === 'tecnico') consultarTecnicosVinculados().then(() => {
           if (tallerConfigSeccion !== 'tecnico') return;
           syncTallerConfigFromDOM();
@@ -9702,6 +9937,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
     attachPresupuestos();
+    attachFacturacion();
 
     const btnTurnos = root.querySelector('#btn-turnos');
     if (btnTurnos) btnTurnos.addEventListener('click', () => {
