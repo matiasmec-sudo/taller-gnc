@@ -95,12 +95,12 @@ export async function chequearIntentos(req, { max = 10, ventanaMs = 10 * 60 * 10
   }
   cache.set(ip, { datos: d, hasta: ahora + CACHE_MS });
 
-  if (!d) return { ok: true, ip };
+  if (!d) return { ok: true, ip, datos: null };
   if (d.bloqueadoHasta && ahora < d.bloqueadoHasta) {
     return { ok: false, ip, segundos: Math.ceil((d.bloqueadoHasta - ahora) / 1000) };
   }
-  if (d.bloqueadoHasta && ahora >= d.bloqueadoHasta) return { ok: true, ip, reiniciar: true };
-  if (ahora - (d.desde || 0) > ventanaMs) return { ok: true, ip, reiniciar: true };
+  if (d.bloqueadoHasta && ahora >= d.bloqueadoHasta) return { ok: true, ip, reiniciar: true, datos: d };
+  if (ahora - (d.desde || 0) > ventanaMs) return { ok: true, ip, reiniciar: true, datos: d };
   if ((d.n || 0) >= max) {
     // Alcanzó el límite: se marca el bloqueo. Es lectura-modificación-escritura
     // sin bloqueo, así que dos pedidos simultáneos pueden pisarse — no importa,
@@ -110,17 +110,26 @@ export async function chequearIntentos(req, { max = 10, ventanaMs = 10 * 60 * 10
     cache.set(ip, { datos: nuevo, hasta: ahora + CACHE_MS });
     return { ok: false, ip, segundos: Math.ceil(bloqueoMs / 1000) };
   }
-  return { ok: true, ip };
+  return { ok: true, ip, datos: d };
 }
 
 // Registra un intento fallido y devuelve cuántos ms conviene esperar antes de
 // responder. El retardo crece con los fallos (0,4 s, 0,8 s, 1,2 s...) hasta un
 // tope, así una persona que se equivocó no lo nota y un script sí.
-export async function registrarFallo(req, { retardoBaseMs = 400, retardoMaxMs = 4000, ventanaMs = 10 * 60 * 1000, reiniciar = false } = {}) {
+//
+// IMPORTANTE: se le pasa el `datos` que ya leyó chequearIntentos en vez de
+// volver a leer. Con dos lecturas por pedido se perdían incrementos: el
+// storage tiene consistencia eventual (~1 s), así que la segunda lectura
+// devolvía un valor viejo y el contador subía uno cada tres o cuatro intentos.
+// Medido en producción el 28/07: con dos lecturas, 38 intentos seguidos no
+// llegaron a disparar el bloqueo. Con una sola, cada intento cuenta.
+export async function registrarFallo(req, { retardoBaseMs = 400, retardoMaxMs = 4000, ventanaMs = 10 * 60 * 1000, reiniciar = false, datos = undefined } = {}) {
   const ip = ipDe(req);
   const ahora = Date.now();
-  let d = null;
-  try { d = await leer(rutaDe(ip)); } catch (e) { d = null; }
+  let d = datos;
+  if (d === undefined) {
+    try { d = await leer(rutaDe(ip)); } catch (e) { d = null; }
+  }
 
   const vencido = reiniciar || !d || (ahora - (d.desde || 0) > ventanaMs) ||
                   (d.bloqueadoHasta && ahora >= d.bloqueadoHasta);
