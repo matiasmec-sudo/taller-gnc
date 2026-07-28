@@ -10,6 +10,7 @@ import { put, list, del } from '@vercel/blob';
 import crypto from 'crypto';
 import webpush from 'web-push';
 import { licenciaValida } from './_licencias.js';
+import { chequearIntentos, registrarFallo, registrarAcierto, esperar } from './_ratelimit.js';
 
 const VINCULO_VIDA_MS = 15 * 60 * 1000;
 
@@ -192,12 +193,24 @@ export default async function handler(req, res) {
 
     // ---- Canje del código de vinculación (no requiere licencia) ----
     if (accion === 'vincular-canjear') {
+      // Mismo problema que /api/licencia: son 6 dígitos (un millón de
+      // combinaciones) en un espacio compartido por TODOS los talleres, y
+      // acertar uno vivo entrega un token que lee la agenda del taller y puede
+      // responder revisiones. Sin freno, se barre el espacio entero.
+      const limite = chequearIntentos(req, { max: 10, ventanaMs: 10 * 60 * 1000, bloqueoMs: 15 * 60 * 1000 });
+      if (!limite.ok) {
+        res.setHeader('Retry-After', String(limite.segundos));
+        return res.status(429).json({ error: 'Demasiados intentos con códigos que no existen. Esperá unos minutos y pedile al taller un código nuevo.' });
+      }
+
       const codigo = String(body.codigo || '').trim();
       if (!/^\d{6}$/.test(codigo)) return res.status(400).json({ error: 'El código debe tener 6 números.' });
       const v = await leerJson(`vinculos/${codigo}.json`);
       if (!v || v.datos.expira < Date.now() || v.datos.usado) {
+        await esperar(registrarFallo(req));
         return res.status(404).json({ error: 'Ese código no existe, ya venció o ya se usó. Generá uno nuevo desde Estelita.' });
       }
+      registrarAcierto(req);
       const hash = v.datos.hash;
       // Marcar el código como usado SOBRESCRIBIENDO (no borrando): las
       // sobrescrituras se propagan más rápido que los borrados en el
