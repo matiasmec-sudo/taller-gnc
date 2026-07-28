@@ -2,3 +2,9 @@
 .env*
 
 node_modules
+
+# Informes de auditoría de seguridad.
+# Este repositorio es PÚBLICO: estos documentos detallan vulnerabilidades que
+# todavía no están corregidas, así que no se versionan acá. Viven solo en la
+# carpeta local.
+AUDITORIA-*.md

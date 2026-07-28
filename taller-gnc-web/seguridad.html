@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<!--
+  FOLLETO DE SEGURIDAD DE ESTELITA — para mandar a los talleres antes de suscribirse.
+  Se puede ver online (estelita.net.ar/seguridad.html) o imprimir a PDF (Ctrl+P).
+
+  ============================ IMPORTANTE, LEER ANTES DE PUBLICAR ============================
+  Estado al 26/07/2026 (ver AUDITORIA-SEGURIDAD-ESCALA.md):
+
+  RESUELTO — El asistente de WhatsApp va integrado para todos los talleres, así que el
+  folleto lo declara abiertamente en el punto 4 y en la tabla del punto 3. privacidad.html
+  (nuevo apartado "3 ter") y terminos.html (apartado 5) ya fueron actualizados para que
+  digan lo mismo. Los tres textos tienen que seguir coincidiendo: si cambia lo que se
+  sube, hay que tocar los tres.
+
+  PENDIENTE, BLOQUEA LA PUBLICACIÓN — Punto 17 del informe. La respuesta "si perdés el
+  celular recuperás todo" asume que la copia de seguridad realmente subió. Hoy, pasados
+  ~150-400 clientes, la subida falla con 413 y la app lo muestra como "sin conexión", así
+  que un taller puede creer que tiene respaldo sin tenerlo. Arreglar eso (sacar la firma
+  de datos.json + mostrar el error real) antes de publicar.
+
+  RECOMENDADO — Punto 20: la app todavía acepta claves de 4 caracteres. El folleto ya pide
+  12 o más; conviene subir el mínimo en la app para que coincidan.
+  ===========================================================================================
+-->
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>La seguridad de tus datos — Estelita</title>
+<meta name="description" content="Cómo protege Estelita los datos de tu taller y de tus clientes: dónde se guardan, quién puede verlos y qué pasa si perdés el celular.">
+<link rel="icon" href="icon-192.png">
+<meta property="og:title" content="La seguridad de tus datos — Estelita">
+<meta property="og:description" content="Dónde se guardan los datos de tu taller, quién puede verlos y qué pasa si perdés el celular. Explicado sin vueltas.">
+<meta property="og:image" content="https://estelita.net.ar/icon-512.png">
+<style>
+  :root {
+    --azul: #1D5BD8;
+    --azul-oscuro: #123C8F;
+    --azul-noche: #0C2A66;
+    --celeste: #EAF1FE;
+    --celeste-borde: #CCDCF8;
+    --fondo: #F4F6FA;
+    --tinta: #16233B;
+    --tinta-suave: #5A6B85;
+    --linea: #E3E8F0;
+    --verde: #1E9E5A;
+    --verde-suave: #EAF7F0;
+    --naranja: #E8842C;
+    --radio: 16px;
+    --sombra: 0 10px 30px rgba(18, 60, 143, .10);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    background: var(--fondo); color: var(--tinta); line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  img { max-width: 100%; display: block; }
+  a { color: var(--azul-oscuro); }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 20px; }
+
+  /* ---------- Portada ---------- */
+  .portada {
+    background: linear-gradient(160deg, var(--azul-noche) 0%, var(--azul-oscuro) 48%, var(--azul) 100%);
+    color: #fff; padding: 54px 0 60px; position: relative; overflow: hidden;
+  }
+  .portada::after {
+    content: ""; position: absolute; right: -90px; top: -90px;
+    width: 320px; height: 320px; border-radius: 50%;
+    background: rgba(255,255,255,.06);
+  }
+  .marca { display: flex; align-items: center; gap: 11px; margin-bottom: 30px; }
+  .marca img { width: 42px; height: 42px; border-radius: 11px; }
+  .marca b { font-size: 21px; letter-spacing: 2.5px; }
+  .kicker {
+    display: inline-block; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.28);
+    padding: 6px 15px; border-radius: 999px; font-size: 13.5px; font-weight: 700;
+    letter-spacing: .5px; margin-bottom: 16px;
+  }
+  .portada h1 { font-size: 38px; line-height: 1.18; margin-bottom: 14px; position: relative; }
+  .portada .bajada { font-size: 18px; opacity: .93; max-width: 620px; position: relative; }
+  @media (max-width: 620px) { .portada h1 { font-size: 29px; } .portada .bajada { font-size: 16.5px; } }
+
+  /* ---------- Bloques ---------- */
+  .seccion { padding: 46px 0 8px; }
+  h2 {
+    font-size: 24px; color: var(--azul-oscuro); margin-bottom: 8px;
+    display: flex; align-items: center; gap: 11px;
+  }
+  h2 .num {
+    flex: none; width: 33px; height: 33px; border-radius: 9px; background: var(--celeste);
+    color: var(--azul-oscuro); font-size: 16px; display: grid; place-items: center;
+    border: 1px solid var(--celeste-borde);
+  }
+  .sub { color: var(--tinta-suave); font-size: 16px; margin-bottom: 20px; }
+
+  .tarjeta {
+    background: #fff; border: 1px solid var(--linea); border-radius: var(--radio);
+    padding: 24px 26px; box-shadow: var(--sombra); margin-bottom: 16px;
+  }
+  @media (max-width: 560px) { .tarjeta { padding: 20px 18px; } }
+  .tarjeta h3 { font-size: 17.5px; margin-bottom: 7px; color: var(--azul-oscuro); }
+  .tarjeta p { font-size: 15.5px; color: #2A3A55; }
+  .tarjeta p + p { margin-top: 9px; }
+
+  .destacado {
+    background: var(--celeste); border: 1px solid var(--celeste-borde);
+    border-radius: 13px; padding: 17px 20px; font-size: 16px; color: #17315F;
+  }
+  .destacado b { color: var(--azul-oscuro); }
+
+  ul.limpia { list-style: none; }
+  ul.limpia li {
+    position: relative; padding-left: 30px; margin-bottom: 11px; font-size: 15.5px; color: #2A3A55;
+  }
+  ul.limpia li::before {
+    content: ""; position: absolute; left: 4px; top: 8px;
+    width: 8px; height: 8px; border-radius: 50%; background: var(--verde);
+  }
+  ul.limpia.cruz li::before { background: var(--tinta-suave); opacity: .45; }
+
+  /* ---------- Tabla de transparencia ---------- */
+  .tabla-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: collapse; width: 100%; min-width: 480px; font-size: 15px; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--linea); vertical-align: top; }
+  th { background: var(--celeste); color: var(--azul-oscuro); font-size: 13.5px; letter-spacing: .3px; text-transform: uppercase; }
+  td:first-child { font-weight: 600; color: var(--tinta); }
+  .si { color: var(--verde); font-weight: 700; }
+  .no { color: var(--tinta-suave); font-weight: 700; }
+
+  /* ---------- Preguntas ---------- */
+  .pregunta { border-left: 3px solid var(--celeste-borde); padding-left: 18px; margin-bottom: 22px; }
+  .pregunta b { display: block; font-size: 16.5px; color: var(--azul-oscuro); margin-bottom: 5px; }
+  .pregunta p { font-size: 15.5px; color: #2A3A55; }
+
+  /* ---------- Cierre ---------- */
+  .cierre {
+    background: linear-gradient(160deg, var(--azul-oscuro) 0%, var(--azul) 100%);
+    color: #fff; border-radius: 20px; padding: 34px 32px; margin: 34px 0 20px;
+  }
+  .cierre h2 { color: #fff; font-size: 23px; }
+  .cierre p { font-size: 16.5px; opacity: .95; margin-bottom: 18px; }
+  .cierre .btn {
+    display: inline-flex; align-items: center; gap: 9px; background: #fff; color: var(--azul-oscuro);
+    text-decoration: none; font-weight: 700; font-size: 16.5px; padding: 13px 26px; border-radius: 999px;
+  }
+  @media (max-width: 560px) { .cierre { padding: 26px 20px; } }
+
+  .pie {
+    padding: 26px 0 50px; color: var(--tinta-suave); font-size: 14px; text-align: center;
+  }
+  .pie a { font-weight: 600; }
+
+  /* ---------- Impresión a PDF ---------- */
+  @media print {
+    body { background: #fff; }
+    .portada { background: var(--azul-oscuro) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 32px 0; }
+    .cierre { background: var(--azul-oscuro) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .tarjeta { box-shadow: none; break-inside: avoid; }
+    .seccion { break-inside: avoid; padding-top: 26px; }
+    .no-print { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="portada">
+  <div class="wrap">
+    <div class="marca">
+      <img src="icon-192.png" alt="Estelita">
+      <b>ESTELITA</b>
+    </div>
+    <span class="kicker">SEGURIDAD Y PRIVACIDAD</span>
+    <h1>Los datos de tus clientes<br>son tuyos. Y se quedan con vos.</h1>
+    <p class="bajada">
+      Antes de confiarle a un programa el DNI, la firma y el domicilio de cada persona que
+      pasa por tu taller, tenés derecho a saber exactamente dónde va a parar todo eso.
+      Acá te lo contamos sin vueltas y sin letra chica.
+    </p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- 1 -->
+  <section class="seccion">
+    <h2><span class="num">1</span> Dónde se guardan los datos</h2>
+    <p class="sub">La respuesta corta: en tu celular o en tu computadora. No en un servidor nuestro.</p>
+
+    <div class="tarjeta">
+      <div class="destacado">
+        Las <b>fotos del DNI y de la cédula</b>, la <b>firma del titular</b>, el <b>domicilio</b>,
+        el <b>teléfono</b> y el <b>historial completo de trámites</b> de cada cliente se guardan
+        dentro del propio dispositivo donde usás Estelita. Nunca se suben en claro a ningún lado.
+      </div>
+      <p style="margin-top:16px;">
+        Esto no es una decisión de marketing: es cómo está construida la aplicación. Estelita
+        trabaja contra el almacenamiento del navegador de tu equipo. Por eso también funciona
+        <b>sin internet</b> — podés cargar un trámite completo en un taller sin señal y se guarda
+        igual.
+      </p>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="seccion">
+    <h2><span class="num">2</span> La copia de seguridad se cifra antes de salir de tu equipo</h2>
+    <p class="sub">Si activás la copia en la nube, sube cerrada con llave. Y la llave la tenés vos.</p>
+
+    <div class="tarjeta">
+      <p>
+        Cuando activás la copia de seguridad, Estelita <b>no manda tus datos y después los
+        protege</b>. Los protege primero, adentro de tu dispositivo, y recién ahí los manda.
+      </p>
+      <ul class="limpia" style="margin-top:14px;">
+        <li>Se cifran con <b>AES-256-GCM</b>, el mismo estándar que usan los bancos y las
+          aplicaciones de mensajería.</li>
+        <li>La llave se arma a partir de <b>una frase que elegís vos</b> y que no nos decís
+          nunca (con PBKDF2 y 150.000 vueltas, para que sea muy costoso probar frases a
+          fuerza bruta). <b>Elegí una frase larga</b>, de doce caracteres para arriba: cuanto
+          más larga, más fuerte es el candado.</li>
+        <li>Lo único que viaja y lo único que queda guardado es <b>el paquete cerrado</b>. Ni
+          nosotros, ni el proveedor de la nube, ni nadie que se meta en ese servidor puede
+          abrirlo.</li>
+        <li>El espacio donde se guarda es <b>privado</b>: los archivos no tienen dirección
+          pública en internet.</li>
+      </ul>
+      <div class="destacado" style="margin-top:16px;">
+        La otra cara de la moneda, y te la decimos de frente: <b>si perdés esa frase, nosotros
+        no te la podemos recuperar.</b> No la tenemos. Anotala en algún lugar seguro el día que
+        la elijas. Que no exista una puerta de atrás es justamente lo que hace que la copia sea
+        segura.
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section class="seccion">
+    <h2><span class="num">3</span> Qué guardamos nosotros (la lista completa)</h2>
+    <p class="sub">Para que sea creíble tiene que ser específico. Esto es todo lo que toca nuestro servidor.</p>
+
+    <div class="tarjeta" style="padding:0; overflow:hidden;">
+      <div class="tabla-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Dato</th>
+              <th>¿Queda en nuestro servidor?</th>
+              <th>Para qué</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Fotos de DNI, cédula y documentación</td>
+              <td class="no">NO</td>
+              <td>Se procesan al instante y se descartan. Nunca se archivan.</td>
+            </tr>
+            <tr>
+              <td>Firma del titular</td>
+              <td class="no">NO</td>
+              <td>Queda en tu dispositivo.</td>
+            </tr>
+            <tr>
+              <td>Domicilio, DNI y datos personales del cliente</td>
+              <td class="no">NO</td>
+              <td>Quedan en tu dispositivo.</td>
+            </tr>
+            <tr>
+              <td>Tu copia de seguridad</td>
+              <td class="si">SÍ, cifrada</td>
+              <td>Para que la puedas recuperar. No la podemos leer.</td>
+            </tr>
+            <tr>
+              <td>Tu código de licencia</td>
+              <td class="si">SÍ</td>
+              <td>Para saber que tu suscripción está al día.</td>
+            </tr>
+            <tr>
+              <td>Cuántas lecturas con IA hiciste</td>
+              <td class="si">SÍ</td>
+              <td>Solo el número, para controlar el consumo. No qué leíste.</td>
+            </tr>
+            <tr>
+              <td>Patente, nombre y estado del trámite<br><span style="font-weight:400;color:var(--tinta-suave);font-size:14px;">(para el asistente de WhatsApp)</span></td>
+              <td class="si">SÍ</td>
+              <td>Para que el asistente pueda contestarle a tu cliente si su oblea está lista. Ver el punto 4.</td>
+            </tr>
+            <tr>
+              <td>Pedidos de turno que llegan por WhatsApp</td>
+              <td class="si">SÍ</td>
+              <td>Nombre, teléfono y qué pidió, hasta que lo cargás a tu agenda o lo descartás.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p style="font-size:14.5px; color:var(--tinta-suave); margin-top:10px;">
+      Si en algún momento agregamos algo a esta lista, te lo vamos a avisar dentro de la
+      aplicación <b>antes</b> de que empiece a funcionar. No después.
+    </p>
+  </section>
+
+  <!-- 4 -->
+  <section class="seccion">
+    <h2><span class="num">4</span> El asistente de WhatsApp: qué sabe y qué no</h2>
+    <p class="sub">Es la única función que necesita saber algo de tus clientes. Te contamos exactamente qué.</p>
+
+    <div class="tarjeta">
+      <p>
+        Estelita incluye un asistente que le contesta por WhatsApp a tus clientes cuando
+        preguntan si la oblea está lista o cuándo tienen turno. Para poder contestar de verdad
+        —y no con una frase armada— necesita saber en qué anda cada trámite. Por eso, y solo
+        por eso, Estelita mantiene en nuestro servidor una <b>lista corta</b> por cada taller.
+      </p>
+      <div class="destacado" style="margin-top:16px;">
+        <b>Lo que la lista tiene:</b> la patente, el nombre del cliente, en qué estado está el
+        trámite, si la oblea está lista y cuándo es el próximo turno.<br><br>
+        <b>Lo que la lista NO tiene:</b> ninguna foto de documentación, ningún número de
+        documento, ningún domicilio y ninguna firma. Nada de eso sale de tu equipo.
+      </div>
+      <ul class="limpia" style="margin-top:16px;">
+        <li>Esa lista es <b>solo tuya</b>. No se cruza con la de otros talleres.</li>
+        <li>Se usa <b>únicamente</b> para que el asistente le conteste a tu cliente. No se usa
+          para publicidad y no se le pasa a nadie.</li>
+        <li>Cuando un cliente te pide un turno por WhatsApp, su nombre y teléfono te quedan en
+          un buzón hasta que lo cargás a la agenda o lo descartás. Después se va.</li>
+        <li>Si te das de baja, <b>borramos esa lista</b> de nuestros servidores. También la
+          borramos antes si nos lo pedís.</li>
+      </ul>
+      <p style="margin-top:14px; font-size:14.5px; color:var(--tinta-suave);">
+        Legalmente: sobre esos datos <b>el responsable seguís siendo vos</b> y nosotros somos
+        el encargado que los trata por tu cuenta y orden, según el artículo 25 de la Ley
+        25.326. Está escrito así en nuestra
+        <a href="privacidad.html">Política de Privacidad</a>, para que no dependa de nuestra
+        palabra.
+      </p>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="seccion">
+    <h2><span class="num">5</span> La lectura con inteligencia artificial</h2>
+    <p class="sub">Sacás una foto del DNI y los campos se completan solos. Esto es lo que pasa por atrás.</p>
+
+    <div class="tarjeta">
+      <p>
+        La foto viaja cifrada por HTTPS a nuestro servidor, que la manda a la inteligencia
+        artificial de <b>Anthropic</b> (la empresa que hace Claude) únicamente para extraer los
+        datos, y te devuelve los campos completados.
+      </p>
+      <ul class="limpia" style="margin-top:14px;">
+        <li><b>La imagen no se archiva.</b> Ni en nuestro servidor ni en el de la IA.</li>
+        <li><b>No se usa para entrenar modelos.</b> La política de la API de Anthropic para
+          empresas lo prohíbe expresamente.</li>
+        <li><b>Es opcional.</b> Si preferís no usarla, cargás los datos a mano y listo.</li>
+      </ul>
+      <p style="margin-top:14px;">
+        Una aclaración honesta: la lectura automática es una ayuda para tipear menos, no un
+        certificado. <b>Revisá siempre los datos antes de firmar la ficha</b> — la
+        responsabilidad del trámite frente al ENARGAS y al PEC sigue siendo del taller.
+      </p>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="seccion">
+    <h2><span class="num">6</span> Tu técnico no ve lo que no tiene que ver</h2>
+    <p class="sub">La app del técnico está pensada para que le puedas dar acceso sin darle las llaves.</p>
+
+    <div class="tarjeta">
+      <ul class="limpia">
+        <li>El técnico se vincula con un <b>código de 6 números que generás vos</b>, que sirve
+          <b>una sola vez</b> y vence a los <b>15 minutos</b>.</li>
+        <li><b>Nunca conoce tu código de licencia.</b> Recibe una credencial propia, distinta.</li>
+        <li>Esa credencial <b>solo sirve para responder revisiones y ver la agenda del día</b>.
+          No habilita la lectura con IA, ni la copia de seguridad, ni activar Estelita en otro
+          lado.</li>
+        <li>La agenda que le llega <b>no incluye el teléfono de tus clientes</b>.</li>
+        <li>Si se va del taller o pierde el celular, lo <b>desvinculás de un toque</b> desde
+          Estelita y su acceso se corta al instante.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section class="seccion">
+    <h2><span class="num">7</span> Las llaves del sistema no están en tu celular</h2>
+    <p class="sub">Un detalle técnico que importa más de lo que parece.</p>
+
+    <div class="tarjeta">
+      <p>
+        Muchas aplicaciones chicas dejan las claves de los servicios que usan escritas adentro
+        de la app. Cualquiera con un poco de conocimiento las saca y las usa a costa del dueño.
+      </p>
+      <p>
+        En Estelita <b>ninguna de esas claves vive en la aplicación</b>. Todo lo que necesita una
+        clave —la inteligencia artificial, el almacenamiento, los pagos— pasa por nuestro
+        servidor, que las guarda de su lado. Si alguien desarma la app que tenés instalada, no
+        encuentra ninguna llave que le sirva para entrar a nuestros sistemas ni a los de otro
+        taller.
+      </p>
+      <p>
+        Lo que sí queda guardado en tu equipo, porque no hay otra forma de que la copia de
+        seguridad funcione sola, es <b>tu frase de cifrado</b>. Por eso el punto siguiente
+        importa tanto: el bloqueo de pantalla de tu celular es, en la práctica, la última
+        puerta.
+      </p>
+    </div>
+  </section>
+
+  <!-- Preguntas -->
+  <section class="seccion">
+    <h2><span class="num">?</span> Las preguntas que nos hacen siempre</h2>
+    <p class="sub">Las incómodas también.</p>
+
+    <div class="tarjeta">
+      <div class="pregunta">
+        <b>¿Ustedes pueden ver la ficha de mis clientes?</b>
+        <p>No. El documento, el domicilio, la firma y las fotos de la documentación están en tu
+        equipo, y la copia de seguridad la recibimos cerrada con una llave que solo tenés vos.
+        Lo único que podemos ver es la lista corta del asistente de WhatsApp que te explicamos
+        en el punto 4: patente, nombre y estado del trámite. Nada más, y te lo decimos de
+        frente en vez de escondértelo.</p>
+      </div>
+      <div class="pregunta">
+        <b>¿Le pueden vender mis datos a alguien?</b>
+        <p>No. Está escrito en la Política de Privacidad y en los Términos, que son un contrato:
+        esos datos se usan solo para que el asistente le conteste a tu cliente, y no se ceden a
+        terceros. Y del resto —la ficha completa— no podríamos aunque quisiéramos: sin tu frase,
+        la copia cifrada es un archivo de letras sin sentido.</p>
+      </div>
+      <div class="pregunta">
+        <b>Si pierdo el celular o se me rompe, ¿pierdo todo?</b>
+        <p>Si tenés la copia de seguridad activada, no: instalás Estelita en el equipo nuevo,
+        ponés tu código de licencia y tu frase, y recuperás tus clientes, tus trámites y tus
+        fotos. <b>Por eso insistimos tanto con que la actives el primer día</b> y con que
+        anotes la frase. Si nunca activaste la copia, los datos estaban solo en ese aparato y
+        no hay forma de recuperarlos. Y revisá cada tanto que la copia diga la fecha de hoy:
+        si algo estuvo fallando, queremos que te enteres ahí y no el día que la necesitás.</p>
+      </div>
+      <div class="pregunta">
+        <b>¿Y si mañana ustedes cierran o desaparecen?</b>
+        <p>Tus datos siguen en tu dispositivo, funcionando, porque nunca dependieron de nosotros.
+        Además Estelita <b>exporta todo a Excel/CSV</b> cuando vos quieras: los datos son tuyos y
+        te los podés llevar en cualquier momento, sin pedir permiso.</p>
+      </div>
+      <div class="pregunta">
+        <b>Si dejo de pagar la suscripción, ¿me borran los datos?</b>
+        <p>No. La baja desactiva la licencia, pero <b>no toca nada de lo que tenés guardado</b> en
+        tu equipo. Si volvés más adelante, está todo donde lo dejaste.</p>
+      </div>
+      <div class="pregunta">
+        <b>¿Puedo usar Estelita en el celular y en la computadora del taller a la vez?</b>
+        <p>Sí. Los dos equipos se emparejan a través de la misma nube cifrada, con tu código de
+        licencia y tu frase. El servidor sigue viendo únicamente paquetes cerrados: la
+        sincronización no le da acceso a nadie a tus datos.</p>
+      </div>
+      <div class="pregunta">
+        <b>¿Qué pasa con la Ley de Protección de Datos?</b>
+        <p>Frente a tus clientes, el responsable de los datos que cargás sos vos (Ley 25.326).
+        Estelita está diseñada para ayudarte a cumplir: los datos no se dispersan, están en tu
+        poder, y podés borrar la ficha de un cliente cuando te lo pida. Te recomendamos dos
+        cosas simples: cargar solo lo necesario para el trámite, y tener bloqueo de pantalla en
+        el equipo donde usás la app.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Lo que te toca a vos -->
+  <section class="seccion">
+    <h2><span class="num">✓</span> Tres cosas que dependen de vos</h2>
+    <p class="sub">Ningún programa puede protegerte de esto. Son dos minutos y valen oro.</p>
+
+    <div class="tarjeta">
+      <ul class="limpia">
+        <li><b>Activá la copia de seguridad el primer día</b>, elegí una frase larga y
+          anotala en un lugar seguro que no sea el mismo celular. Es la única que no tiene
+          repuesto.</li>
+        <li><b>Poné bloqueo de pantalla</b> en el equipo donde usás Estelita. Es la puerta de
+          entrada a la ficha de todos tus clientes, y la última defensa si el aparato se
+          pierde.</li>
+        <li><b>No compartas tu código de licencia.</b> Es tuyo y de tu taller. Si sospechás que
+          se filtró, escribinos y te damos uno nuevo en el momento.</li>
+      </ul>
+    </div>
+  </section>
+
+  <div class="cierre">
+    <h2 style="margin-bottom:10px;">¿Te quedó alguna duda?</h2>
+    <p>
+      Preguntanos lo que sea, incluso lo técnico. Preferimos contestarte cien preguntas antes de
+      que te suscribas, que dejarte con una duda después.
+    </p>
+    <a class="btn" href="https://wa.me/5492236009347?text=Hola%2C%20le%C3%AD%20el%20folleto%20de%20seguridad%20de%20Estelita%20y%20tengo%20una%20consulta">
+      Escribinos por WhatsApp
+    </a>
+  </div>
+
+  <p class="pie">
+    Estelita — Matías Agustín Casimir · Mar del Plata, Buenos Aires, Argentina<br>
+    <a href="mailto:estelitagnc@gmail.com">estelitagnc@gmail.com</a> ·
+    <a href="privacidad.html">Política de Privacidad</a> ·
+    <a href="terminos.html">Términos y Condiciones</a><br>
+    <span style="font-size:13px;">Última actualización: julio de 2026</span>
+  </p>
+
+</main>
+
+</body>
+</html>

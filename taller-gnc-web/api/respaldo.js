@@ -83,9 +83,34 @@ export default async function handler(req, res) {
       // Borra los archivos que ya no forman parte de la copia (por ejemplo,
       // fotos de clientes eliminados). "vigentes" es la lista de nombres que
       // deben conservarse.
-      const setVigentes = new Set(Array.isArray(vigentes) ? vigentes : []);
+      //
+      // GUARDAS: esta acción es la única que borra, y no tiene papelera ni
+      // versionado. Un cliente que mande una lista vacía o incompleta (app
+      // recién instalada, datos todavía sin cargar, bug) se llevaba puesto el
+      // respaldo entero del taller. Antes de borrar, dos controles.
+      if (!Array.isArray(vigentes) || !vigentes.length) {
+        return res.status(400).json({ error: 'No se depuró nada: la lista de archivos vigentes vino vacía.' });
+      }
+      // La copia siempre tiene que incluir el archivo principal. Si no está,
+      // el cliente no sabe realmente qué conservar.
+      if (!vigentes.includes('datos.json')) {
+        return res.status(400).json({ error: 'No se depuró nada: la lista de archivos vigentes no incluye la copia principal.' });
+      }
+
+      const setVigentes = new Set(vigentes);
       const l = await list({ prefix: carpeta + '/' });
       const aBorrar = l.blobs.filter(b => !setVigentes.has(b.pathname.slice(carpeta.length + 1)));
+
+      // Freno de mano: si el borrado se lleva más del 60% de lo guardado, casi
+      // seguro es un error del cliente y no una limpieza legítima.
+      const total = l.blobs.length;
+      if (total > 1 && aBorrar.length > Math.ceil(total * 0.6)) {
+        return res.status(409).json({
+          error: `Se frenó la limpieza por seguridad: iba a borrar ${aBorrar.length} de ${total} archivos guardados. Si de verdad querés depurar tanto, escribinos.`,
+          borrados: 0,
+        });
+      }
+
       if (aBorrar.length) await del(aBorrar.map(b => b.url));
       return res.status(200).json({ ok: true, borrados: aBorrar.length });
     }

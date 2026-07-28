@@ -82,6 +82,11 @@ export function codigosEnv() {
   return (process.env.LICENSE_CODES || '').split(',').map(c => c.trim()).filter(Boolean);
 }
 
+// Lectura TOLERANTE: ante un error de storage devuelve [] para que los caminos
+// de validación caigan al respaldo del env en vez de dejar a un taller afuera.
+// OJO: solo para LEER. Para cualquier camino que después ESCRIBA la lista hay
+// que usar leerLicenciasEstricto(), porque un [] por error de red seguido de un
+// guardarLicencias() borra todas las licencias reales.
 export async function leerLicencias() {
   try {
     const data = await leerJsonBlob(STORE_PATH);
@@ -89,6 +94,16 @@ export async function leerLicencias() {
   } catch (e) {
     return [];
   }
+}
+
+// Lectura ESTRICTA: distingue "no hay licencias" de "no se pudo leer".
+// Si el storage falla, TIRA el error en vez de devolver una lista vacía. Es lo
+// que usan todos los caminos que después sobrescriben el archivo (el panel de
+// admin y los webhooks de Mercado Pago): sin esto, un hipo de red hacía que el
+// llamador creyera que el store estaba vacío y lo pisara entero.
+export async function leerLicenciasEstricto() {
+  const data = await leerJsonBlob(STORE_PATH);
+  return data && Array.isArray(data.licencias) ? data.licencias : [];
 }
 
 export async function guardarLicencias(licencias) {
@@ -110,7 +125,10 @@ export async function crearSignup(token, datos) {
 // Cuando MP autoriza la suscripción: crea la licencia (una sola vez por
 // preapproval) y la vincula al signup. Devuelve el código.
 export async function activarLicenciaMP({ token, preapprovalId, email, plan, pagoHasta, prueba }) {
-  const lics = await leerLicencias();
+  // Estricto: este camino escribe la lista completa. Si la lectura falla,
+  // preferimos que el webhook devuelva error y Mercado Pago reintente, antes
+  // que sobrescribir el archivo con una sola licencia.
+  const lics = await leerLicenciasEstricto();
   let l = lics.find(x => x.mpPreapprovalId === preapprovalId);
   if (!l) {
     const codigo = nuevoCodigo(lics.map(x => x.codigo).concat(codigosEnv()));
@@ -132,7 +150,7 @@ export async function activarLicenciaMP({ token, preapprovalId, email, plan, pag
 
 // Cobro mensual aprobado: renueva un mes y saca de prueba.
 export async function renovarPorPreapproval(preapprovalId) {
-  const lics = await leerLicencias();
+  const lics = await leerLicenciasEstricto();
   const l = lics.find(x => x.mpPreapprovalId === preapprovalId);
   if (!l) return false;
   const hoy = new Date().toISOString().slice(0, 10);
@@ -146,7 +164,7 @@ export async function renovarPorPreapproval(preapprovalId) {
 
 // Suscripción cancelada/pausada: suspende la licencia.
 export async function suspenderPorPreapproval(preapprovalId) {
-  const lics = await leerLicencias();
+  const lics = await leerLicenciasEstricto();
   const l = lics.find(x => x.mpPreapprovalId === preapprovalId);
   if (!l) return false;
   l.estado = 'suspendido';

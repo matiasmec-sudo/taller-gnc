@@ -1,14 +1,18 @@
 {
-  "rewrites": [
+  "headers": [
     {
-      "source": "/",
-      "has": [{ "type": "host", "value": "estelita.com.ar" }],
-      "destination": "/estelita.html"
-    },
-    {
-      "source": "/",
-      "has": [{ "type": "host", "value": "www.estelita.com.ar" }],
-      "destination": "/estelita.html"
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "no-referrer" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Permissions-Policy", "value": "geolocation=(), microphone=(), payment=(), usb=()" },
+        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains" },
+        {
+          "key": "Content-Security-Policy-Report-Only",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://crm.estelita.net.ar https://facturas.estelita.net.ar; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        }
+      ]
     }
   ]
 }

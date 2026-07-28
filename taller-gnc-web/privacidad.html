@@ -32,13 +32,20 @@
     <p><b>Responsable:</b> Matías Agustín Casimir ("Estelita"), Mar del Plata, provincia de Buenos Aires, Argentina. Contacto: <a href="mailto:estelitagnc@gmail.com">estelitagnc@gmail.com</a> · WhatsApp +54 9 223 600-9347.</p>
 
     <h2>1. La idea central</h2>
-    <div class="destacado">Los datos de los clientes del taller <b>se guardan en el dispositivo del taller</b> (celular o computadora), no en servidores nuestros. Nosotros no podemos ver, usar ni vender esa información: no la tenemos.</div>
+    <div class="destacado">El grueso de los datos de los clientes del taller —documento, domicilio, firma y fotos de documentación— <b>se guarda en el dispositivo del taller</b> (celular o computadora), no en servidores nuestros. Lo único que sí pasa por nuestros servidores está detallado en el punto 2 y en el punto 3 ter, y siempre por cuenta y orden del taller.</div>
 
     <h2>2. Qué datos maneja la aplicación y dónde quedan</h2>
+    <p><b>Quedan únicamente en el dispositivo del taller:</b></p>
     <ul>
-      <li><b>Datos de clientes del taller</b> (nombre, documento, domicilio, teléfono, vehículo, equipo de GNC, trámites, firma, fotos de documentación): quedan guardados únicamente en el almacenamiento local del dispositivo donde se usa Estelita.</li>
-      <li><b>Datos del taller</b> (razón social, CUIT, técnico, códigos de taller y PEC): ídem, solo en el dispositivo.</li>
-      <li><b>Código de licencia</b>: se guarda en el dispositivo y se envía a nuestro servidor únicamente para validar que la licencia esté activa cuando se usan la lectura con inteligencia artificial o la copia de seguridad.</li>
+      <li><b>Datos de clientes del taller</b>: documento, domicilio, vehículo, equipo de GNC, detalle de los trámites, firma del titular y fotos de documentación.</li>
+      <li><b>Datos del taller</b>: razón social, CUIT, técnico, códigos de taller y PEC.</li>
+    </ul>
+    <p><b>Sí pasan por nuestros servidores:</b></p>
+    <ul>
+      <li><b>Código de licencia</b>: se envía para validar que la licencia esté activa y para identificar al taller en los servicios que se describen abajo.</li>
+      <li><b>Copia de seguridad</b>, si el taller la activa: se sube <b>cifrada en el dispositivo</b>, de manera que no podemos leer su contenido (punto 3).</li>
+      <li><b>Imágenes que el taller elige leer con inteligencia artificial</b>: se procesan y se descartan, no se almacenan (punto 3 bis).</li>
+      <li><b>Índice de estado de trámites</b>, para el asistente de WhatsApp: patente, nombre del cliente, estado del trámite, si la oblea está lista y el próximo turno (punto 3 ter).</li>
     </ul>
 
     <h2>3. Copia de seguridad cifrada (opcional)</h2>
@@ -57,6 +64,16 @@
       <li>La función es opcional: el taller siempre puede cargar los datos a mano.</li>
     </ul>
 
+    <h2>3 ter. Asistente de WhatsApp y estado de trámites</h2>
+    <p>Estelita incluye un asistente que contesta por WhatsApp a los clientes del taller (por ejemplo, si su oblea ya está lista o cuándo tiene turno). Para poder responder con datos reales, la aplicación mantiene actualizado en nuestro servidor un <b>índice de estado</b> por cada taller.</p>
+    <ul>
+      <li><b>Qué contiene ese índice:</b> patente, nombre del cliente, estado del último trámite, si la oblea está lista y la fecha del próximo turno.</li>
+      <li><b>Qué NO contiene:</b> fotos de documentación, número de documento, domicilio ni firma. Esos datos nunca se suben en claro.</li>
+      <li><b>Pedidos de turno:</b> cuando un cliente pide un turno por WhatsApp, su nombre, teléfono y lo que pidió quedan en un buzón asociado al taller hasta que el taller lo carga a su agenda o lo descarta.</li>
+      <li><b>Para qué se usa:</b> exclusivamente para que el asistente le conteste al cliente de ese taller. No se cruza con datos de otros talleres, no se usa con fines publicitarios y no se cede a terceros.</li>
+    </ul>
+    <p>En este tratamiento el <b>taller es el responsable</b> de los datos y nosotros actuamos como <b>encargados del tratamiento</b> por su cuenta y orden, en los términos del artículo 25 de la Ley 25.326: tratamos esos datos solo conforme a las instrucciones del taller, no los usamos para un fin distinto, y los eliminamos cuando el taller lo solicita o cuando termina la relación.</p>
+
     <h2>4. Envíos por WhatsApp</h2>
     <p>Cuando el taller envía una ficha técnica al PEC o un aviso a un cliente, el envío lo hace el propio taller desde su cuenta de WhatsApp. Ese envío se rige por las condiciones y la privacidad de WhatsApp; Estelita solo prepara el archivo y el mensaje.</p>
 
@@ -68,7 +85,7 @@
     <p>La Agencia de Acceso a la Información Pública (AAIP), en su carácter de órgano de control de la Ley 25.326, tiene la atribución de atender las denuncias y reclamos que se interpongan con relación al incumplimiento de las normas sobre protección de datos personales.</p>
 
     <h2>7. Qué pasa si el taller deja de usar Estelita</h2>
-    <p>Los datos quedan en el dispositivo del taller y pueden borrarse desde el propio navegador o dispositivo. La baja de la licencia no borra los datos locales.</p>
+    <p>Los datos quedan en el dispositivo del taller y pueden borrarse desde el propio navegador o dispositivo. La baja de la licencia no borra los datos locales. A pedido del taller, y en todos los casos al darse de baja, eliminamos de nuestros servidores su copia de seguridad cifrada, su índice de estado de trámites y su buzón de pedidos de turno.</p>
 
     <h2>8. Cambios en esta política</h2>
     <p>Si esta política cambia en algo relevante (por ejemplo, si se incorpora un nuevo servicio que trate datos de otra manera), lo comunicaremos dentro de la aplicación antes de que el cambio entre en vigencia.</p>

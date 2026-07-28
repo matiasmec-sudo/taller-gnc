@@ -2829,9 +2829,15 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   // taller no tiene la facturación dada de alta (certificado + punto de
   // venta), el servidor contesta con un error claro y acá se muestra tal cual.
   // ============================================================
-  // La clave 'fact_url' en localStorage permite apuntar a otro facturador
-  // (pruebas locales, o el dominio definitivo cuando esté).
-  const FACTURADOR_URL = localStorage.getItem('fact_url') || 'https://facturas.estelita.net.ar';
+  // Dirección FIJA del facturador. Antes se podía sobrescribir con la clave
+  // 'fact_url' de localStorage (venía de las pruebas locales), pero eso era un
+  // agujero: cualquiera que pudiera escribir esa única clave —un script
+  // inyectado, una extensión del navegador, alguien con la computadora del
+  // taller un minuto— desviaba TODA la facturación a un servidor propio y se
+  // llevaba el código de licencia más el nombre, documento y domicilio de cada
+  // cliente facturado, de forma permanente y sin dejar rastro en pantalla.
+  // Para probar contra otro servidor, cambiar esta constante y compilar.
+  const FACTURADOR_URL = 'https://facturas.estelita.net.ar';
 
   function factB64ABlob(b64) {
     const bin = atob(b64);
@@ -3134,7 +3140,12 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     6: 'FACTURA B', 7: 'NOTA DÉB. B', 8: 'NOTA CRÉD. B',
     11: 'FACTURA C', 12: 'NOTA DÉB. C', 13: 'NOTA CRÉD. C',
   };
-  const factNroCbte = (c) => `${String(c.punto_venta).padStart(5, '0')}-${String(c.numero).padStart(8, '0')}`;
+  // Todo lo que devuelve el facturador se escapa antes de entrar al HTML,
+  // incluidos los campos "numéricos": padStart no valida nada, y el punto de
+  // venta nace de un campo de texto libre de Mi taller que viaja al servidor y
+  // vuelve. Sin escapar, ese campo era un XSS guardado que se ejecutaba en
+  // todos los dispositivos del taller al abrir la sección ARCA.
+  const factNroCbte = (c) => `${escapeHtml(String(c.punto_venta).padStart(5, '0'))}-${escapeHtml(String(c.numero).padStart(8, '0'))}`;
 
   async function factApi(ruta, opciones = {}) {
     opciones.headers = {
@@ -3176,7 +3187,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     if (!e.puede_facturar) {
       return `<div class="agent-hint">🕐 Taller <b>${escapeHtml(t.nombre_fantasia || t.razon_social)}</b> (CUIT ${escapeHtml(t.cuit)}) registrado. Falta ${t.tiene_certificado ? 'configurar el punto de venta' : 'el trámite del certificado digital en ARCA'} — escribinos desde Mi taller → ARCA para activarlo.</div>`;
     }
-    return `<div class="agent-hint">✅ Facturando como <b>${escapeHtml(t.nombre_fantasia || t.razon_social)}</b> — CUIT ${escapeHtml(t.cuit)}, ${t.condicion_iva === 'RI' ? 'Responsable Inscripto' : 'Monotributo'}, punto de venta ${String(t.punto_venta).padStart(5, '0')}.</div>`;
+    return `<div class="agent-hint">✅ Facturando como <b>${escapeHtml(t.nombre_fantasia || t.razon_social)}</b> — CUIT ${escapeHtml(t.cuit)}, ${t.condicion_iva === 'RI' ? 'Responsable Inscripto' : 'Monotributo'}, punto de venta ${escapeHtml(String(t.punto_venta).padStart(5, '0'))}.</div>`;
   }
 
   // --- Panel: Facturación (menú de la izquierda) ---
@@ -3197,13 +3208,13 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         const esFactura = [1, 6, 11].includes(c.cbte_tipo);
         return `<div class="tramite-row">
           <div>
-            <div class="hist-tipo">${FACT_NOMBRES[c.cbte_tipo] || c.cbte_tipo} ${factNroCbte(c)}${anulada ? ' · <b style="color:var(--danger);">ANULADA</b>' : ''}</div>
+            <div class="hist-tipo">${FACT_NOMBRES[c.cbte_tipo] || escapeHtml(c.cbte_tipo)} ${factNroCbte(c)}${anulada ? ' · <b style="color:var(--danger);">ANULADA</b>' : ''}</div>
             <div class="hist-nombre">${c.fecha.slice(6, 8)}/${c.fecha.slice(4, 6)}/${c.fecha.slice(0, 4)} · ${escapeHtml(c.receptor_nombre || 'Consumidor Final')}${c.ambiente !== 'produccion' ? ' · <span style="color:var(--warn);">PRUEBA</span>' : ''}</div>
           </div>
           <div style="display:flex; align-items:center; gap:8px;">
             <b>${presuMoney(c.imp_total)}</b>
-            <button type="button" class="btn btn-ghost btn-sm" data-fact-pdf="${c.id}">PDF</button>
-            ${esFactura && !anulada ? `<button type="button" class="btn btn-ghost btn-sm" data-fact-anular="${c.id}" title="Emite la nota de crédito que la anula">Anular</button>` : ''}
+            <button type="button" class="btn btn-ghost btn-sm" data-fact-pdf="${escapeHtml(c.id)}">PDF</button>
+            ${esFactura && !anulada ? `<button type="button" class="btn btn-ghost btn-sm" data-fact-anular="${escapeHtml(c.id)}" title="Emite la nota de crédito que la anula">Anular</button>` : ''}
           </div>
         </div>`;
       }).join('')}</div>`
@@ -4580,8 +4591,12 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     return list;
   }
 
+  // El String(...) no es decorativo: si acá entra un número o un objeto (por
+  // ejemplo un campo que el facturador devuelve como número en vez de texto),
+  // .replace no existe y el TypeError corta el render ANTES de pintar nada,
+  // dejando la pantalla en blanco sin ningún mensaje.
   function escapeHtml(str) {
-    return (str || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    return String(str == null ? '' : str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   }
 
   // Ícono de información unificado de la app: circulito "i" que muestra u
@@ -9277,6 +9292,21 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     if (btnRespaldoSubir) btnRespaldoSubir.addEventListener('click', async () => {
       const clave = (root.querySelector('#respaldo-clave').value || '');
       if (clave.trim().length < 4) { await customAlert('Elegí una clave de al menos 4 caracteres y anotala en un lugar seguro: sin ella, la copia no se puede recuperar.'); return; }
+
+      // FRENO: guardar una copia estando sin clientes pisa la copia buena de la
+      // nube y borra las fotos. Pasa sobre todo al abrir Estelita por primera
+      // vez en una dirección nueva o en un equipo nuevo: la app arranca vacía y
+      // el reflejo es apretar "Guardar copia" creyendo que así se recupera.
+      // Con datos cargados no molesta nunca.
+      if (!clientes.length) {
+        const igual = await customConfirm(
+          'Este equipo no tiene ningún cliente cargado. Si guardás la copia ahora, vas a REEMPLAZAR la copia de la nube por una vacía y se van a borrar las fotos guardadas.\n\n' +
+          'Si lo que querés es traer tus datos a este equipo, cerrá esto y usá "Recuperar copia".',
+          { titulo: 'Ojo: no hay datos para guardar', okLabel: 'Guardar igual (borra la copia)', cancelLabel: 'Cancelar', danger: true }
+        );
+        if (!igual) return;
+      }
+
       respaldoBotones(true);
       try {
         respaldoStatus('', 'Cifrando y subiendo los datos del taller...');
@@ -9293,14 +9323,24 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
           vigentes.push(nombre);
         }
         // Borrar de la nube lo que ya no corresponde (ej. clientes eliminados).
-        await apiRespaldo({ accion: 'depurar', vigentes });
+        // No es fatal: los datos YA se subieron bien. Si el servidor frena la
+        // limpieza por seguridad (borraría demasiado), lo peor que pasa es que
+        // queden fotos viejas ocupando lugar — no vale la pena decirle al
+        // taller que falló la copia cuando en realidad se guardó.
+        let avisoDepurar = '';
+        try {
+          await apiRespaldo({ accion: 'depurar', vigentes });
+        } catch (eDep) {
+          console.error('No se pudo depurar la nube', eDep);
+          avisoDepurar = ' (quedaron copias viejas sin borrar en la nube)';
+        }
         // Recordar la clave en este equipo: sirve para activar la
         // sincronización automática sin volver a escribirla.
         try { localStorage.setItem(SYNC_CLAVE_KEY, clave); } catch (e3) { /* ok */ }
         respaldoUltima = fmtFechaHora(new Date().toISOString());
         const hint = root.querySelector('#respaldo-ultima');
         if (hint) hint.textContent = 'Última copia guardada: ' + respaldoUltima;
-        respaldoStatus('ok', `Copia guardada: ${clientes.length} cliente(s), ${vigentes.length - 1} con fotos. Guardá bien tu clave — sin ella la copia no se puede leer.`);
+        respaldoStatus('ok', `Copia guardada: ${clientes.length} cliente(s), ${vigentes.length - 1} con fotos${avisoDepurar}. Guardá bien tu clave — sin ella la copia no se puede leer.`);
       } catch (e) {
         console.error(e);
         respaldoStatus('err', 'No se pudo guardar la copia: ' + (e.message || e));

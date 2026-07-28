@@ -4,7 +4,7 @@
 // eliminar. La primera vez importa (seed) los códigos de LICENSE_CODES para
 // que el panel muestre también los que ya estaban en uso.
 import crypto from 'crypto';
-import { leerLicencias, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, sumarMesISO, leerSugerencias, guardarSugerencias, leerCredito, guardarCredito } from './_licencias.js';
+import { leerLicenciasEstricto, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, sumarMesISO, leerSugerencias, guardarSugerencias, leerCredito, guardarCredito } from './_licencias.js';
 
 // Ritmo de consumo de la IA. El consumo se guarda por MES (no por día), así que
 // el ritmo se estima como: gastado del mes / días transcurridos del mes. Se
@@ -71,9 +71,21 @@ export default async function handler(req, res) {
   if (!process.env.BLOB_READ_WRITE_TOKEN) return res.status(500).json({ error: 'Falta BLOB_READ_WRITE_TOKEN en Vercel.' });
 
   try {
-    let lics = await leerLicencias();
+    // Estricto a propósito: si la lectura del storage falla, tiene que tirar
+    // error y cortar acá. Con la lectura tolerante, un hipo de red devolvía []
+    // y el sembrado de abajo sobrescribía TODAS las licencias reales (las de
+    // Mercado Pago incluidas) con los códigos sueltos del env.
+    let lics;
+    try {
+      lics = await leerLicenciasEstricto();
+    } catch (e) {
+      return res.status(503).json({
+        error: 'No se pudo leer la lista de licencias en este momento. Probá de nuevo en un minuto — no se modificó nada.',
+      });
+    }
 
-    // Seed: si el store está vacío, traer los códigos que ya estaban en el env.
+    // Seed: si el store está REALMENTE vacío, traer los códigos que ya estaban
+    // en el env. Llegar acá ahora garantiza que la lectura funcionó.
     if (!lics.length) {
       const hoy = new Date().toISOString().slice(0, 10);
       const env = codigosEnv();
