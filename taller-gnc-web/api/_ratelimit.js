@@ -2,36 +2,60 @@
 // responden sí/no sobre si un código existe. Sin esto, probar el millón de
 // combinaciones posibles de un código de licencia es cuestión de horas.
 //
-// Cómo funciona y qué esperar de esto:
-// Las funciones de Vercel son sin estado, pero la MISMA instancia se reutiliza
-// entre pedidos mientras está caliente, así que un contador en memoria del
-// módulo aguanta perfectamente el caso normal (alguien martillando desde una
-// IP). Un atacante que reparta el ataque entre muchas instancias puede
-// escaparse en parte del contador — por eso además hay un RETARDO CRECIENTE en
-// cada fallo, que no depende de la memoria compartida y le pone un techo al
-// ritmo por conexión.
+// POR QUÉ ESTÁ HECHO ASÍ (medido en producción, no supuesto)
+// La primera versión llevaba el contador solo en memoria del módulo. Falla:
+// Vercel reparte los pedidos entre varias instancias y cada una arranca su
+// contador en cero. Medido el 28/07: sobre 12 intentos seguidos, algunos
+// cayeron en una instancia caliente y comieron el retardo máximo de 4 s, pero
+// otros cayeron en instancias frescas y respondieron en 0,35 s. Nunca se llegó
+// al bloqueo. O sea: el contador en memoria no sirve para esto.
 //
-// Si algún día hace falta algo a prueba de todo, esto se reemplaza por Vercel
-// KV / Redis con INCR atómico sin tocar los endpoints: la firma queda igual.
+// Ahora el conteo vive en Vercel Blob, que es compartido por todas las
+// instancias, con la memoria del módulo como caché de lectura para no ir al
+// storage cuando ya sabemos que la IP está bloqueada.
+//
+// El costo se mantiene bajo porque SOLO SE ESCRIBE CUANDO HAY UN FALLO. Un
+// taller que pone bien su código no crea ningún archivo ni paga ninguna
+// escritura. Los archivos que se acumulan son, por definición, de quien está
+// probando códigos.
 //
 // Este archivo empieza con "_" a propósito: Vercel no lo trata como una ruta.
+import { put } from '@vercel/blob';
+import crypto from 'crypto';
 
-const intentos = new Map(); // ip -> { n, desde, bloqueadoHasta }
+const PREFIJO = 'sistema/rl-';
 
-const LIMPIEZA_CADA_MS = 10 * 60 * 1000;
-let ultimaLimpieza = Date.now();
+// Caché de lectura en memoria. Guarda lo último que se leyó del storage para
+// esta IP; se usa solo mientras no venza, y nunca para PERMITIR algo que el
+// storage diría que está bloqueado.
+const cache = new Map();
+const CACHE_MS = 5000;
 
-// La memoria no puede crecer sin techo: cada tanto se tiran las entradas
-// vencidas, y si aun así hay demasiadas, se vacía entera (perder el conteo es
-// preferible a quedarse sin memoria).
-function limpiar(ahora, ventanaMs) {
-  if (ahora - ultimaLimpieza < LIMPIEZA_CADA_MS) return;
-  ultimaLimpieza = ahora;
-  for (const [ip, d] of intentos) {
-    const vencido = ahora - d.desde > ventanaMs && (!d.bloqueadoHasta || ahora > d.bloqueadoHasta);
-    if (vencido) intentos.delete(ip);
-  }
-  if (intentos.size > 20000) intentos.clear();
+function rutaDe(ip) {
+  const h = crypto.createHash('sha256').update('rl:' + ip).digest('hex').slice(0, 32);
+  return `${PREFIJO}${h}.json`;
+}
+
+function blobBaseUrl() {
+  const partes = (process.env.BLOB_READ_WRITE_TOKEN || '').split('_');
+  return `https://${(partes[3] || '').toLowerCase()}.private.blob.vercel-storage.com`;
+}
+
+async function leer(ruta) {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
+  const r = await fetch(`${blobBaseUrl()}/${ruta}?nc=${Date.now()}`, {
+    headers: { authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
+    cache: 'no-store',
+  });
+  if (!r.ok) return null; // 404 incluido: no hay intentos previos
+  return r.json().catch(() => null);
+}
+
+async function escribir(ruta, datos) {
+  await put(ruta, JSON.stringify(datos), {
+    access: 'private', addRandomSuffix: false, allowOverwrite: true,
+    contentType: 'application/json', cacheControlMaxAge: 0,
+  });
 }
 
 export function ipDe(req) {
@@ -46,25 +70,44 @@ export function esperar(ms) {
 }
 
 // ¿Esta IP puede seguir intentando?
-// Devuelve { ok: true } o { ok: false, segundos } si está bloqueada.
-// NO cuenta el intento: eso lo hace registrarFallo(), para que los aciertos
-// no penalicen a un taller que se equivocó una vez y después acertó.
-export function chequearIntentos(req, { max = 10, ventanaMs = 10 * 60 * 1000, bloqueoMs = 15 * 60 * 1000 } = {}) {
-  const ahora = Date.now();
-  limpiar(ahora, ventanaMs);
+// Devuelve { ok: true } o { ok: false, segundos }.
+//
+// FALLA ABIERTO ante cualquier problema de storage: dejar afuera a un taller
+// legítimo por un hipo de red sería peor que el abuso que evita. Quien intenta
+// abusar igual se come el retardo creciente de registrarFallo.
+export async function chequearIntentos(req, { max = 10, ventanaMs = 10 * 60 * 1000, bloqueoMs = 15 * 60 * 1000 } = {}) {
   const ip = ipDe(req);
-  const d = intentos.get(ip);
+  const ahora = Date.now();
+
+  const enCache = cache.get(ip);
+  if (enCache && ahora < enCache.hasta) {
+    const d = enCache.datos;
+    if (d?.bloqueadoHasta && ahora < d.bloqueadoHasta) {
+      return { ok: false, ip, segundos: Math.ceil((d.bloqueadoHasta - ahora) / 1000) };
+    }
+  }
+
+  let d;
+  try {
+    d = await leer(rutaDe(ip));
+  } catch (e) {
+    return { ok: true, ip };
+  }
+  cache.set(ip, { datos: d, hasta: ahora + CACHE_MS });
+
   if (!d) return { ok: true, ip };
   if (d.bloqueadoHasta && ahora < d.bloqueadoHasta) {
     return { ok: false, ip, segundos: Math.ceil((d.bloqueadoHasta - ahora) / 1000) };
   }
-  // Se cumplió el bloqueo o venció la ventana: se arranca de cero.
-  if (ahora - d.desde > ventanaMs || (d.bloqueadoHasta && ahora >= d.bloqueadoHasta)) {
-    intentos.delete(ip);
-    return { ok: true, ip };
-  }
-  if (d.n >= max) {
-    d.bloqueadoHasta = ahora + bloqueoMs;
+  if (d.bloqueadoHasta && ahora >= d.bloqueadoHasta) return { ok: true, ip, reiniciar: true };
+  if (ahora - (d.desde || 0) > ventanaMs) return { ok: true, ip, reiniciar: true };
+  if ((d.n || 0) >= max) {
+    // Alcanzó el límite: se marca el bloqueo. Es lectura-modificación-escritura
+    // sin bloqueo, así que dos pedidos simultáneos pueden pisarse — no importa,
+    // el peor caso es que el bloqueo arranque un intento más tarde.
+    const nuevo = { ...d, bloqueadoHasta: ahora + bloqueoMs };
+    try { await escribir(rutaDe(ip), nuevo); } catch (e) { /* best-effort */ }
+    cache.set(ip, { datos: nuevo, hasta: ahora + CACHE_MS });
     return { ok: false, ip, segundos: Math.ceil(bloqueoMs / 1000) };
   }
   return { ok: true, ip };
@@ -73,19 +116,29 @@ export function chequearIntentos(req, { max = 10, ventanaMs = 10 * 60 * 1000, bl
 // Registra un intento fallido y devuelve cuántos ms conviene esperar antes de
 // responder. El retardo crece con los fallos (0,4 s, 0,8 s, 1,2 s...) hasta un
 // tope, así una persona que se equivocó no lo nota y un script sí.
-export function registrarFallo(req, { retardoBaseMs = 400, retardoMaxMs = 4000 } = {}) {
-  const ahora = Date.now();
+export async function registrarFallo(req, { retardoBaseMs = 400, retardoMaxMs = 4000, ventanaMs = 10 * 60 * 1000, reiniciar = false } = {}) {
   const ip = ipDe(req);
-  const d = intentos.get(ip);
-  if (!d) {
-    intentos.set(ip, { n: 1, desde: ahora, bloqueadoHasta: 0 });
-    return retardoBaseMs;
-  }
-  d.n += 1;
-  return Math.min(retardoBaseMs * d.n, retardoMaxMs);
+  const ahora = Date.now();
+  let d = null;
+  try { d = await leer(rutaDe(ip)); } catch (e) { d = null; }
+
+  const vencido = reiniciar || !d || (ahora - (d.desde || 0) > ventanaMs) ||
+                  (d.bloqueadoHasta && ahora >= d.bloqueadoHasta);
+  const nuevo = vencido
+    ? { n: 1, desde: ahora, bloqueadoHasta: 0 }
+    : { n: (d.n || 0) + 1, desde: d.desde || ahora, bloqueadoHasta: d.bloqueadoHasta || 0 };
+
+  try { await escribir(rutaDe(ip), nuevo); } catch (e) { /* best-effort */ }
+  cache.set(ip, { datos: nuevo, hasta: ahora + CACHE_MS });
+  return Math.min(retardoBaseMs * nuevo.n, retardoMaxMs);
 }
 
 // Un acierto limpia el historial de esa IP.
-export function registrarAcierto(req) {
-  intentos.delete(ipDe(req));
+export async function registrarAcierto(req) {
+  const ip = ipDe(req);
+  cache.delete(ip);
+  try {
+    const d = await leer(rutaDe(ip));
+    if (d) await escribir(rutaDe(ip), { n: 0, desde: Date.now(), bloqueadoHasta: 0 });
+  } catch (e) { /* best-effort */ }
 }

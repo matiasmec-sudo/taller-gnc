@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Método no permitido' });
   }
 
-  const limite = chequearIntentos(req, { max: 10, ventanaMs: 10 * 60 * 1000, bloqueoMs: 15 * 60 * 1000 });
+  const limite = await chequearIntentos(req, { max: 10, ventanaMs: 10 * 60 * 1000, bloqueoMs: 15 * 60 * 1000 });
   if (!limite.ok) {
     res.setHeader('Retry-After', String(limite.segundos));
     return res.status(429).json({
@@ -28,10 +28,10 @@ export default async function handler(req, res) {
   if (!(await licenciaValida(license))) {
     // El retardo va DESPUÉS de decidir, y solo cuando falla: un taller que
     // pone bien su código entra al instante.
-    await esperar(registrarFallo(req));
+    await esperar(await registrarFallo(req, { reiniciar: limite.reiniciar }));
     return res.status(403).json({ error: 'Código de licencia no válido.' });
   }
 
-  registrarAcierto(req);
+  await registrarAcierto(req);
   return res.status(200).json({ ok: true });
 }
