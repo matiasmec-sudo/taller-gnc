@@ -7827,7 +7827,13 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       body: JSON.stringify({ license: localStorage.getItem(LICENSE_KEY), ...body }),
     });
     const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.error || ('Error ' + r.status + ' del servidor de respaldo'));
+    if (!r.ok) {
+      // Se conserva el código HTTP: arriba hace falta para distinguir "no hay
+      // señal" de "el servidor rechazó la copia", que no es lo mismo ni cerca.
+      const err = new Error(data.error || ('Error ' + r.status + ' del servidor de respaldo'));
+      err.status = r.status;
+      throw err;
+    }
     return data;
   }
 
@@ -7870,6 +7876,33 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   function actualizarEstadoSyncUI() {
     const el = root.querySelector('#sync-estado');
     if (el) el.textContent = textoEstadoSync();
+  }
+
+  // ---- Red de seguridad del respaldo ----
+  // El peor escenario no es que falle: es que falle EN SILENCIO. El taller
+  // sigue cargando meses convencido de que tiene copia y, si pierde el equipo,
+  // pierde todo. Por eso, además del mensaje de error, se avisa fuerte cuando
+  // hace días que no se guarda con éxito — sin importar el motivo.
+  const DIAS_ALERTA_RESPALDO = 3;
+  function diasSinRespaldo() {
+    if (!syncActiva()) return null;
+    const u = syncUltima || localStorage.getItem(SYNC_ULTIMA_KEY);
+    if (!u) return null;
+    const d = Math.floor((Date.now() - new Date(u).getTime()) / 86400000);
+    return isNaN(d) ? null : d;
+  }
+  function bannerRespaldo() {
+    const d = diasSinRespaldo();
+    if (d === null || d < DIAS_ALERTA_RESPALDO) return '';
+    return `<div class="panel" style="border:2px solid var(--danger); background:color-mix(in srgb, var(--danger) 8%, transparent);">
+      <h2 style="margin:0 0 4px; font-size:16px; color:var(--danger);">⚠️ Hace ${d} días que la copia no se guarda</h2>
+      <p class="scan-sub" style="margin:0 0 8px;">
+        La última copia en la nube es del <b>${fmtFechaHora(syncUltima || localStorage.getItem(SYNC_ULTIMA_KEY))}</b>.
+        Todo lo que cargaste después <b>está solo en este dispositivo</b>: si lo perdés, se pierde.
+        Entrá a la copia de seguridad y fijate qué dice el estado.
+      </p>
+      <div class="form-actions"><button type="button" class="btn btn-primary btn-sm" id="btn-ir-respaldo">Ver la copia de seguridad</button></div>
+    </div>`;
   }
 
   async function sincronizar(motivo) {
@@ -7985,8 +8018,16 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       if (cambioLocal && !showForm && !editingId) render();
       else actualizarEstadoSyncUI();
     } catch (e) {
+      // Antes CUALQUIER falla se mostraba como "sin conexión", así que un
+      // rechazo del servidor (la copia no entra, la licencia venció, etc.) se
+      // leía como un problema de señal y el taller seguía trabajando meses
+      // creyendo que tenía respaldo. Ahora se distingue.
       if (e && e.message === 'CLAVE') {
         syncEstado = 'La clave guardada en este equipo no abre la copia de la nube. Desactivá la sincronización y activala de nuevo con la clave correcta.';
+      } else if (e && (e.status === 413 || /demasiado grande|too large|payload/i.test(e.message || ''))) {
+        syncEstado = 'ATENCIÓN: la copia ya no entra en el servidor y NO se está guardando. No es falta de señal. Avisanos para agrandar el límite.';
+      } else if (e && e.status >= 400) {
+        syncEstado = 'ATENCIÓN: la copia NO se pudo guardar. ' + (e.message || 'El servidor la rechazó') + '. No es falta de señal.';
       } else {
         syncEstado = 'Sin conexión con la nube — se vuelve a intentar solo.';
       }
@@ -8524,6 +8565,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
           <div class="chip chip-ok"><div class="chip-num">${counts.ok}</div><div class="chip-lbl">Al día</div></div>
         </div>`}
 
+        ${algunPanelAbierto ? '' : bannerRespaldo()}
         ${algunPanelAbierto ? '' : bannerInstalar()}
 
         ${showHoy ? hoyPanel(entrando.hoy) : ''}
@@ -9212,6 +9254,22 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     });
 
     // --- Copia de seguridad en la nube ---
+    // El cartel de "hace N días que no se guarda" lleva directo a la copia.
+    const btnIrRespaldo = root.querySelector('#btn-ir-respaldo');
+    if (btnIrRespaldo) btnIrRespaldo.addEventListener('click', async () => {
+      cerrarPanelesConsulta();
+      menuOpen = false;
+      showRespaldo = true;
+      respaldoUltima = null;
+      render();
+      try {
+        const l = await apiRespaldo({ accion: 'listar' });
+        const d = (l.archivos || []).find(a => a.nombre === 'datos.json');
+        if (d) respaldoUltima = d.subido;
+      } catch (e) { /* si no se puede listar, el panel lo muestra igual */ }
+      if (showRespaldo) render();
+    });
+
     const btnRespaldoMenu = root.querySelector('#btn-respaldo');
     if (btnRespaldoMenu) btnRespaldoMenu.addEventListener('click', async () => {
       cerrarPanelesConsulta();
