@@ -738,6 +738,12 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 #gnc-app .activation-wrap { max-width: 420px; padding-top: 80px; }
 #gnc-app .activation-panel #activation-input { width: 100%; margin-bottom: 4px; }
 #gnc-app .activation-hint { font-size: 13px; color: var(--text-muted); margin: 0 0 16px; line-height: 1.5; }
+/* Presentación del producto: quien entra al dominio sin tener código (un
+   taller interesado, o el revisor de Meta) tiene que entender qué es esto
+   antes de encontrarse con una pantalla que le pide una licencia. */
+#gnc-app .activation-presenta { font-size: 14px; color: var(--text); margin: 0 0 14px; line-height: 1.6; }
+#gnc-app .activation-conocer { margin: 0 0 6px; }
+#gnc-app .activation-sub { font-size: 15px; margin: 22px 0 6px; padding-top: 16px; border-top: 1px solid var(--line); }
 #gnc-app .activation-terminos { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--text-muted); margin: 10px 0 4px; line-height: 1.5; }
 #gnc-app .activation-terminos input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; margin-top: 2px; flex-shrink: 0; }
 #gnc-app .activation-terminos a { color: var(--flame); font-weight: 600; }
@@ -1062,7 +1068,18 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
     root.innerHTML = `
       <div class="wrap activation-wrap">
         <div class="panel activation-panel">
-          <h2>Activar Estelita</h2>
+          <h2>Estelita</h2>
+          <p class="activation-presenta">
+            El sistema de gestión para <b>talleres de GNC</b>: la ficha del PEC sin cargar
+            dos veces lo mismo, los vencimientos de oblea y prueba hidráulica al día,
+            la agenda de turnos, los presupuestos, la factura electrónica y un
+            asistente que atiende tu WhatsApp.
+          </p>
+          <div class="activation-conocer">
+            <a class="btn btn-outline btn-sm" href="estelita.html">Ver qué hace y cuánto sale ↗</a>
+          </div>
+
+          <h3 class="activation-sub">Activar</h3>
           <p class="activation-hint">Ingresá el código de licencia de tu taller.</p>
           <form id="activation-form">
             <input type="text" id="activation-input" placeholder="Ej: GNC-0001" autocomplete="off">
