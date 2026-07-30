@@ -760,6 +760,17 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 }
 #gnc-app .card-abrir:hover { color: var(--flame); }
 
+/* Registro de trámites por PEC (exigencia de ENARGAS). */
+#gnc-app .reg-wrap { overflow-x: auto; background: var(--surface-alt); border-radius: 12px; padding: 2px 10px 6px; }
+#gnc-app .reg-tabla { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; }
+#gnc-app .reg-tabla th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); padding: 8px 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+#gnc-app .reg-tabla td { padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+#gnc-app .reg-tabla tbody tr:last-child td { border-bottom: none; }
+#gnc-app .reg-tot { display: flex; gap: 7px; flex-wrap: wrap; margin: 8px 0; }
+#gnc-app .reg-tot span { background: var(--surface-alt); border-radius: 999px; padding: 4px 11px; font-family: var(--mono); font-size: 11px; }
+#gnc-app .reg-filtros { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 6px; }
+#gnc-app .reg-filtros label { display: block; font-size: 12px; }
+
 #gnc-app .hidden { display: none !important; }
 #gnc-app .loading {
   text-align: center; padding: 40px; color: var(--text-muted); font-family: var(--mono); font-size: 12px;
@@ -3905,6 +3916,193 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         </div>`).join('')}</div>`
         : '<p class="scan-sub">No hay clientes inactivos.</p>'}
     </div>`;
+  }
+
+  // ===== REGISTRO DE TRÁMITES POR PEC =====
+  // ENARGAS le exige al taller llevar el registro de los trámites que mandó a
+  // cada PEC, separados por tipo. Se arma con lo que ya viene guardado en cada
+  // trámite (fecha, tipo y el PEC al que se envió), así vale también para atrás
+  // sin tener que recargar nada.
+  let registroAnio = '';   // '' = todos los años
+  let registroPecSel = 'todos';
+  let registroTipoSel = 'todos';
+
+  function pecLabelRegistro(i) {
+    const p = (tallerConfig.pecs || [])[i];
+    if (!p) return `PEC ${i + 1} (ya no está cargado en Mi taller)`;
+    return p.razonSocial || p.codigoPec || `PEC ${i + 1}`;
+  }
+  function registroFilas() {
+    const filas = [];
+    clientes.forEach(c => {
+      (c.tramites || []).forEach(t => {
+        filas.push({
+          fecha: t.fecha || '',
+          patente: c.patente || '',
+          telefono: c.telefono || '',
+          tipo: t.tipo || '',
+          // Los trámites viejos, de antes de que se pudiera elegir el PEC,
+          // no traen pecIndex: caen en el primero.
+          pecIndex: Number.isInteger(t.pecIndex) ? t.pecIndex : 0,
+        });
+      });
+    });
+    return filas.sort((a, b) => (a.fecha || '').localeCompare(b.fecha || ''));
+  }
+  function registroFiltradas() {
+    return registroFilas().filter(f =>
+      (!registroAnio || (f.fecha || '').slice(0, 4) === registroAnio) &&
+      (registroPecSel === 'todos' || String(f.pecIndex) === registroPecSel) &&
+      (registroTipoSel === 'todos' || f.tipo === registroTipoSel));
+  }
+  // Los PEC que hay que mostrar: los cargados en Mi taller, más cualquiera que
+  // haya quedado en un trámite viejo aunque después se borró de la config.
+  function registroPecIndices(filas) {
+    const conf = (tallerConfig.pecs || []).map((p, i) => i);
+    return [...new Set([...conf, ...filas.map(f => f.pecIndex)])].sort((a, b) => a - b);
+  }
+
+  function registroPanel(entrando) {
+    const todas = registroFilas();
+    const filas = registroFiltradas();
+    const anios = [...new Set(todas.map(f => (f.fecha || '').slice(0, 4)).filter(Boolean))].sort().reverse();
+    const pecs = tallerConfig.pecs || [];
+    const secciones = registroPecIndices(filas).map(i => {
+      const suyas = filas.filter(f => f.pecIndex === i);
+      if (!suyas.length) return '';
+      const porTipo = TRAMITE_TIPOS
+        .map(t => ({ label: t.label, n: suyas.filter(f => f.tipo === t.value).length }))
+        .filter(x => x.n);
+      return `<div style="margin-top:20px;">
+        <h3 style="margin-bottom:2px;">${escapeHtml(pecLabelRegistro(i))}</h3>
+        <div class="scan-sub">${pecs[i] && pecs[i].codigoPec ? 'Código ' + escapeHtml(pecs[i].codigoPec) + ' · ' : ''}${suyas.length} trámite${suyas.length === 1 ? '' : 's'}</div>
+        <div class="reg-tot">${porTipo.map(x => `<span>${escapeHtml(x.label)}: <b>${x.n}</b></span>`).join('')}</div>
+        <div class="reg-wrap"><table class="reg-tabla">
+          <thead><tr><th>Fecha</th><th>Patente</th><th>Teléfono</th><th>Tipo de trámite</th></tr></thead>
+          <tbody>${suyas.map(f => `<tr>
+            <td>${f.fecha ? fmtDate(f.fecha) : '—'}</td>
+            <td>${escapeHtml(f.patente || '—')}</td>
+            <td>${escapeHtml(f.telefono || '—')}</td>
+            <td>${escapeHtml(tramiteTipoLabel(f.tipo))}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      </div>`;
+    }).join('');
+
+    return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="registro-panel">
+      ${panelVolver()}
+      <h2 style="margin-top:0;">Registro de trámites por PEC</h2>
+      <p class="scan-sub">Los trámites que mandaste a cada PEC, separados por tipo. Sale de lo que ya está cargado en cada trámite, así que incluye los de antes.</p>
+
+      <div class="reg-filtros">
+        <label>Año
+          <select id="reg-anio">
+            <option value="">Todos</option>
+            ${anios.map(a => `<option value="${a}" ${registroAnio === a ? 'selected' : ''}>${a}</option>`).join('')}
+          </select>
+        </label>
+        <label>PEC
+          <select id="reg-pec">
+            <option value="todos">Todos</option>
+            ${registroPecIndices(todas).map(i => `<option value="${i}" ${registroPecSel === String(i) ? 'selected' : ''}>${escapeHtml(pecLabelRegistro(i))}</option>`).join('')}
+          </select>
+        </label>
+        <label>Tipo de trámite
+          <select id="reg-tipo">
+            <option value="todos">Todos</option>
+            ${TRAMITE_TIPOS.map(t => `<option value="${t.value}" ${registroTipoSel === t.value ? 'selected' : ''}>${escapeHtml(t.label)}</option>`).join('')}
+          </select>
+        </label>
+      </div>
+
+      <div class="form-actions" style="margin:10px 0 4px;">
+        <button type="button" class="btn btn-primary btn-sm" id="btn-reg-pdf" ${filas.length ? '' : 'disabled'}>Imprimir / PDF</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-reg-csv" ${filas.length ? '' : 'disabled'}>Exportar CSV</button>
+      </div>
+
+      ${filas.length
+        ? secciones
+        : `<p class="scan-sub" style="margin-top:16px;">No hay trámites que coincidan con los filtros.</p>`}
+
+      ${pecs.length > 1 ? `<p class="scan-sub" style="margin-top:22px;">Ojo: los trámites cargados antes de que se pudiera elegir el PEC quedaron todos en <b>${escapeHtml(pecLabelRegistro(0))}</b>. Si en su momento los mandaste a otro, hay que corregirlos a mano desde el trámite.</p>` : ''}
+    </div>`;
+  }
+
+  function exportarRegistroCSV() {
+    const filas = registroFiltradas();
+    const headers = ['PEC', 'Codigo PEC', 'Fecha', 'Patente', 'Telefono', 'Tipo de tramite'];
+    const pecs = tallerConfig.pecs || [];
+    const rows = filas.map(f => [
+      pecLabelRegistro(f.pecIndex),
+      (pecs[f.pecIndex] && pecs[f.pecIndex].codigoPec) || '',
+      f.fecha ? fmtDate(f.fecha) : '',
+      f.patente, f.telefono, tramiteTipoLabel(f.tipo),
+    ].map(csvEscape).join(','));
+    const csv = [headers.map(csvEscape).join(','), ...rows].join('\r\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    descargarBlob(blob, `registro_pec_${registroAnio || 'todos'}.csv`);
+  }
+
+  async function generarRegistroPdf() {
+    await cargarJsPdf();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const tc = tallerConfig;
+    const pecs = tc.pecs || [];
+    const L = 15, R = 195, PIE = 280;
+    let y = 20;
+    const nuevaHoja = () => { doc.addPage(); y = 20; };
+    const salto = (alto) => { if (y + alto > PIE) nuevaHoja(); };
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+    doc.text(tallerNombre || 'Taller GNC', L, y); y += 6;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90);
+    [tc.razonSocial, tc.direccion, [tc.cuit ? 'CUIT ' + tc.cuit : '', tc.codigoTaller ? 'Código Taller ' + tc.codigoTaller : ''].filter(Boolean).join('    ')]
+      .filter(Boolean).forEach(l => { doc.text(String(l), L, y); y += 4.5; });
+    doc.setTextColor(0); y += 3;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
+    doc.text('Registro de trámites por PEC', L, y); y += 5.5;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(110);
+    doc.text(`${registroAnio ? 'Año ' + registroAnio : 'Todos los años'}${registroTipoSel !== 'todos' ? ' · ' + tramiteTipoLabel(registroTipoSel) : ''} · emitido el ${fmtDate(fechaLocalISO())}`, L, y);
+    doc.setTextColor(0); y += 8;
+
+    const filas = registroFiltradas();
+    const cols = [L, L + 26, L + 60, L + 100];
+    registroPecIndices(filas).forEach(i => {
+      const suyas = filas.filter(f => f.pecIndex === i);
+      if (!suyas.length) return;
+      salto(30);
+      doc.setDrawColor(190); doc.line(L, y, R, y); y += 6;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+      doc.text(pecLabelRegistro(i), L, y); y += 5;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(110);
+      const cod = pecs[i] && pecs[i].codigoPec ? 'Código ' + pecs[i].codigoPec + ' · ' : '';
+      doc.text(`${cod}${suyas.length} trámite${suyas.length === 1 ? '' : 's'}`, L, y); y += 5;
+      TRAMITE_TIPOS.forEach(t => {
+        const n = suyas.filter(f => f.tipo === t.value).length;
+        if (!n) return;
+        salto(6);
+        doc.text(`${t.label}: ${n}`, L + 4, y); y += 4.5;
+      });
+      doc.setTextColor(0); y += 3;
+
+      const encabezado = () => {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+        ['Fecha', 'Patente', 'Teléfono', 'Tipo de trámite'].forEach((h, k) => doc.text(h, cols[k], y));
+        y += 2; doc.setDrawColor(210); doc.line(L, y, R, y); y += 4.5;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+      };
+      salto(14); encabezado();
+      suyas.forEach(f => {
+        if (y + 6 > PIE) { nuevaHoja(); encabezado(); }
+        [f.fecha ? fmtDate(f.fecha) : '—', f.patente || '—', f.telefono || '—', tramiteTipoLabel(f.tipo)]
+          .forEach((v, k) => doc.text(String(v), cols[k], y));
+        y += 5.5;
+      });
+      y += 4;
+    });
+
+    return doc.output('blob');
   }
 
   // La pantalla "Hoy" se arma con secciones plegables, para ver de un vistazo
@@ -7318,6 +7516,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   let showHoy = false;
   // Panel de estadísticas (trámites por mes/tipo, totales, ingresos estimados).
   let showEstadisticas = false;
+  let showRegistro = false;
   let showRecuperar = false;
   // Presupuestos: los guardados, y el que se está armando ahora.
   // presuDraft = null significa que se está viendo la lista, no el formulario.
@@ -8663,11 +8862,11 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     // buscador y los botones Nuevo/ENARGAS y las tarjetas de clientes, que
     // abajo del panel no tenían sentido y confundían.
     const pendCount = pendientesItems().length;
-    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo || showTurnos || showHoy || showEstadisticas || showRecuperar || showFacturacion || !!verUltimoTramiteId;
+    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo || showTurnos || showHoy || showEstadisticas || showRecuperar || showRegistro || showFacturacion || !!verUltimoTramiteId;
     // Para el botón "atrás" del celular: qué paneles cuentan como "algo abierto
     // que hay que cerrar". El asistente de trámite queda afuera a propósito.
     panelAbiertoAhora = showHistorial || showPendientes || showBulkImport || showTallerConfig
-      || showQuickAdd || showRespaldo || showTurnos || showHoy || showEstadisticas
+      || showQuickAdd || showRespaldo || showTurnos || showHoy || showEstadisticas || showRegistro
       || showRecuperar || showFacturacion || showPresupuestos || !!showFotosFor || !!verUltimoTramiteId;
     const turnosAvisoCount = turnosParaAvisar().length;
     // Globito de Turnos en la barra: recordatorios sin mandar + pedidos que
@@ -8695,6 +8894,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       facturacion: showFacturacion && !prevPanelState.facturacion,
       hoy: showHoy && !prevPanelState.hoy,
       estadisticas: showEstadisticas && !prevPanelState.estadisticas,
+      registro: showRegistro && !prevPanelState.registro,
       recuperar: showRecuperar && !prevPanelState.recuperar,
       ultimoTramite: !!verUltimoTramiteId && !prevPanelState.ultimoTramite,
     };
@@ -8702,7 +8902,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       wizard: wizardAbierto, wizardStep, fotos: !!showFotosFor, historial: showHistorial,
       pendientes: showPendientes, bulkImport: showBulkImport, tallerConfig: showTallerConfig,
       enargasPaste: enargasPasteOpen, quickAdd: showQuickAdd, respaldo: showRespaldo,
-      turnos: showTurnos, hoy: showHoy, estadisticas: showEstadisticas, recuperar: showRecuperar, ultimoTramite: !!verUltimoTramiteId,
+      turnos: showTurnos, hoy: showHoy, estadisticas: showEstadisticas, recuperar: showRecuperar, registro: showRegistro, ultimoTramite: !!verUltimoTramiteId,
       facturacion: showFacturacion,
     };
 
@@ -8719,6 +8919,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-facturacion">${menuIco('presupuesto')}Facturación</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-recuperar">${menuIco('chart')}Recuperar${paraRecuperarLista().ahora.length ? ` <span class="menu-badge-inline">${paraRecuperarLista().ahora.length}</span>` : ''}</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-estadisticas">${menuIco('chart')}Estadísticas</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-registro">${menuIco('clipboard')}Registro de trámites por PEC</button>
                 <div class="menu-sep"></div>
                 <div class="menu-group-label">Datos</div>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-import">${menuIco('download')}Importar clientes (Excel / cuaderno)</button>
@@ -8753,6 +8954,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
 
         ${showHoy ? hoyPanel(entrando.hoy) : ''}
         ${showEstadisticas ? estadisticasPanel(entrando.estadisticas) : ''}
+        ${showRegistro ? registroPanel(entrando.registro) : ''}
         ${showRecuperar ? recuperarPanel(entrando.recuperar) : ''}
         ${showTallerConfig ? tallerConfigPanel(entrando.tallerConfig) : ''}
         ${showPendientes ? pendientesPanel(entrando.pendientes) : ''}
@@ -8847,6 +9049,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     showHoy = false;
     showEstadisticas = false;
     showRecuperar = false;
+    showRegistro = false;
     showBulkImport = false;
     showQuickAdd = false;
     showPresupuestos = false;
@@ -9368,6 +9571,42 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       menuOpen = false;
       showEstadisticas = !abierto;
       render();
+    });
+
+    const btnRegistro = root.querySelector('#btn-registro');
+    if (btnRegistro) btnRegistro.addEventListener('click', () => {
+      const abierto = showRegistro;
+      showForm = false; editingId = null;
+      cerrarPanelesConsulta();
+      menuOpen = false;
+      showRegistro = !abierto;
+      render();
+    });
+
+    ['reg-anio', 'reg-pec', 'reg-tipo'].forEach(id => {
+      const sel = root.querySelector('#' + id);
+      if (!sel) return;
+      sel.addEventListener('change', () => {
+        if (id === 'reg-anio') registroAnio = sel.value;
+        else if (id === 'reg-pec') registroPecSel = sel.value;
+        else registroTipoSel = sel.value;
+        render();
+      });
+    });
+
+    const btnRegCsv = root.querySelector('#btn-reg-csv');
+    if (btnRegCsv) btnRegCsv.addEventListener('click', () => exportarRegistroCSV());
+
+    const btnRegPdf = root.querySelector('#btn-reg-pdf');
+    if (btnRegPdf) btnRegPdf.addEventListener('click', async () => {
+      btnRegPdf.disabled = true;
+      try {
+        const blob = await generarRegistroPdf();
+        await abrirOCompartirPdf(blob, `registro_pec_${registroAnio || 'todos'}.pdf`, 'Registro de trámites por PEC');
+      } catch (e) {
+        await customAlert('No se pudo armar el PDF: ' + (e && e.message ? e.message : e), 'Error');
+      }
+      btnRegPdf.disabled = false;
     });
 
     const btnRecuperar = root.querySelector('#btn-recuperar');
