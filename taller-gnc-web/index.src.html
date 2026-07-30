@@ -605,7 +605,8 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 #gnc-app .client-card.st-danger { border-left-color: var(--danger); }
 #gnc-app .client-card.st-warn { border-left-color: var(--warn); }
 #gnc-app .client-card.st-ok { border-left-color: var(--ok); }
-#gnc-app .client-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+#gnc-app .client-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: nowrap; }
+#gnc-app .client-top[data-toggle-detalle] { cursor: pointer; }
 #gnc-app .client-patente { font-family: var(--display); font-weight: 800; font-size: 21px; letter-spacing: 1px; }
 #gnc-app .client-modelo { font-family: var(--sans); font-size: 13px; color: var(--text-muted); margin-top: 2px; }
 #gnc-app .client-name { font-family: var(--sans); font-size: 13px; font-weight: 600; color: var(--text); margin-top: 4px; }
@@ -727,6 +728,37 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 #gnc-app .badge-danger { background: #FDE8E5; color: #C0281A; }
 #gnc-app .badge-warn { background: #FCF1DC; color: #B36F00; }
 #gnc-app .badge-ok { background: #E1F5EA; color: #157A44; }
+
+/* Vencimiento de la tarjeta: UN solo bloque por auto, a lo ancho y teñido
+   según el estado. Es lo primero que hay que ver al abrir la tarjeta. */
+#gnc-app .venc-box {
+  grid-column: 1 / -1; border-radius: 12px; padding: 11px 13px; background: var(--surface-alt);
+  display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+#gnc-app .venc-box.v-danger { background: rgba(217,59,43,0.10); }
+#gnc-app .venc-box.v-warn { background: rgba(223,139,0,0.11); }
+#gnc-app .venc-titulo { font-family: var(--sans); font-size: 14px; font-weight: 700; }
+#gnc-app .venc-alerta { font-family: var(--mono); font-size: 10.5px; color: var(--warn); font-weight: 700; margin-top: 5px; }
+/* Barra de accesos de la tarjeta: iconos chicos, todos del mismo peso, para
+   que no le compitan al botón de "Inicio de trámite". */
+#gnc-app .card-toolbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1px solid var(--line); margin-top: 12px; }
+#gnc-app .card-tool {
+  background: none; border: none; padding: 9px 2px; border-radius: 10px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  color: var(--text-muted); font-family: var(--sans); font-size: 10.5px; font-weight: 700; line-height: 1.2;
+}
+#gnc-app .card-tool:hover:not([disabled]) { background: var(--surface-alt); color: var(--text); }
+#gnc-app .card-tool[disabled] { opacity: 0.35; cursor: default; }
+#gnc-app .card-tool svg { width: 19px; height: 19px; }
+/* En pantallas angostas "Comprobante" no entra a 10.5px: se achica la letra
+   en vez de cortar la palabra o mandar la barra a dos renglones. */
+@media (max-width: 430px) { #gnc-app .card-tool { font-size: 10px; letter-spacing: -0.2px; padding: 9px 1px; } }
+#gnc-app .card-mas { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 0 2px; border-top: 1px dashed var(--line); }
+#gnc-app .card-abrir {
+  background: none; border: none; cursor: pointer; padding: 2px 0 0 8px; flex-shrink: 0;
+  font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--text-muted); white-space: nowrap;
+}
+#gnc-app .card-abrir:hover { color: var(--flame); }
 
 #gnc-app .hidden { display: none !important; }
 #gnc-app .loading {
@@ -1054,6 +1086,8 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
   // Ids de clientes cuya tarjeta tiene el detalle (datos + historial de
   // trámites) desplegado — no hace falta entrar a editar solo para mirar.
   const clientesExpandidos = new Set();
+  // Tarjetas con la fila de accesos secundarios ("Más") desplegada.
+  const clientesMasAbierto = new Set();
   // Ids de clientes que tienen fotos de documentación guardadas — para
   // mostrar el botón "Documentación" habilitado solo cuando hay algo que ver.
   let clientesConFotos = new Set();
@@ -1494,13 +1528,6 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       que: f.cosa,
     });
     return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
-  }
-  // Para un vencimiento suelto de la ficha del cliente (oblea o PH por separado).
-  function waLinkVencimientoSuelto(cliente, tipo) {
-    const iso = tipo === 'oblea' ? obleaVenceISO(cliente)
-      : phVencimientoISO(cliente.fecha_crpc, cliente.tipo_cilindro);
-    const s = statusOf(iso);
-    return waLinkVencimiento(cliente, tipo === 'oblea' ? 'oblea' : 'ph', s.meses == null ? 0 : s.meses);
   }
 
   // Mensaje para recuperar al que se fue a otro taller, cuando le vuelve a
@@ -4946,46 +4973,68 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     URL.revokeObjectURL(url);
   }
 
-  function docRowOblea(cliente) {
-    // Se muestra el vencimiento REAL: si la prueba hidráulica vence antes, la
-    // oblea vence con ella (y se aclara, para que no parezca un error).
-    const venc = obleaVenceISO(cliente);
-    const topeada = !!(venc && cliente.fecha_oblea && venc !== cliente.fecha_oblea);
-    const s = statusOf(venc);
-    const badgeClass = s.level === 'danger' ? 'badge-danger' : s.level === 'warn' ? 'badge-warn' : s.level === 'ok' ? 'badge-ok' : '';
-    // Si el auto ya no tiene GNC (desmontaje/baja) no se ofrece avisarle.
-    const waBtn = (s.level === 'danger' || s.level === 'warn') && cleanPhone(cliente.telefono) && !sinGnc(cliente)
-      ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-venc="${cliente.id}" data-aviso-ym="${ymDe(venc)}" href="${waLinkVencimientoSuelto(cliente, 'oblea')}">Avisar por WhatsApp</a>`
-      : '';
-    return `<div class="doc-row">
-      <div>
-        <div class="doc-label">Oblea</div>
-        <div class="doc-date">${fmtDate(venc)} ${venc ? `<span class="badge ${badgeClass}">${s.label}</span>` : ''}</div>
-        ${topeada ? `<div class="doc-sub">Vence junto con la prueba hidráulica (la oblea no puede durar más que el cilindro). En la oblea figura ${fmtDate(cliente.fecha_oblea)}.</div>` : ''}
-      </div>
-      ${waBtn}
-    </div>`;
-  }
-
-  function docRowPH(cliente) {
+  // Vencimientos de la tarjeta, en UN solo bloque. Cuando la oblea y la prueba
+  // hidráulica caen juntas (la regla de los 7 meses) es una sola visita y un
+  // solo mensaje: mostrarlas en dos cajas con dos botones de "Avisar" hacía
+  // parecer que había que avisarle dos veces. Si de verdad vencen en meses
+  // distintos, van como dos renglones, cada uno con su aviso.
+  function docRowVencimientos(cliente) {
+    const obleaIso = obleaVenceISO(cliente);
     const phIso = phVencimientoISO(cliente.fecha_crpc, cliente.tipo_cilindro);
-    const s = statusOf(phIso);
-    const badgeClass = s.level === 'danger' ? 'badge-danger' : s.level === 'warn' ? 'badge-warn' : s.level === 'ok' ? 'badge-ok' : '';
-    const vencMY = phIso ? `${phIso.slice(5,7)}/${phIso.slice(0,4)}` : '—';
-    const waBtn = (s.level === 'danger' || s.level === 'warn') && cleanPhone(cliente.telefono) && !sinGnc(cliente)
-      ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-venc="${cliente.id}" data-aviso-ym="${ymDe(phIso)}" href="${waLinkVencimientoSuelto(cliente, 'prueba')}">Avisar por WhatsApp</a>`
-      : '';
-    const sub = cliente.fecha_crpc
+    const juntas = obleaIso && phIso && mesesEntre(ymDe(obleaIso), ymDe(phIso)) < MIN_MESES_OBLEA;
+    const crpcSub = cliente.fecha_crpc
       ? `Últ. CRPC: ${fmtMonthYear(cliente.fecha_crpc)} · cada ${cliente.tipo_cilindro === '3' ? '3' : '5'} años`
       : 'Sin dato de CRPC';
-    return `<div class="doc-row">
-      <div>
-        <div class="doc-label">Prueba Hidráulica (CRPC)</div>
-        <div class="doc-date">${vencMY} ${phIso ? `<span class="badge ${badgeClass}">${s.label}</span>` : ''}</div>
-        <div class="doc-sub">${sub}</div>
-      </div>
-      ${waBtn}
-    </div>`;
+    // La oblea puede estar topeada por la prueba hidráulica: se aclara para que
+    // la fecha que se ve acá no parezca un error contra la oblea de papel.
+    const topeada = !!(obleaIso && cliente.fecha_oblea && obleaIso !== cliente.fecha_oblea);
+    const subOblea = topeada
+      ? `Vence junto con la prueba hidráulica (la oblea no puede durar más que el cilindro). En la oblea figura ${fmtDate(cliente.fecha_oblea)}.`
+      : '';
+
+    let filas;
+    if (juntas) filas = [{ que: 'ambas', titulo: 'Oblea y prueba hidráulica', iso: obleaIso, fecha: fmtDate(obleaIso), sub: [subOblea, crpcSub].filter(Boolean).join(' · ') }];
+    else filas = [
+      obleaIso ? { que: 'oblea', titulo: 'Oblea', iso: obleaIso, fecha: fmtDate(obleaIso), sub: subOblea } : null,
+      phIso ? { que: 'ph', titulo: 'Prueba hidráulica (CRPC)', iso: phIso, fecha: `${phIso.slice(5, 7)}/${phIso.slice(0, 4)}`, sub: crpcSub } : null,
+    ].filter(Boolean);
+    if (!filas.length) filas = [{ que: null, titulo: 'Vencimientos', iso: null, fecha: '—', sub: 'Faltan las fechas de oblea y de CRPC.' }];
+
+    return filas.map((f, i) => {
+      const s = statusOf(f.iso);
+      const cls = s.level === 'danger' ? 'v-danger' : s.level === 'warn' ? 'v-warn' : '';
+      const badgeClass = s.level === 'danger' ? 'badge-danger' : s.level === 'warn' ? 'badge-warn' : s.level === 'ok' ? 'badge-ok' : '';
+      // Si el auto ya no tiene GNC (desmontaje/baja) no se ofrece avisarle.
+      const waBtn = f.que && (s.level === 'danger' || s.level === 'warn') && cleanPhone(cliente.telefono) && !sinGnc(cliente)
+        ? `<a class="btn btn-wa" target="_blank" rel="noopener" data-aviso-venc="${cliente.id}" data-aviso-ym="${ymDe(f.iso)}" href="${waLinkVencimiento(cliente, f.que, s.meses == null ? 0 : s.meses)}">Avisar por WhatsApp</a>`
+        : '';
+      // El taller de la última oblea va acá adentro, no en una caja aparte:
+      // es justo el dato que hace falta ANTES de mandarle el mensaje.
+      const alerta = (i === 0 && renovoEnOtroTaller(cliente))
+        ? `<div class="venc-alerta">La última la renovó en ${escapeHtml(cliente.ultimaObleaTaller)} — no la hizo con vos</div>`
+        : '';
+      return `<div class="venc-box ${cls}">
+        <div>
+          <div class="venc-titulo">${f.titulo}</div>
+          <div class="doc-date">${f.fecha} ${f.iso ? `<span class="badge ${badgeClass}">${s.label}</span>` : ''}</div>
+          ${f.sub ? `<div class="doc-sub">${f.sub}</div>` : ''}
+          ${alerta}
+        </div>
+        ${waBtn}
+      </div>`;
+    }).join('');
+  }
+
+  // Iconos de la barra de accesos de la tarjeta.
+  const CARD_ICONS = {
+    whatsapp: 'M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z',
+    turno: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
+    actualizar: 'M23 4v6h-6M1 20v-6h6M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15',
+    comprobante: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 13h8M8 17h5',
+    mas: 'M5 12h.01M12 12h.01M19 12h.01',
+  };
+  function cardIcon(name) {
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${CARD_ICONS[name]}"/></svg>`;
   }
 
   // "-wrap" es lo que se mueve al reacomodarse la lista (animación FLIP en
@@ -5000,35 +5049,22 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     const s = worstStatus(c);
     const cls = s.level === 'danger' ? 'st-danger' : s.level === 'warn' ? 'st-warn' : 'st-ok';
     const expandido = clientesExpandidos.has(c.id);
+    const masAbierto = clientesMasAbierto.has(c.id);
     const tieneFotos = clientesConFotos.has(c.id);
     return `<div class="client-card-wrap ${expandido ? 'expandido' : ''}" data-client-id="${c.id}">
       <button type="button" class="client-swipe-delete" data-swipe-delete="${c.id}">Eliminar</button>
       <div class="client-card ${cls} ${expandido ? 'expandida' : ''}">
-        <div class="client-top">
+        <div class="client-top" data-toggle-detalle="${c.id}" title="Ver datos y trámites">
           <div>
             <div class="client-patente">${escapeHtml(c.patente || 'SIN PATENTE')}</div>
             <div class="client-modelo">${escapeHtml([c.marca, c.modelo].filter(Boolean).join(' ')) || 'Sin marca/modelo'}${c.anio ? ' · ' + escapeHtml(c.anio) : ''}</div>
             <div class="client-name">${escapeHtml(nombreFicha(c))}${c.telefono ? ' · ' + escapeHtml(c.telefono) : ''}</div>
             ${clienteDatos(c).propio && (c.nombre || '').trim() ? `<div class="doc-sub" style="font-size:11px; color:var(--text-muted);">Titular s/ cédula: ${escapeHtml(c.nombre)}</div>` : ''}
           </div>
-          <div class="client-actions">
-            ${c.telefono ? `<a class="btn btn-wa" target="_blank" rel="noopener" href="${waLinkGeneral(c)}">WhatsApp</a>` : ''}
-            <button class="btn btn-ghost" data-fotos="${c.id}" ${tieneFotos ? '' : 'disabled title="Este cliente todavía no tiene fotos de documentación guardadas"'}>Documentación</button>
-            <button class="btn btn-ghost" data-actualizar="${c.id}">Actualizar datos</button>
-            <button class="btn btn-ghost" data-turno="${c.id}">Turno</button>
-            <button class="btn btn-ghost" data-facturar="${c.id}">Emitir comprobante</button>
-            ${c.tramites.length ? `<button class="btn btn-ghost" data-ultimo-tramite="${c.id}">Último trámite</button>` : ''}
-            <button class="btn btn-agent" data-tramite="${c.id}">Inicio de trámite</button>
-          </div>
+          <span class="card-abrir">${expandido ? 'Ocultar ▾' : `Ver ficha${c.tramites.length ? ` (${c.tramites.length})` : ''} ▸`}</span>
         </div>
         <div class="docs">
           ${sinGnc(c) ? `<div class="doc-row"><div><div class="doc-label">Sin GNC</div><div class="doc-sub">Se le hizo ${tramiteTipoLabel(latestTramite(c).tipo).toLowerCase()} del equipo, así que no figura en los vencimientos. Si vuelve a instalar, reaparece solo.</div></div></div>` : ''}
-          ${c.ultimaObleaTaller ? `<div class="doc-row">
-            <div>
-              <div class="doc-label">Última oblea</div>
-              <div class="doc-sub"${renovoEnOtroTaller(c) ? ' style="color:var(--warn); font-weight:700;"' : ''}>${escapeHtml(c.ultimaObleaTaller)}${c.ultimaObleaFecha ? ' · vence ' + fmtDate(c.ultimaObleaFecha) : ''}${renovoEnOtroTaller(c) ? ' — no la hizo con vos' : ''}</div>
-            </div>
-          </div>` : ''}
           ${fueraDeCirculacion(c) ? `<div class="doc-row">
             <div>
               <div class="doc-label">${c.estado === 'recuperar' ? 'Para recuperar' : 'Cliente inactivo'}</div>
@@ -5036,8 +5072,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
             </div>
             <button type="button" class="btn btn-ghost btn-sm" data-reactivar="${c.id}">Reactivar</button>
           </div>` : ''}
-          ${docRowOblea(c)}
-          ${docRowPH(c)}
+          ${docRowVencimientos(c)}
           ${(() => {
             const t = proximoTurnoDe(c);
             if (!t) return '';
@@ -5045,10 +5080,23 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
             return `<div class="doc-row"><span class="doc-label">Turno</span><span class="badge ${t.fecha === fechaLocalISO() ? 'badge-danger' : 'badge-warn'}">${cuando}${t.hora ? ' ' + escapeHtml(t.hora) : ''}${t.motivo ? ' — ' + escapeHtml(t.motivo) : ''}</span></div>${t.presupuesto ? `<div class="doc-row"><span class="doc-label">Presupuesto</span><span>${escapeHtml(t.presupuesto)}</span></div>` : ''}`;
           })()}
         </div>
-        <div class="form-actions" style="margin-top:10px;">
-          <button type="button" class="btn btn-ghost btn-sm" data-toggle-detalle="${c.id}">${expandido ? 'Ocultar detalle' : `Ver datos y trámites${c.tramites.length ? ` (${c.tramites.length})` : ''}`}</button>
-          <button type="button" class="btn btn-trash" data-delete="${c.id}" title="Eliminar cliente" aria-label="Eliminar cliente">${trashSvg()}</button>
+        <div class="form-actions" style="margin-top:12px;">
+          <button type="button" class="btn btn-agent" data-tramite="${c.id}" style="flex:1;">Inicio de trámite</button>
         </div>
+        <div class="card-toolbar">
+          ${cleanPhone(c.telefono)
+            ? `<a class="card-tool" target="_blank" rel="noopener" href="${waLinkGeneral(c)}">${cardIcon('whatsapp')}<span>WhatsApp</span></a>`
+            : `<button type="button" class="card-tool" disabled title="Este cliente no tiene teléfono cargado">${cardIcon('whatsapp')}<span>WhatsApp</span></button>`}
+          <button type="button" class="card-tool" data-turno="${c.id}">${cardIcon('turno')}<span>Turno</span></button>
+          <button type="button" class="card-tool" data-actualizar="${c.id}">${cardIcon('actualizar')}<span>Actualizar</span></button>
+          <button type="button" class="card-tool" data-facturar="${c.id}">${cardIcon('comprobante')}<span>Comprobante</span></button>
+          <button type="button" class="card-tool" data-card-mas="${c.id}">${cardIcon('mas')}<span>${masAbierto ? 'Cerrar' : 'Más'}</span></button>
+        </div>
+        ${masAbierto ? `<div class="card-mas">
+          <button type="button" class="btn btn-ghost btn-sm" data-fotos="${c.id}" ${tieneFotos ? '' : 'disabled title="Este cliente todavía no tiene fotos de documentación guardadas"'}>Documentación</button>
+          ${c.tramites.length ? `<button type="button" class="btn btn-ghost btn-sm" data-ultimo-tramite="${c.id}">Último trámite</button>` : ''}
+          <button type="button" class="btn btn-trash btn-sm" data-delete="${c.id}" title="Eliminar cliente">${trashSvg()} Eliminar</button>
+        </div>` : ''}
         ${expandido ? clientDetalleExpandido(c) : ''}
       </div>
     </div>`;
@@ -10718,6 +10766,15 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         abrirWhatsappUrl(waLinkObleaLista(c));
         t.avisoObleaEnviado = true;
         await saveClientes();
+        render();
+      });
+    });
+
+    root.querySelectorAll('[data-card-mas]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-card-mas');
+        if (clientesMasAbierto.has(id)) clientesMasAbierto.delete(id);
+        else clientesMasAbierto.add(id);
         render();
       });
     });
