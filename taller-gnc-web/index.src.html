@@ -5580,11 +5580,11 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         <label>Código Taller
           <input type="text" id="tc-codigo-taller" value="${escapeHtml(t.codigoTaller)}" placeholder="Ej: LET0238">
         </label>
-        <label>Razón social anterior del taller (opcional)
-          <input type="text" id="tc-razon-social-anterior" value="${escapeHtml(t.razonSocialAnterior || '')}" placeholder="Si cambió de dueño, el nombre anterior">
-          <span class="hint">Sirve para no confundir las obleas viejas del taller con las de la competencia. Podés poner varias separadas por coma.</span>
+        <label>Otras razones sociales de este taller (opcional)
+          <input type="text" id="tc-razon-social-anterior" value="${escapeHtml(t.razonSocialAnterior || '')}" placeholder="Ej: JUAN PEREZ, PEREZ GNC S.R.L.">
+          <span class="hint">Cómo figura el taller en el SIC de ENARGAS si es distinto de la razón social de arriba, y el nombre del dueño anterior si el taller cambió de manos. Varias separadas por coma. Sirve para no confundir las obleas propias con las de la competencia.</span>
         </label>
-        <label>Código Taller anterior (opcional)
+        <label>Otros códigos de taller (opcional)
           <input type="text" id="tc-codigo-taller-anterior" value="${escapeHtml(t.codigoTallerAnterior || '')}" placeholder="Ej: LET0004">
         </label>
         <label>Centros de reprueba (CRPC) — siglas separadas por coma
