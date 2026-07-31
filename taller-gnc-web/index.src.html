@@ -1039,9 +1039,6 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
     // { ajusteGnc: %, ajusteMec: %, items: { 'nombre del ítem': precio } }.
     // Si un ítem no está acá, se usa el de lista ajustado por el %.
     listaPrecios: { ajusteGnc: 0, ajusteMec: 0, items: {} },
-    // Precio por tipo de trámite (solo para la estimación de ingresos en
-    // Estadísticas). { conversion: 50000, ... }
-    precios: {},
     // Centros de reprueba (CRPC) que trabaja el taller, siglas separadas por
     // coma. Alimentan el desplegable del cilindro y la prueba hidráulica.
     centrosReprueba: 'GNSE, MMDP',
@@ -4194,8 +4191,6 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
 
   function estadisticasPanel(entrando) {
     const e = computeEstadisticas();
-    const precios = tallerConfig.precios || {};
-    const money = n => '$' + Number(n || 0).toLocaleString('es-AR');
     const bar = (label, val, max, extra) => `<div class="stat-row">
       <div class="stat-label">${label}</div>
       <div class="stat-track"><div class="stat-fill" style="width:${Math.max(2, Math.round(val / max * 100))}%"></div></div>
@@ -4211,10 +4206,6 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       meses.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
     }
     const maxMes = Math.max(1, ...meses.map(m => e.porMes[m] || 0));
-    const ingresoPorTipo = TRAMITE_TIPOS
-      .map(t => ({ t, cant: e.porTipo[t.value] || 0, precio: Number(precios[t.value]) || 0 }))
-      .filter(x => x.cant > 0 && x.precio > 0);
-    const ingresoTotal = ingresoPorTipo.reduce((s, x) => s + x.cant * x.precio, 0);
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="estadisticas-panel">
       ${panelVolver()}
       <h2 style="margin-top:0;">Estadísticas</h2>
@@ -4228,12 +4219,6 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       ${tiposConDatos.length ? tiposConDatos.map(t => bar(t.label, e.porTipo[t.value], maxTipo)).join('') : '<p class="scan-sub">Todavía no hay trámites cargados.</p>'}
       <h3>Trámites por mes (últimos 12)</h3>
       ${meses.some(m => e.porMes[m]) ? meses.map(m => bar(fmtMonthYear(m), e.porMes[m] || 0, maxMes)).join('') : '<p class="scan-sub">Todavía no hay trámites cargados.</p>'}
-      <h3>Ingresos estimados</h3>
-      ${ingresoPorTipo.length
-        ? `${ingresoPorTipo.map(x => `<div class="stat-row"><div class="stat-label">${x.t.label} <span class="scan-sub">(${x.cant} × ${money(x.precio)})</span></div><div class="stat-val">${money(x.cant * x.precio)}</div></div>`).join('')}
-           <div class="stat-total">Total estimado: <b>${money(ingresoTotal)}</b></div>
-           <p class="scan-sub">Estimado según los precios cargados en Mi taller. <button type="button" class="license-link" data-ir-precios>editar precios</button></p>`
-        : `<p class="scan-sub">Cargá el precio de cada tipo de trámite en Mi taller y acá vas a ver una estimación de ingresos. <button type="button" class="license-link" data-ir-precios>cargar precios</button></p>`}
     </div>`;
   }
 
@@ -5981,13 +5966,6 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         <button type="button" class="btn btn-ghost btn-sm" id="btn-grilla-calibracion">Imprimir grilla de calibración</button>
       </div>
       <div class="agent-hint" style="margin-top:4px;">La grilla imprime una regla en milímetros: poné una planilla EN BLANCO en la impresora e imprimila encima (al 100%). Sacale una foto y mandánosla para ubicar cada dato en el lugar exacto.</div>`;
-    const secPrecios = `
-      <div class="agent-hint" style="margin-top:0;">Precio de cada tipo de trámite. Se usa solo para la estimación de ingresos en Estadísticas — no aparece en las fichas ni en los mensajes. Dejá en blanco los que no quieras contar.</div>
-      <div class="form-grid">
-        ${TRAMITE_TIPOS.map(t => `<label>${t.label}
-          <input type="number" min="0" step="100" id="tc-precio-${t.value}" value="${escapeHtml(String((tallerConfig.precios && tallerConfig.precios[t.value]) || ''))}" placeholder="$">
-        </label>`).join('')}
-      </div>`;
     const secLogo = `
       <div class="agent-hint" style="margin-top:0;">El logo va arriba de todo en los presupuestos que le entregás al cliente. Elegí una imagen (PNG o JPG); se guarda en este equipo junto con el resto de la configuración.</div>
       ${tallerConfig.logo ? `<div style="margin:10px 0;"><img src="${tallerConfig.logo}" alt="Logo del taller" style="max-height:70px; max-width:200px; border:1px solid var(--line); border-radius:8px; padding:6px; background:#fff;"></div>` : ''}
@@ -6066,7 +6044,6 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       ${configSeccionCard('mensajes', 'Mensajes de WhatsApp', secMensajes)}
       ${configSeccionCard('logo', 'Logo del taller', secLogo)}
       ${configSeccionCard('listas', 'Listas de precios (para los presupuestos)', secListas)}
-      ${configSeccionCard('precios', 'Precios de trámites', secPrecios)}
       ${configSeccionCard('impresion', 'Impresión sobre la planilla', secImpresion)}
       ${configSeccionCard('licencia', 'Licencia del equipo', secLicencia)}
       ${configSeccionCard('sugerencias', 'Sugerencias para mejorar Estelita', secSugerencias)}
@@ -6100,15 +6077,6 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     setNum('tc-aviso-anticipacion', 'avisoAnticipacionMeses');
     setNum('tc-ajuste-x', 'impresionAjusteX');
     setNum('tc-ajuste-y', 'impresionAjusteY');
-    if (el('tc-precio-' + TRAMITE_TIPOS[0].value)) {
-      tallerConfig.precios = tallerConfig.precios || {};
-      TRAMITE_TIPOS.forEach(t => {
-        const e = el('tc-precio-' + t.value);
-        if (!e) return;
-        const v = Number(e.value);
-        if (v > 0) tallerConfig.precios[t.value] = v; else delete tallerConfig.precios[t.value];
-      });
-    }
     // Listas de precios. El ajuste general y la mano de obra de cada servicio;
     // los precios propios de ítems sueltos se guardan solos al tipearlos.
     if (el('tc-aj-gnc')) {
@@ -9209,7 +9177,6 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       const nombreEl = root.querySelector('#tc-nombre');
       if (nombreEl) { tallerNombre = nombreEl.value.trim() || 'Mi Taller GNC'; await saveTaller(); }
       const mensajes = tallerConfig.mensajes || {};
-      const precios = tallerConfig.precios || {};
       const pecs = (tallerConfig.pecs || []).map(p => ({
         codigoPec: (p.codigoPec || '').trim(), razonSocial: (p.razonSocial || '').trim(),
         direccion: (p.direccion || '').trim(), telefono: (p.telefono || '').trim(),
@@ -9235,7 +9202,6 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         impresionAjusteX: Number(tallerConfig.impresionAjusteX) || 0,
         impresionAjusteY: Number(tallerConfig.impresionAjusteY) || 0,
         mensajes,
-        precios,
         // Campos planos = espejo del primer PEC, por compatibilidad con
         // datos y funciones anteriores a la lista de PECs.
         codigoPec: p0.codigoPec, pecRazonSocial: p0.razonSocial, pecDireccion: p0.direccion,
@@ -9663,16 +9629,6 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         await reactivarCliente(c);
         render();
       });
-    });
-
-    // "Cargar/editar precios" desde Estadísticas: abre Mi taller en la
-    // sección de precios.
-    const btnIrPrecios = root.querySelector('[data-ir-precios]');
-    if (btnIrPrecios) btnIrPrecios.addEventListener('click', () => {
-      cerrarPanelesConsulta();
-      showTallerConfig = true;
-      tallerConfigSeccion = 'precios';
-      render();
     });
 
     // --- Copia de seguridad en la nube ---
