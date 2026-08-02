@@ -4350,6 +4350,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
               <div class="hist-estado ${tramite.estadoPec === 'enviado' ? '' : 'pend'}">${ESTADO_PEC_LABELS[tramite.estadoPec]}</div>
             </div>
             ${tramite.estadoPec !== 'enviado' ? `<button type="button" class="btn btn-ghost btn-sm" data-editar-tramite-cliente="${cliente.id}" data-editar-tramite-id="${tramite.id}">Editar</button>` : ''}
+            ${tramite.estadoPec === 'enviado' ? `<label class="oblea-check" title="Marcá cuando la oblea volvió del PEC y está lista para retirar"><input type="checkbox" data-oblea-lista="${cliente.id}" data-oblea-tramite="${tramite.id}" ${tramite.obleaLista ? 'checked' : ''}> Oblea lista</label>` : ''}
             ${tramite.estadoPec === 'enviado' && cliente.telefono ? (
               tramite.avisoObleaEnviado
                 ? `<a class="btn btn-wa btn-sm" target="_blank" rel="noopener" href="${waLinkGeneral(cliente)}" title="Aviso de oblea ya enviado — contactar por WhatsApp">WhatsApp</a>`
@@ -10971,6 +10972,13 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         if (!t || t.avisoObleaEnviado) return;
         abrirWhatsappUrl(waLinkObleaLista(c));
         t.avisoObleaEnviado = true;
+        // Avisarle al cliente que llegó la oblea IMPLICA que llegó: si no se
+        // marcaba acá, el asistente de WhatsApp seguía contestándole que
+        // todavía no estaba lista justo después de que vos le dijiste que sí.
+        if (!t.obleaLista) {
+          t.obleaLista = true;
+          t.obleaListaEn = new Date().toISOString();
+        }
         await saveClientes();
         render();
       });
