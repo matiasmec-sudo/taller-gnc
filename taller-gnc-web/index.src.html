@@ -3607,7 +3607,10 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     { value: 'otro_taller', label: 'Renovó en otro taller', destino: 'recuperar', ayuda: 'Al año vuelve a necesitar oblea: queda en "Para recuperar".' },
     { value: 'vendio', label: 'Vendió el vehículo', destino: 'inactivo', ayuda: 'Sale de las listas. Queda guardado por las dudas.' },
     { value: 'sin_gnc', label: 'No usa más el GNC', destino: 'inactivo', ayuda: 'Equipo sacado, auto parado o roto.' },
-    { value: 'no_contesta', label: 'No contesta / no sé', destino: 'inactivo', ayuda: 'Sale de las listas; lo podés reactivar cuando quieras.' },
+    // Los dos primeros van a "Para recuperar" porque el auto SIGUE teniendo
+    // GNC: el año que viene le toca oblea igual, con nosotros o sin nosotros.
+    // Los otros dos van a inactivos: ese auto ya no vuelve.
+    { value: 'no_contesta', label: 'No contesta / no sé', destino: 'recuperar', ayuda: 'Al año le toca la oblea igual: queda en "Para recuperar".' },
   ];
   function motivoCierre(v) { return MOTIVOS_CIERRE.find(m => m.value === v) || null; }
   function motivoCierreLabel(v) { const m = motivoCierre(v); return m ? m.label : (v || ''); }
@@ -3870,7 +3873,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       return `<div class="doc-row">
         <div class="hist-tocable" data-ver-cliente="${c.id}" title="Ver la ficha del cliente">
           <div class="doc-label">${escapeHtml(nombreFicha(c))} · ${escapeHtml(c.patente || 's/d')}</div>
-          <div class="doc-sub">Se fue en ${nombreMes(c.estadoVencRef || '')}${it.objetivo ? ' · le toca en ' + nombreMes(it.objetivo) : ''}${intentos ? ' · ' + intentos + (intentos === 1 ? ' intento' : ' intentos') : ''}</div>
+          <div class="doc-sub">${escapeHtml(motivoCierreLabel(c.estadoMotivo))} · se fue en ${nombreMes(c.estadoVencRef || '')}${it.objetivo ? ' · le toca en ' + nombreMes(it.objetivo) : ''}${intentos ? ' · ' + intentos + (intentos === 1 ? ' intento' : ' intentos') : ''}</div>
         </div>
         ${cleanPhone(c.telefono)
           ? `<a class="btn btn-wa btn-sm" target="_blank" rel="noopener" data-intento-recuperar="${c.id}" href="${waLinkRecuperar(c)}">Ofrecerle</a>`
@@ -3885,7 +3888,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
 
       <h3 style="margin-top:14px;">Les toca este mes (${r.ahora.length})</h3>
       ${r.ahora.length
-        ? `<p class="scan-sub">Se fueron a otro taller y ahora les vuelve a tocar la oblea. Es el momento de ofrecerles algo.</p><div class="docs">${r.ahora.map(filaRec).join('')}</div>`
+        ? `<p class="scan-sub">El año pasado no vinieron —se fueron a otro taller o nunca contestaron— y ahora les vuelve a tocar la oblea. Es el momento de ofrecerles algo.</p><div class="docs">${r.ahora.map(filaRec).join('')}</div>`
         : '<p class="scan-sub">Ninguno por ahora.</p>'}
 
       ${r.despues.length ? `<h3>Más adelante (${r.despues.length})</h3>
@@ -4121,8 +4124,8 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     const v = vencimientosPorAuto();
     const pend = pendientesItems();
     const vencCount = v.primerAviso.length + v.segundoAviso.length + v.mesQueViene.length;
-    const seccionVenc = (titulo, arr) => arr.length
-      ? `<h4 class="hoy-sub">${titulo} (${arr.length})</h4><div class="docs">${arr.map(vencItemHtml).join('')}</div>`
+    const seccionVenc = (titulo, arr, ayuda) => arr.length
+      ? `<h4 class="hoy-sub">${titulo} (${arr.length})</h4>${ayuda ? `<p class="scan-sub" style="margin-top:-4px;">${ayuda}</p>` : ''}<div class="docs">${arr.map(vencItemHtml).join('')}</div>`
       : '';
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="hoy-panel">
       ${panelVolver()}
@@ -4145,7 +4148,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
 
       ${hoySeccion('vencimientos', 'Vencimientos para avisar', vencCount,
         (v.primerAviso.length || v.segundoAviso.length || v.mesQueViene.length)
-          ? `${seccionVenc('Primer aviso', v.primerAviso)}${seccionVenc('Segundo aviso', v.segundoAviso)}${seccionVenc(`Vencen el mes que viene — ${nombreMes(ymMasMeses(currentYM(), 1))}`, v.mesQueViene)}`
+          ? `${seccionVenc('Primer aviso', v.primerAviso)}${seccionVenc('Segundo aviso', v.segundoAviso, 'Cuando les avises de nuevo salen de acá y pasan solos a <b>Recuperar</b>, para buscarlos el año que viene. Si aparecen y les cargás un trámite, vuelven solos.')}${seccionVenc(`Vencen el mes que viene — ${nombreMes(ymMasMeses(currentYM(), 1))}`, v.mesQueViene)}`
           : '')}
 
       ${hoySeccion('cerrar', 'Cerrá estos casos', v.paraCerrar.length, v.paraCerrar.length ? `
@@ -10274,8 +10277,18 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         const ym = a.getAttribute('data-aviso-ym');
         if (!c || !ym) return;
         if (!c.avisoVenc || typeof c.avisoVenc !== 'object') c.avisoVenc = {};
+        // Si ya había un aviso para ese vencimiento, este es el SEGUNDO: se
+        // avisó dos veces y no vino. Sale solo del circuito de avisos y queda
+        // en "Para recuperar", que es donde vuelve a aparecer el año que viene
+        // cuando le toque la oblea de nuevo. Si aparece antes y le cargás un
+        // trámite, se reactiva solo.
+        const eraSegundoAviso = !!c.avisoVenc[ym];
         c.avisoVenc[ym] = fechaLocalISO();
-        await saveClientes();
+        if (eraSegundoAviso && !fueraDeCirculacion(c)) {
+          await cerrarCasoCliente(c, 'no_contesta', ym);
+        } else {
+          await saveClientes();
+        }
         render();
       });
     });
