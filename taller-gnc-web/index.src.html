@@ -771,6 +771,18 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 #gnc-app .reg-filtros { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 6px; }
 #gnc-app .reg-filtros label { display: block; font-size: 12px; }
 
+/* Precios finales de servicios: un renglón por servicio. */
+#gnc-app .serv-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+#gnc-app .serv-fila { display: flex; align-items: center; gap: 8px; }
+#gnc-app .serv-nombre-fijo { flex: 1; font-size: 13.5px; font-weight: 600; min-width: 0; }
+#gnc-app .serv-nombre { flex: 1; min-width: 0; }
+#gnc-app .serv-precio { width: 120px; flex: 0 0 auto; text-align: right; }
+#gnc-app .serv-calc { font-family: var(--mono); font-size: 10px; color: var(--text-muted); width: 62px; text-align: center; flex: 0 0 auto; }
+@media (max-width: 560px) {
+  #gnc-app .serv-fila { flex-wrap: wrap; }
+  #gnc-app .serv-nombre-fijo, #gnc-app .serv-nombre { flex: 1 0 100%; }
+}
+
 #gnc-app .hidden { display: none !important; }
 #gnc-app .loading {
   text-align: center; padding: 40px; color: var(--text-muted); font-family: var(--mono); font-size: 12px;
@@ -1035,6 +1047,12 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
     // sola al cargar un equipo completo de GNC.
     presuUltimoNumero: 0,
     presuInstalacion: 450000,
+    // Precio FINAL de cada servicio, el que se le cobra al cliente:
+    // { oblea: 60000, ph1: 220000, ... }. Sólo están los que el taller tocó;
+    // el resto se muestra calculado con la receta. Y serviciosPropios son los
+    // renglones que agregó el taller: [{ nombre, precio }].
+    serviciosFinales: {},
+    serviciosPropios: [],
     // Precios propios del taller para el catálogo de presupuestos:
     // { ajusteGnc: %, ajusteMec: %, items: { 'nombre del ítem': precio } }.
     // Si un ítem no está acá, se usa el de lista ajustado por el %.
@@ -2500,6 +2518,74 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     (srv.c || []).forEach(x => meter(x, 'equipo'));
     (srv.t || []).forEach(x => meter(x, 'tramite'));
     p.mo = (Number(p.mo) || 0) + mo;
+  }
+
+  // ===== PRECIOS FINALES DE LOS SERVICIOS =====
+  // Lo que el taller le COBRA al cliente por cada servicio, en un solo número.
+  //
+  // Antes el precio salía de una receta: mano de obra + cada componente + los
+  // trámites. Eso obligaba a mantener doscientos costos para llegar a un número
+  // que el taller ya sabe de memoria, y que además el cliente nunca ve
+  // desglosado (en GNC el presupuesto sale sin precio por renglón). Ahora el
+  // taller escribe el precio final y listo.
+  //
+  // La receta NO se borra: sigue existiendo y sirve para calcular el precio de
+  // arranque de cada renglón, así el taller abre la pantalla y ya están sus
+  // números en vez de una lista vacía.
+  const SERVICIOS_ESTANDAR = [
+    { id: 'oblea', nombre: 'Renovación de oblea', srv: 'Renovación de oblea' },
+    { id: 'ph1', nombre: 'Prueba hidráulica — 1 cilindro', srv: 'Prueba hidráulica', cil: 1 },
+    { id: 'ph2', nombre: 'Prueba hidráulica — 2 cilindros', srv: 'Prueba hidráulica', cil: 2 },
+    { id: 'ph2bc', nombre: 'Prueba hidráulica — 2 cilindros bajo chasis', srv: 'Prueba hidráulica', cil: 2, bajoChasis: true },
+    { id: 'reg5', nombre: 'Cambio de regulador 5ta', srv: 'Reemplazo de regulador 5ta' },
+    { id: 'reg4', nombre: 'Cambio de regulador 3ra/4ta', srv: 'Reemplazo de regulador 3ra/4ta (Gascom)' },
+    { id: 'conmu', nombre: 'Cambio de llave conmutadora', srv: 'Reemplazo de llave conmutadora' },
+    { id: 'canio', nombre: 'Cambio de caño de alta', srv: 'Reemplazo de caño de alta' },
+    { id: 'mang', nombre: 'Kit de mangueras 5ta', srv: 'Reemplazo de kit de mangueras 5ta' },
+    { id: 'diag', nombre: 'Diagnóstico computarizado', srv: 'Diagnóstico computarizado 5ta' },
+    { id: 'regul4', nombre: 'Regulación 4ta generación', srv: 'Regulaciones 4ta generación' },
+    { id: 'valcar', nombre: 'Cambio de válvula de carga interna', srv: 'Reemplazo de válvula de carga interna' },
+    { id: 'picocar', nombre: 'Cambio de pico de carga interna', srv: 'Reemplazo de pico de carga interna' },
+    { id: 'oringext', nombre: 'Cambio de o-ring de carga externa', srv: 'Reemplazo de o-ring carga externa' },
+  ];
+
+  /** Precio que hoy calcularía la receta para un servicio, para precargarlo. */
+  function precioCalculadoServicio(def) {
+    const srv = PRESU_SERVICIOS.find(s => s.n === def.srv);
+    if (!srv) return 0;
+    const sumaComp = nombres => (nombres || []).reduce((t, n) => {
+      const c = presuComp(n);
+      return t + (c ? presuPrecioComp(c) : 0);
+    }, 0);
+    let total = 0;
+    if (srv.porCil) {
+      const n = Math.max(1, Number(def.cil) || 1);
+      total += presuMo(srv, 'base') + n * presuMo(srv, 'cil');
+      total += n * (sumaComp(srv.cCil) + sumaComp(srv.tCil));
+      if (def.bajoChasis && srv.bajoChasis) total += presuMo(srv, 'bajoChasis');
+    } else {
+      total += presuMo(srv);
+    }
+    total += sumaComp(srv.c) + sumaComp(srv.t);
+    return Math.round(total);
+  }
+
+  /** La lista que ve el taller: los estándar más los que agregó él. */
+  function serviciosPrecios() {
+    const guardados = (tallerConfig.serviciosFinales && typeof tallerConfig.serviciosFinales === 'object')
+      ? tallerConfig.serviciosFinales : {};
+    const estandar = SERVICIOS_ESTANDAR.map(d => ({
+      id: d.id,
+      nombre: d.nombre,
+      // Si el taller nunca lo tocó, se muestra lo que da la receta.
+      precio: guardados[d.id] != null ? Number(guardados[d.id]) : precioCalculadoServicio(d),
+      propio: false,
+      cargado: guardados[d.id] != null,
+    }));
+    const propios = (tallerConfig.serviciosPropios || []).map((s, i) => ({
+      id: 'propio-' + i, nombre: s.nombre || '', precio: Number(s.precio) || 0, propio: true, cargado: true,
+    }));
+    return [...estandar, ...propios];
   }
 
   // Como el render reconstruye todo el DOM, hay que rescatar lo tipeado ANTES
@@ -5985,6 +6071,27 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     // de GNC (que es la ganancia del taller) y, si hace falta, el ítem suelto.
     const lp = t.listaPrecios || {};
     const nPropios = Object.keys(lp.items || {}).length;
+    // Precios finales: un renglón por servicio, sin sumas ni recetas. Es lo que
+    // ve el cliente y lo que va a contestar el asistente de WhatsApp.
+    const filasServicios = serviciosPrecios();
+    const secServicios = `
+      <div class="agent-hint" style="margin-top:0;">El precio que le cobrás al cliente por cada servicio, en un solo número. Los que ves ahora salen calculados de tu lista de precios; tocá el que quieras y queda fijo ese. Es lo que también va a contestar el asistente de WhatsApp, así que conviene tenerlo al día.</div>
+      <div class="serv-lista">
+        ${filasServicios.map(f => `
+          <div class="serv-fila">
+            ${f.propio
+              ? `<input type="text" class="serv-nombre" data-serv-nombre="${f.id}" value="${escapeHtml(f.nombre)}" placeholder="Nombre del servicio">`
+              : `<span class="serv-nombre-fijo">${escapeHtml(f.nombre)}</span>`}
+            <input type="number" min="0" step="1000" class="serv-precio" data-serv-precio="${f.id}" value="${f.precio || ''}" placeholder="$" inputmode="numeric">
+            ${f.propio
+              ? `<button type="button" class="btn btn-trash btn-sm" data-serv-borrar="${f.id}" title="Quitar este servicio">${trashSvg()}</button>`
+              : (f.cargado ? `<button type="button" class="btn btn-ghost btn-sm" data-serv-reset="${f.id}" title="Volver al precio calculado">↺</button>` : '<span class="serv-calc">calculado</span>')}
+          </div>`).join('')}
+      </div>
+      <div class="form-actions" style="margin-top:10px;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-serv-agregar">+ Agregar un servicio propio</button>
+      </div>`;
+
     const secListas = `
       <div class="agent-hint" style="margin-top:0;">Estelita ya viene cargada con la lista de componentes y equipos de PecMar y con los precios sugeridos de mano de obra de la Cámara (ATAIA), así podés presupuestar desde el primer día. Acá los llevás a los tuyos.</div>
 
@@ -6048,6 +6155,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       ${configSeccionCard('tecnico', 'App del técnico', secTecnico)}
       ${configSeccionCard('mensajes', 'Mensajes de WhatsApp', secMensajes)}
       ${configSeccionCard('logo', 'Logo del taller', secLogo)}
+      ${configSeccionCard('servicios', 'Precios de servicios (los que le decís al cliente)', secServicios)}
       ${configSeccionCard('listas', 'Listas de precios (para los presupuestos)', secListas)}
       ${configSeccionCard('impresion', 'Impresión sobre la planilla', secImpresion)}
       ${configSeccionCard('licencia', 'Licencia del equipo', secLicencia)}
@@ -6076,6 +6184,33 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     setStr('tc-tecnico-nombre', 'tecnicoNombre');
     setStr('tc-tecnico-matricula', 'tecnicoMatricula');
     setStr('tc-codigo-taller', 'codigoTaller');
+    // Precios finales de servicios. Sólo se guarda lo que el taller escribió:
+    // si borra el número, el renglón vuelve a mostrarse calculado.
+    if (root.querySelector('[data-serv-precio]')) {
+      tallerConfig.serviciosFinales = tallerConfig.serviciosFinales || {};
+      const propios = [];
+      root.querySelectorAll('[data-serv-precio]').forEach(inp => {
+        const id = inp.getAttribute('data-serv-precio');
+        const valor = inp.value.trim() === '' ? null : Number(inp.value);
+        if (id.startsWith('propio-')) {
+          const nomEl = root.querySelector(`[data-serv-nombre="${id}"]`);
+          propios.push({ nombre: nomEl ? nomEl.value.trim() : '', precio: valor || 0 });
+        } else {
+          // Sólo queda fijo el precio que el taller REALMENTE cambió: si es el
+          // mismo que calcula la lista, el renglón sigue siendo "calculado".
+          // Si no, con sólo abrir y guardar Mi taller se congelarían los catorce
+          // sin que nadie lo pida.
+          const def = SERVICIOS_ESTANDAR.find(d => d.id === id);
+          const calculado = def ? precioCalculadoServicio(def) : null;
+          if (valor != null && valor > 0 && valor !== calculado) {
+            tallerConfig.serviciosFinales[id] = valor;
+          } else {
+            delete tallerConfig.serviciosFinales[id];
+          }
+        }
+      });
+      tallerConfig.serviciosPropios = propios.filter(p => p.nombre);
+    }
     setStr('tc-razon-social-anterior', 'razonSocialAnterior');
     setStr('tc-codigo-taller-anterior', 'codigoTallerAnterior');
     setStr('tc-centros-reprueba', 'centrosReprueba');
@@ -9552,6 +9687,31 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     if (btnCrm) btnCrm.addEventListener('click', () => {
       menuOpen = false;
       setTimeout(render, 0);
+    });
+
+    // --- Precios finales de servicios ---
+    const btnServAgregar = root.querySelector('#btn-serv-agregar');
+    if (btnServAgregar) btnServAgregar.addEventListener('click', () => {
+      syncTallerConfigFromDOM();
+      tallerConfig.serviciosPropios = [...(tallerConfig.serviciosPropios || []), { nombre: '', precio: 0 }];
+      render();
+    });
+    root.querySelectorAll('[data-serv-borrar]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.getAttribute('data-serv-borrar').replace('propio-', ''));
+        syncTallerConfigFromDOM();
+        tallerConfig.serviciosPropios = (tallerConfig.serviciosPropios || []).filter((_, k) => k !== i);
+        render();
+      });
+    });
+    // "↺" devuelve el renglón al precio que calcula la lista de precios.
+    root.querySelectorAll('[data-serv-reset]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-serv-reset');
+        syncTallerConfigFromDOM();
+        if (tallerConfig.serviciosFinales) delete tallerConfig.serviciosFinales[id];
+        render();
+      });
     });
 
     const btnRegistro = root.querySelector('#btn-registro');
