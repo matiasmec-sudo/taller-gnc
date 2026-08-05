@@ -1053,6 +1053,8 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
     // renglones que agregó el taller: [{ nombre, precio }].
     serviciosFinales: {},
     serviciosPropios: [],
+    // Renombres del taller sobre los renglones estándar: { oblea: 'Oblea' }.
+    serviciosNombres: {},
     // Precios propios del taller para el catálogo de presupuestos:
     // { ajusteGnc: %, ajusteMec: %, items: { 'nombre del ítem': precio } }.
     // Si un ítem no está acá, se usa el de lista ajustado por el %.
@@ -2574,9 +2576,13 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   function serviciosPrecios() {
     const guardados = (tallerConfig.serviciosFinales && typeof tallerConfig.serviciosFinales === 'object')
       ? tallerConfig.serviciosFinales : {};
+    const nombres = tallerConfig.serviciosNombres || {};
     const estandar = SERVICIOS_ESTANDAR.map(d => ({
       id: d.id,
-      nombre: d.nombre,
+      // El taller puede renombrar cualquier renglón: no todos le dicen igual a
+      // lo mismo ("cambio de reductor" vs "cambio de regulador").
+      nombre: nombres[d.id] || d.nombre,
+      nombreBase: d.nombre,
       // Si el taller nunca lo tocó, se muestra lo que da la receta.
       precio: guardados[d.id] != null ? Number(guardados[d.id]) : precioCalculadoServicio(d),
       propio: false,
@@ -6079,9 +6085,8 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       <div class="serv-lista">
         ${filasServicios.map(f => `
           <div class="serv-fila">
-            ${f.propio
-              ? `<input type="text" class="serv-nombre" data-serv-nombre="${f.id}" value="${escapeHtml(f.nombre)}" placeholder="Nombre del servicio">`
-              : `<span class="serv-nombre-fijo">${escapeHtml(f.nombre)}</span>`}
+            <input type="text" class="serv-nombre" data-serv-nombre="${f.id}" value="${escapeHtml(f.nombre)}" placeholder="Nombre del servicio">
+            ${f.propio ? '' : `<input type="hidden" data-serv-base="${f.id}" value="${escapeHtml(f.nombreBase || '')}">`}
             <input type="number" min="0" step="1000" class="serv-precio" data-serv-precio="${f.id}" value="${f.precio || ''}" placeholder="$" inputmode="numeric">
             ${f.propio
               ? `<button type="button" class="btn btn-trash btn-sm" data-serv-borrar="${f.id}" title="Quitar este servicio">${trashSvg()}</button>`
@@ -6091,6 +6096,41 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       <div class="form-actions" style="margin-top:10px;">
         <button type="button" class="btn btn-ghost btn-sm" id="btn-serv-agregar">+ Agregar un servicio propio</button>
       </div>`;
+
+    // Equipos completos: la matriz que manda el proveedor (cilindro × sistema),
+    // con el precio ya armado. El taller sólo pisa lo que quiera y le suma su
+    // mano de obra. Se muestra un cilindro por vez: son 40 × 6 = 240 precios y
+    // en pantalla juntos no se entienden.
+    const eqCils = (PRESU_EQUIPOS.cil || []);
+    const eqIdx = Math.min(Math.max(0, Number(tallerConfig._eqVista) || 0), Math.max(0, eqCils.length - 1));
+    const eqCil = eqCils[eqIdx];
+    const eqPropios = (tallerConfig.listaPrecios && tallerConfig.listaPrecios.items) || {};
+    const eqAjuste = Number((tallerConfig.listaPrecios || {}).ajusteGnc) || 0;
+    const secEquipos = `
+      <div class="agent-hint" style="margin-top:0;">El precio del equipo completo, con el cilindro incluido, tal como lo manda el proveedor. Elegí la medida del cilindro y vas a ver el precio de cada sistema. Es lo que cuesta el material: tu trabajo va abajo, en la mano de obra.</div>
+      <label>Medida del cilindro
+        <select id="eq-cil">
+          ${eqCils.map((c, i) => `<option value="${i}" ${i === eqIdx ? 'selected' : ''}>${escapeHtml(c.n)}</option>`).join('')}
+        </select>
+      </label>
+      ${eqCil ? `<div class="serv-lista" style="margin-top:10px;">
+        ${Object.keys(eqCil.p).filter(s => eqCil.p[s] != null).map(s => {
+          const clave = `Equipo ${eqCil.n} — ${s}`;
+          const propio = eqPropios[clave];
+          const base = Math.round(eqCil.p[s] * (1 + eqAjuste / 100));
+          return `<div class="serv-fila">
+            <span class="serv-nombre-fijo">${escapeHtml(s)}</span>
+            <input type="number" min="0" step="1000" class="serv-precio" data-eq-precio="${escapeHtml(clave)}" value="${propio != null ? Number(propio) : base}" inputmode="numeric">
+            ${propio != null
+              ? `<button type="button" class="btn btn-ghost btn-sm" data-eq-reset="${escapeHtml(clave)}" title="Volver al precio de lista">↺</button>`
+              : '<span class="serv-calc">de lista</span>'}
+          </div>`;
+        }).join('')}
+      </div>` : '<p class="scan-sub">No hay cilindros cargados.</p>'}
+      <label style="margin-top:12px;">Mano de obra de instalación
+        <input type="number" min="0" step="1000" id="tc-presu-instalacion" value="${escapeHtml(String(tallerConfig.presuInstalacion || 0))}" inputmode="numeric">
+        <span class="hint">Tu trabajo, aparte del equipo. Se suma sola cuando cargás un equipo completo en un presupuesto.</span>
+      </label>`;
 
     const secListas = `
       <div class="agent-hint" style="margin-top:0;">Estelita ya viene cargada con la lista de componentes y equipos de PecMar y con los precios sugeridos de mano de obra de la Cámara (ATAIA), así podés presupuestar desde el primer día. Acá los llevás a los tuyos.</div>
@@ -6156,6 +6196,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       ${configSeccionCard('mensajes', 'Mensajes de WhatsApp', secMensajes)}
       ${configSeccionCard('logo', 'Logo del taller', secLogo)}
       ${configSeccionCard('servicios', 'Precios de servicios (los que le decís al cliente)', secServicios)}
+      ${configSeccionCard('equipos', 'Precios de equipos completos (instalación)', secEquipos)}
       ${configSeccionCard('listas', 'Listas de precios (para los presupuestos)', secListas)}
       ${configSeccionCard('impresion', 'Impresión sobre la planilla', secImpresion)}
       ${configSeccionCard('licencia', 'Licencia del equipo', secLicencia)}
@@ -6184,10 +6225,29 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     setStr('tc-tecnico-nombre', 'tecnicoNombre');
     setStr('tc-tecnico-matricula', 'tecnicoMatricula');
     setStr('tc-codigo-taller', 'codigoTaller');
+    // Precios de equipos completos: igual que los servicios, sólo queda guardado
+    // lo que el taller pisó; si coincide con el de lista, sigue el de lista.
+    if (root.querySelector('[data-eq-precio]')) {
+      tallerConfig.listaPrecios = tallerConfig.listaPrecios || { ajusteGnc: 0, ajusteMec: 0, items: {} };
+      tallerConfig.listaPrecios.items = tallerConfig.listaPrecios.items || {};
+      const aj = Number(tallerConfig.listaPrecios.ajusteGnc) || 0;
+      root.querySelectorAll('[data-eq-precio]').forEach(inp => {
+        const clave = inp.getAttribute('data-eq-precio');
+        const valor = inp.value.trim() === '' ? null : Number(inp.value);
+        const m = clave.match(/^Equipo (.+) — (.+)$/);
+        const cil = m ? (PRESU_EQUIPOS.cil || []).find(c => c.n === m[1]) : null;
+        const base = cil && m ? Math.round(cil.p[m[2]] * (1 + aj / 100)) : null;
+        if (valor != null && valor > 0 && valor !== base) tallerConfig.listaPrecios.items[clave] = valor;
+        else delete tallerConfig.listaPrecios.items[clave];
+      });
+    }
+    setNum('tc-presu-instalacion', 'presuInstalacion');
+
     // Precios finales de servicios. Sólo se guarda lo que el taller escribió:
     // si borra el número, el renglón vuelve a mostrarse calculado.
     if (root.querySelector('[data-serv-precio]')) {
       tallerConfig.serviciosFinales = tallerConfig.serviciosFinales || {};
+      tallerConfig.serviciosNombres = tallerConfig.serviciosNombres || {};
       const propios = [];
       root.querySelectorAll('[data-serv-precio]').forEach(inp => {
         const id = inp.getAttribute('data-serv-precio');
@@ -6196,6 +6256,13 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
           const nomEl = root.querySelector(`[data-serv-nombre="${id}"]`);
           propios.push({ nombre: nomEl ? nomEl.value.trim() : '', precio: valor || 0 });
         } else {
+          // El nombre sólo se guarda si lo cambió: si es el de fábrica, no se
+          // congela (así una mejora futura del texto llega a quien no lo tocó).
+          const nomEl = root.querySelector(`[data-serv-nombre="${id}"]`);
+          const baseEl = root.querySelector(`[data-serv-base="${id}"]`);
+          const nom = nomEl ? nomEl.value.trim() : '';
+          if (nom && baseEl && nom !== baseEl.value) tallerConfig.serviciosNombres[id] = nom;
+          else delete tallerConfig.serviciosNombres[id];
           // Sólo queda fijo el precio que el taller REALMENTE cambió: si es el
           // mismo que calcula la lista, el renglón sigue siendo "calculado".
           // Si no, con sólo abrir y guardar Mi taller se congelarían los catorce
@@ -9687,6 +9754,24 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     if (btnCrm) btnCrm.addEventListener('click', () => {
       menuOpen = false;
       setTimeout(render, 0);
+    });
+
+    // --- Precios de equipos completos ---
+    const selEqCil = root.querySelector('#eq-cil');
+    if (selEqCil) selEqCil.addEventListener('change', () => {
+      syncTallerConfigFromDOM();
+      tallerConfig._eqVista = Number(selEqCil.value) || 0;
+      render();
+    });
+    root.querySelectorAll('[data-eq-reset]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const clave = btn.getAttribute('data-eq-reset');
+        syncTallerConfigFromDOM();
+        if (tallerConfig.listaPrecios && tallerConfig.listaPrecios.items) {
+          delete tallerConfig.listaPrecios.items[clave];
+        }
+        render();
+      });
     });
 
     // --- Precios finales de servicios ---
