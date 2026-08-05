@@ -772,6 +772,11 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 #gnc-app .reg-filtros label { display: block; font-size: 12px; }
 
 /* Precios finales de servicios: un renglón por servicio. */
+#gnc-app .serv-switch {
+  display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 700;
+  padding: 10px 12px; background: var(--surface-alt); border-radius: 10px; margin-bottom: 10px; cursor: pointer;
+}
+#gnc-app .serv-switch input { width: 18px; height: 18px; accent-color: var(--ok); cursor: pointer; flex: 0 0 auto; }
 #gnc-app .serv-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 #gnc-app .serv-fila { display: flex; align-items: center; gap: 8px; }
 #gnc-app .serv-nombre-fijo { flex: 1; font-size: 13.5px; font-weight: 600; min-width: 0; }
@@ -1055,6 +1060,18 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
     serviciosPropios: [],
     // Renombres del taller sobre los renglones estándar: { oblea: 'Oblea' }.
     serviciosNombres: {},
+    // Qué presta el taller. NO es una preferencia de la app: es lo que el
+    // asistente de WhatsApp le va a contestar al cliente. Apagado = "no lo
+    // hacemos"; prendido sin precio = "lo hacemos, se confirma en el taller".
+    haceTramitesGnc: true,
+    haceInstalaciones: true,
+    haceMecanica: true,
+    // La grilla de equipos la define CADA taller: los sistemas se llaman
+    // distinto según el proveedor, así que no se puede traer una lista hecha.
+    // Las medidas sí arrancan con las habituales, que son de norma.
+    equipoSistemas: ['5ta generación', '4ta generación'],
+    equipoMedidas: ['30 L', '40 L', '45 L', '60 L', '65 L', '80 L'],
+    equipoPrecios: {},
     // Precios propios del taller para el catálogo de presupuestos:
     // { ajusteGnc: %, ajusteMec: %, items: { 'nombre del ítem': precio } }.
     // Si un ítem no está acá, se usa el de lista ajustado por el %.
@@ -6081,7 +6098,8 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     // ve el cliente y lo que va a contestar el asistente de WhatsApp.
     const filasServicios = serviciosPrecios();
     const secServicios = `
-      <div class="agent-hint" style="margin-top:0;">El precio que le cobrás al cliente por cada servicio, en un solo número. Los que ves ahora salen calculados de tu lista de precios; tocá el que quieras y queda fijo ese. Es lo que también va a contestar el asistente de WhatsApp, así que conviene tenerlo al día.</div>
+      <label class="serv-switch"><input type="checkbox" id="tc-hace-tramites" ${tallerConfig.haceTramitesGnc !== false ? 'checked' : ''}> El taller realiza trámites de GNC</label>
+      <div class="agent-hint" style="margin-top:0;">El asistente de WhatsApp responde con estos precios. Un renglón sin precio se responde como “lo hacemos, el precio se confirma en el taller”. Si desactivás la sección, se responde que el taller no presta ese servicio.</div>
       <div class="serv-lista">
         ${filasServicios.map(f => `
           <div class="serv-fila">
@@ -6090,50 +6108,53 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
             <input type="number" min="0" step="1000" class="serv-precio" data-serv-precio="${f.id}" value="${f.precio || ''}" placeholder="$" inputmode="numeric">
             ${f.propio
               ? `<button type="button" class="btn btn-trash btn-sm" data-serv-borrar="${f.id}" title="Quitar este servicio">${trashSvg()}</button>`
-              : (f.cargado ? `<button type="button" class="btn btn-ghost btn-sm" data-serv-reset="${f.id}" title="Volver al precio calculado">↺</button>` : '<span class="serv-calc">calculado</span>')}
+              : (f.cargado
+                ? `<button type="button" class="btn btn-ghost btn-sm" data-serv-reset="${f.id}" title="Volver al precio de lista">↺</button>`
+                : `<span class="serv-calc">${f.precio ? 'Precio de lista' : 'Sin precio publicado'}</span>`)}
           </div>`).join('')}
       </div>
       <div class="form-actions" style="margin-top:10px;">
         <button type="button" class="btn btn-ghost btn-sm" id="btn-serv-agregar">+ Agregar un servicio propio</button>
       </div>`;
 
-    // Equipos completos: la matriz que manda el proveedor (cilindro × sistema),
-    // con el precio ya armado. El taller sólo pisa lo que quiera y le suma su
-    // mano de obra. Se muestra un cilindro por vez: son 40 × 6 = 240 precios y
-    // en pantalla juntos no se entienden.
-    const eqCils = (PRESU_EQUIPOS.cil || []);
-    const eqIdx = Math.min(Math.max(0, Number(tallerConfig._eqVista) || 0), Math.max(0, eqCils.length - 1));
-    const eqCil = eqCils[eqIdx];
-    const eqPropios = (tallerConfig.listaPrecios && tallerConfig.listaPrecios.items) || {};
-    const eqAjuste = Number((tallerConfig.listaPrecios || {}).ajusteGnc) || 0;
+    // Equipos completos. La grilla la define CADA taller: qué sistemas trabaja
+    // (los nombres los pone su proveedor, no hay dos iguales) y con qué medidas
+    // de cilindro. Traerle una lista hecha sería imponerle el proveedor ajeno.
+    const eqSistemas = (tallerConfig.equipoSistemas || []).filter(s => String(s).trim());
+    const eqMedidas = (tallerConfig.equipoMedidas || []).filter(m => String(m).trim());
+    const eqPrecios = tallerConfig.equipoPrecios || {};
+    const eqClave = (medida, sistema) => `${medida}||${sistema}`;
     const secEquipos = `
-      <div class="agent-hint" style="margin-top:0;">El precio del equipo completo, con el cilindro incluido, tal como lo manda el proveedor. Elegí la medida del cilindro y vas a ver el precio de cada sistema. Es lo que cuesta el material: tu trabajo va abajo, en la mano de obra.</div>
-      <label>Medida del cilindro
-        <select id="eq-cil">
-          ${eqCils.map((c, i) => `<option value="${i}" ${i === eqIdx ? 'selected' : ''}>${escapeHtml(c.n)}</option>`).join('')}
-        </select>
-      </label>
-      ${eqCil ? `<div class="serv-lista" style="margin-top:10px;">
-        ${Object.keys(eqCil.p).filter(s => eqCil.p[s] != null).map(s => {
-          const clave = `Equipo ${eqCil.n} — ${s}`;
-          const propio = eqPropios[clave];
-          const base = Math.round(eqCil.p[s] * (1 + eqAjuste / 100));
-          return `<div class="serv-fila">
-            <span class="serv-nombre-fijo">${escapeHtml(s)}</span>
-            <input type="number" min="0" step="1000" class="serv-precio" data-eq-precio="${escapeHtml(clave)}" value="${propio != null ? Number(propio) : base}" inputmode="numeric">
-            ${propio != null
-              ? `<button type="button" class="btn btn-ghost btn-sm" data-eq-reset="${escapeHtml(clave)}" title="Volver al precio de lista">↺</button>`
-              : '<span class="serv-calc">de lista</span>'}
-          </div>`;
-        }).join('')}
-      </div>` : '<p class="scan-sub">No hay cilindros cargados.</p>'}
+      <label class="serv-switch"><input type="checkbox" id="tc-hace-instalaciones" ${tallerConfig.haceInstalaciones !== false ? 'checked' : ''}> El taller realiza instalaciones de GNC</label>
+      <div class="agent-hint" style="margin-top:0;">El asistente de WhatsApp responde con estos precios. Un renglón sin precio se responde como “lo hacemos, el precio se confirma en el taller”. Si desactivás la sección, se responde que el taller no presta ese servicio.</div>
+
+      <div class="lp-h">1. Los sistemas que trabajás</div>
+      <div class="agent-hint" style="margin-top:0;">Poné los nombres como se los decís al cliente. Uno por renglón.</div>
+      <textarea id="tc-eq-sistemas" rows="3" placeholder="5ta generación&#10;4ta generación">${escapeHtml(eqSistemas.join('\n'))}</textarea>
+
+      <div class="lp-h">2. Las medidas de cilindro</div>
+      <textarea id="tc-eq-medidas" rows="3" placeholder="30 L&#10;40 L&#10;60 L">${escapeHtml(eqMedidas.join('\n'))}</textarea>
+
+      <div class="lp-h">3. El precio de cada combinación</div>
+      ${(eqSistemas.length && eqMedidas.length) ? `
+        <div class="agent-hint" style="margin-top:0;">El equipo completo con el cilindro incluido. Tu mano de obra va abajo.</div>
+        <div class="reg-wrap"><table class="reg-tabla">
+          <thead><tr><th>Cilindro</th>${eqSistemas.map(s => `<th>${escapeHtml(s)}</th>`).join('')}</tr></thead>
+          <tbody>${eqMedidas.map(m => `<tr>
+            <td>${escapeHtml(m)}</td>
+            ${eqSistemas.map(s => `<td><input type="number" min="0" step="1000" class="serv-precio" style="width:110px;" data-eqp="${escapeHtml(eqClave(m, s))}" value="${eqPrecios[eqClave(m, s)] || ''}" placeholder="—" inputmode="numeric"></td>`).join('')}
+          </tr>`).join('')}</tbody>
+        </table></div>`
+        : '<p class="scan-sub">Cargá al menos un sistema y una medida para que aparezca la grilla.</p>'}
+
       <label style="margin-top:12px;">Mano de obra de instalación
         <input type="number" min="0" step="1000" id="tc-presu-instalacion" value="${escapeHtml(String(tallerConfig.presuInstalacion || 0))}" inputmode="numeric">
         <span class="hint">Tu trabajo, aparte del equipo. Se suma sola cuando cargás un equipo completo en un presupuesto.</span>
       </label>`;
 
     const secListas = `
-      <div class="agent-hint" style="margin-top:0;">Estelita ya viene cargada con la lista de componentes y equipos de PecMar y con los precios sugeridos de mano de obra de la Cámara (ATAIA), así podés presupuestar desde el primer día. Acá los llevás a los tuyos.</div>
+      <label class="serv-switch"><input type="checkbox" id="tc-hace-mecanica" ${tallerConfig.haceMecanica !== false ? 'checked' : ''}> El taller realiza trabajos de mecánica</label>
+      <div class="agent-hint" style="margin-top:0;">Estos precios se usan para armar presupuestos. El asistente no cotiza mecánica por WhatsApp: responde que el taller lo hace y que el trabajo se presupuesta con el vehículo a la vista. Si desactivás la sección, responde que el taller no hace mecánica.</div>
 
       <div class="lp-h">1. Ajuste general</div>
       <div class="agent-hint" style="margin-top:0;">Si tus precios están parejo por encima (o por debajo) de la lista, con esto solo alcanza. Poné cuánto por ciento, o dejá 0 para usar la lista tal cual.</div>
@@ -6195,9 +6216,9 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       ${configSeccionCard('tecnico', 'App del técnico', secTecnico)}
       ${configSeccionCard('mensajes', 'Mensajes de WhatsApp', secMensajes)}
       ${configSeccionCard('logo', 'Logo del taller', secLogo)}
-      ${configSeccionCard('servicios', 'Lista de precios CRM "Servicios frecuentes"', secServicios)}
-      ${configSeccionCard('equipos', 'Lista de precios CRM "Cilindros y equipos completos"', secEquipos)}
-      ${configSeccionCard('listas', 'Listas de precios (para los presupuestos)', secListas)}
+      ${configSeccionCard('servicios', 'GNC — Servicios frecuentes', secServicios)}
+      ${configSeccionCard('equipos', 'GNC — Cilindros y equipos', secEquipos)}
+      ${configSeccionCard('listas', 'Mecánica — Lista de precios', secListas)}
       ${configSeccionCard('impresion', 'Impresión sobre la planilla', secImpresion)}
       ${configSeccionCard('licencia', 'Licencia del equipo', secLicencia)}
       ${configSeccionCard('sugerencias', 'Sugerencias para mejorar Estelita', secSugerencias)}
@@ -6225,23 +6246,33 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     setStr('tc-tecnico-nombre', 'tecnicoNombre');
     setStr('tc-tecnico-matricula', 'tecnicoMatricula');
     setStr('tc-codigo-taller', 'codigoTaller');
-    // Precios de equipos completos: igual que los servicios, sólo queda guardado
-    // lo que el taller pisó; si coincide con el de lista, sigue el de lista.
-    if (root.querySelector('[data-eq-precio]')) {
-      tallerConfig.listaPrecios = tallerConfig.listaPrecios || { ajusteGnc: 0, ajusteMec: 0, items: {} };
-      tallerConfig.listaPrecios.items = tallerConfig.listaPrecios.items || {};
-      const aj = Number(tallerConfig.listaPrecios.ajusteGnc) || 0;
-      root.querySelectorAll('[data-eq-precio]').forEach(inp => {
-        const clave = inp.getAttribute('data-eq-precio');
+    // Equipos: los sistemas y las medidas los define el taller (una por
+    // renglón), y la grilla se arma con eso.
+    const eqSisEl = el('tc-eq-sistemas');
+    if (eqSisEl) {
+      tallerConfig.equipoSistemas = eqSisEl.value.split('\n').map(s => s.trim()).filter(Boolean);
+    }
+    const eqMedEl = el('tc-eq-medidas');
+    if (eqMedEl) {
+      tallerConfig.equipoMedidas = eqMedEl.value.split('\n').map(s => s.trim()).filter(Boolean);
+    }
+    if (root.querySelector('[data-eqp]')) {
+      tallerConfig.equipoPrecios = tallerConfig.equipoPrecios || {};
+      root.querySelectorAll('[data-eqp]').forEach(inp => {
+        const clave = inp.getAttribute('data-eqp');
         const valor = inp.value.trim() === '' ? null : Number(inp.value);
-        const m = clave.match(/^Equipo (.+) — (.+)$/);
-        const cil = m ? (PRESU_EQUIPOS.cil || []).find(c => c.n === m[1]) : null;
-        const base = cil && m ? Math.round(cil.p[m[2]] * (1 + aj / 100)) : null;
-        if (valor != null && valor > 0 && valor !== base) tallerConfig.listaPrecios.items[clave] = valor;
-        else delete tallerConfig.listaPrecios.items[clave];
+        // Vacío = "lo hacemos, el precio se confirma en el taller".
+        if (valor != null && valor > 0) tallerConfig.equipoPrecios[clave] = valor;
+        else delete tallerConfig.equipoPrecios[clave];
       });
     }
     setNum('tc-presu-instalacion', 'presuInstalacion');
+    // Qué presta el taller: define qué contesta el asistente.
+    [['tc-hace-tramites', 'haceTramitesGnc'], ['tc-hace-instalaciones', 'haceInstalaciones'],
+     ['tc-hace-mecanica', 'haceMecanica']].forEach(([id, campo]) => {
+      const e = el(id);
+      if (e) tallerConfig[campo] = !!e.checked;
+    });
 
     // Precios finales de servicios. Sólo se guarda lo que el taller escribió:
     // si borra el número, el renglón vuelve a mostrarse calculado.
@@ -9756,22 +9787,10 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       setTimeout(render, 0);
     });
 
-    // --- Precios de equipos completos ---
-    const selEqCil = root.querySelector('#eq-cil');
-    if (selEqCil) selEqCil.addEventListener('change', () => {
-      syncTallerConfigFromDOM();
-      tallerConfig._eqVista = Number(selEqCil.value) || 0;
-      render();
-    });
-    root.querySelectorAll('[data-eq-reset]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const clave = btn.getAttribute('data-eq-reset');
-        syncTallerConfigFromDOM();
-        if (tallerConfig.listaPrecios && tallerConfig.listaPrecios.items) {
-          delete tallerConfig.listaPrecios.items[clave];
-        }
-        render();
-      });
+    // Al cambiar los sistemas o las medidas hay que redibujar la grilla.
+    ['tc-eq-sistemas', 'tc-eq-medidas'].forEach(id => {
+      const e = root.querySelector('#' + id);
+      if (e) e.addEventListener('change', () => { syncTallerConfigFromDOM(); render(); });
     });
 
     // --- Precios finales de servicios ---
