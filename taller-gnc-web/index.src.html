@@ -6168,24 +6168,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       </div>
       <div class="agent-hint lp-ej" id="tc-aj-ej">${escapeHtml(ajusteEjemplo(lp.ajusteGnc, lp.ajusteMec))}</div>
 
-      <div class="lp-h">2. Tu mano de obra en GNC</div>
-      <div class="agent-hint" style="margin-top:0;">Lo que cobrás de mano de obra en cada servicio frecuente. Este es el número que te deja la ganancia: los componentes pasan a costo. El precio final del servicio sale solo, sumando los componentes de la lista.</div>
-      ${PRESU_SERVICIOS.map((s, i) => s.porCil ? `
-        <div class="lp-mo-multi">
-          <div class="lp-mo-nom">${escapeHtml(s.n)}</div>
-          <div class="form-grid">
-            <label>Base (fija)<input type="number" min="0" step="1000" id="tc-mo-${i}-base" value="${escapeHtml(String(presuMo(s, 'base')))}"></label>
-            <label>Por cilindro<input type="number" min="0" step="1000" id="tc-mo-${i}-cil" value="${escapeHtml(String(presuMo(s, 'cil')))}"></label>
-            <label>Adicional bajo chasis<input type="number" min="0" step="1000" id="tc-mo-${i}-bajoChasis" value="${escapeHtml(String(presuMo(s, 'bajoChasis')))}"></label>
-          </div>
-          <div class="agent-hint" style="margin-top:2px;">Mano de obra = base + (cilindros × por cilindro). Hoy: 1 cil. ${presuMoney(presuMo(s, 'base') + presuMo(s, 'cil'))} · 2 cil. ${presuMoney(presuMo(s, 'base') + 2 * presuMo(s, 'cil'))} · 3 cil. ${presuMoney(presuMo(s, 'base') + 3 * presuMo(s, 'cil'))}</div>
-        </div>` : `
-        <label class="lp-mo-fila">
-          <span>${escapeHtml(s.n)}</span>
-          <input type="number" min="0" step="1000" id="tc-mo-${i}" value="${escapeHtml(String(presuMo(s)))}">
-        </label>`).join('')}
-
-      <div class="lp-h">3. Un ítem puntual</div>
+      <div class="lp-h">2. Un ítem puntual</div>
       <div class="agent-hint" style="margin-top:0;">Buscá cualquier componente, equipo o trabajo de mecánica y ponele tu precio. Se guarda apenas lo escribís${nPropios ? ` — hoy tenés <b id="tc-lp-n">${nPropios}</b> ${nPropios === 1 ? 'ítem con precio propio' : 'ítems con precio propio'}` : '. <b id="tc-lp-n" hidden>0</b>'}.</div>
       <input type="text" id="tc-lp-busca" placeholder="Ej: reductor SGV, embrague, cilindro 30/244…" autocomplete="off">
       <div id="tc-lp-res" class="presu-res lp-res"></div>
