@@ -1475,11 +1475,48 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       etiquetas: ['nombre', 'patente', 'taller'],
       texto: `Hola {nombre}! Te escribimos de {taller}.`,
     },
+    factura: {
+      label: 'Al enviar una factura',
+      etiquetas: ['nombre', 'total', 'taller'],
+      texto: `¡Hola {nombre}! Te mando la factura por {total}. ¡Gracias!`,
+    },
+    comprobante: {
+      label: 'Al enviar un comprobante de pago',
+      etiquetas: ['nombre', 'total', 'taller'],
+      texto: `¡Hola {nombre}! Te mando el comprobante por {total}. ¡Gracias!`,
+    },
+    presupuesto: {
+      label: 'Al enviar un presupuesto',
+      etiquetas: ['nombre', 'vehiculo', 'total', 'taller'],
+      texto: `¡Hola {nombre}! Te paso el presupuesto{vehiculo}: {total}. Cualquier duda, escribinos. ¡Gracias!`,
+    },
+    fichaPec: {
+      label: 'Al enviar la ficha técnica al PEC',
+      etiquetas: ['patente', 'pec', 'nota', 'taller'],
+      texto: `Hola! Ficha técnica del trámite de GNC de la patente {patente} para {pec}.{nota}`,
+    },
+    turnoConfirmado: {
+      label: 'Confirmación de un turno pedido por WhatsApp',
+      etiquetas: ['cuando', 'taller', 'direccion'],
+      texto: `¡Listo! Te confirmamos el turno para el {cuando}. Te esperamos. 🔧`,
+    },
+    turnoPerdido: {
+      label: 'Aviso a quien no vino a su turno',
+      etiquetas: ['nombre', 'fecha', 'taller'],
+      texto: `¡Hola {nombre}! Vimos que no pudiste venir a tu turno del {fecha}. ¿Reprogramamos? Decinos qué día te queda cómodo y te esperamos. ¡Saludos!`,
+    },
+    adjuntoPc: {
+      label: 'Aclaración del PDF (solo al enviar desde la computadora)',
+      etiquetas: [],
+      texto: ` (te adjunto el PDF que se acaba de descargar)`,
+    },
   };
 
   function plantillaMensaje(key) {
     const custom = tallerConfig.mensajes && tallerConfig.mensajes[key];
-    return (typeof custom === 'string' && custom.trim()) ? custom : MENSAJES_DEFAULT[key].texto;
+    // Si el taller guardó un texto —incluso vacío— manda el suyo. El vacío es
+    // "no mandes nada"; para volver al original se usa el botón de restaurar.
+    return (typeof custom === 'string') ? custom : MENSAJES_DEFAULT[key].texto;
   }
   // Reemplaza {etiquetas} por sus valores; las que no vengan se borran.
   function renderMensaje(key, vars) {
@@ -3112,14 +3149,19 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       const nombre = `Presupuesto-${p.numero}-${(p.patente || 'cliente').replace(/\W/g, '')}.pdf`;
       const file = new File([blob], nombre, { type: 'application/pdf' });
       const t = presuTotales(p);
-      const msg = `¡Hola${p.nombre ? ' ' + p.nombre : ''}! Te paso el presupuesto${p.vehiculo ? ' de tu ' + p.vehiculo : ''}: ${presuMoney(t.total)}. Cualquier duda, escribinos. ¡Gracias!`;
+      const msg = renderMensaje('presupuesto', {
+        ...varsTaller(),
+        nombre: p.nombre || '',
+        vehiculo: p.vehiculo ? ' de tu ' + p.vehiculo : '',
+        total: presuMoney(t.total),
+      });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: 'Presupuesto N° ' + p.numero, text: msg });
         return;
       }
       descargarBlob(blob, nombre);
       const tel = cleanPhone(presuTelefonoDe(p));
-      abrirWhatsapp(tel, msg + ' (te adjunto el PDF que se acaba de descargar)');
+      abrirWhatsapp(tel, msg + renderMensaje('adjuntoPc', {}));
     } catch (e) {
       if (e && e.name === 'AbortError') return;   // el usuario cerró el menú de compartir
       console.error(e);
@@ -3160,7 +3202,9 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   async function factCompartirPdf(resp, telefono, nombreCliente) {
     const blob = factB64ABlob(resp.pdfBase64);
     const file = new File([blob], resp.nombrePdf, { type: 'application/pdf' });
-    const msg = `¡Hola${nombreCliente ? ' ' + nombreCliente : ''}! Te mando la factura por ${presuMoney(resp.comprobante.imp_total)}. ¡Gracias!`;
+    const msg = renderMensaje('factura', {
+      ...varsTaller(), nombre: nombreCliente || '', total: presuMoney(resp.comprobante.imp_total),
+    });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({ files: [file], title: resp.nombrePdf, text: msg });
@@ -3168,7 +3212,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       } catch (e) { if (e && e.name === 'AbortError') return; }
     }
     descargarBlob(blob, resp.nombrePdf);
-    if (telefono) abrirWhatsapp(cleanPhone(telefono), msg + ' (te adjunto el PDF que se acaba de descargar)');
+    if (telefono) abrirWhatsapp(cleanPhone(telefono), msg + renderMensaje('adjuntoPc', {}));
   }
 
   // Comprobante de pago SIN valor fiscal: el papel para el cliente que solo
@@ -3223,7 +3267,9 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   // se descarga y se abre el chat.
   async function compartirComprobantePago(blob, nombreArchivo, telefono, nombreCliente, total) {
     const file = new File([blob], nombreArchivo, { type: 'application/pdf' });
-    const msg = `¡Hola${nombreCliente ? ' ' + nombreCliente : ''}! Te mando el comprobante por ${presuMoney(total)}. ¡Gracias!`;
+    const msg = renderMensaje('comprobante', {
+      ...varsTaller(), nombre: nombreCliente || '', total: presuMoney(total),
+    });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({ files: [file], title: nombreArchivo, text: msg });
@@ -3231,7 +3277,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       } catch (e) { if (e && e.name === 'AbortError') return; }
     }
     descargarBlob(blob, nombreArchivo);
-    if (telefono) abrirWhatsapp(cleanPhone(telefono), msg + ' (te adjunto el PDF que se acaba de descargar)');
+    if (telefono) abrirWhatsapp(cleanPhone(telefono), msg + renderMensaje('adjuntoPc', {}));
   }
 
   // ¿Qué comprobante le damos al cliente? Devuelve 'fiscal', 'nofiscal' o null.
@@ -6552,7 +6598,10 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         const ta = el('tc-msg-' + key);
         if (!ta) return;
         const val = ta.value;
-        if (val.trim() && val !== MENSAJES_DEFAULT[key].texto) tallerConfig.mensajes[key] = val;
+        // Vaciarlo es una decisión del taller: "no mandes ningún texto". Por eso
+        // se guarda el vacío en vez de borrar la personalización. Para volver al
+        // original está el botón de restaurar.
+        if (val !== MENSAJES_DEFAULT[key].texto) tallerConfig.mensajes[key] = val;
         else delete tallerConfig.mensajes[key];
       });
     }
@@ -7723,7 +7772,9 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   async function compartirPecPdf(blob, filename, cliente, fotosIncluidas, pec) {
     const notaFotos = fotosIncluidas ? ' Incluye las fotos de la documentación.' : '';
     const nombrePec = (pec && pec.razonSocial) ? pec.razonSocial : 'el PEC';
-    const mensaje = `Hola! Ficha técnica del trámite de GNC de la patente ${cliente.patente || 's/d'} para ${nombrePec}.${notaFotos}`;
+    const mensaje = renderMensaje('fichaPec', {
+      ...varsTaller(), patente: cliente.patente || 's/d', pec: nombrePec, nota: notaFotos,
+    });
     const file = new File([blob], filename, { type: 'application/pdf' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       await customAlert(`Se abre el menú de compartir CON el PDF ya adjunto: elegí WhatsApp y después el chat de ${nombrePec}. El archivo viaja solo, no hay que adjuntar nada.`, 'Enviar al PEC');
@@ -7738,7 +7789,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     // (acá adjuntar a mano es fácil: arrastrás el PDF a la ventana).
     descargarBlob(blob, filename);
     const pecPhone = cleanPhone(pec && pec.telefono);
-    abrirWhatsapp(pecPhone || '', mensaje + ' (adjuntá el PDF que se acaba de descargar)');
+    abrirWhatsapp(pecPhone || '', mensaje + renderMensaje('adjuntoPc', {}));
   }
 
   function tramiteRow(clienteId, t) {
@@ -11383,7 +11434,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         // enviarlo (ej. si le cambió el día que pidió). Best-effort: si falla no molesta.
         if (p.telefono) {
           const cuando = fmtDate(r.fecha) + (r.hora ? ' a las ' + r.hora + ' hs' : '');
-          const textoDef = '¡Listo! Te confirmamos el turno para el ' + cuando + '. Te esperamos. 🔧';
+          const textoDef = renderMensaje('turnoConfirmado', { ...varsTaller(), cuando });
           const texto = await mostrarModalConfirmacionWa(textoDef);
           if (texto) {
             fetch('https://crm.estelita.net.ar/api/turno-confirmado', {
@@ -11449,7 +11500,9 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
           const ok = await customConfirm('¿Querés mandarle un WhatsApp para reprogramar el turno?', { titulo: 'No asistió', okLabel: 'Mandar WhatsApp', cancelLabel: 'Ahora no' });
           if (ok) {
             const nombre = c.nombre && c.nombre !== c.patente ? c.nombre : '';
-            const msg = `¡Hola${nombre ? ' ' + nombre : ''}! Vimos que no pudiste venir a tu turno del ${fmtDate(t.fecha)}. ¿Reprogramamos? Decinos qué día te queda cómodo y te esperamos. ¡Saludos!`;
+            const msg = renderMensaje('turnoPerdido', {
+              ...varsTaller(), nombre: nombre || '', fecha: fmtDate(t.fecha),
+            });
             abrirWhatsapp(c.telefono, msg);
           }
         }
