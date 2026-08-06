@@ -4665,6 +4665,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
             ${revisionBitacoraHtml(tramite)}
             <div class="form-actions" style="margin-top:8px;">
               <button type="button" class="btn btn-ghost btn-sm" data-reimprimir-cliente="${cliente.id}" data-reimprimir-id="${tramite.id}">Imprimir ficha</button>
+              ${tramite.tipo === 'prueba_hidraulica' ? `<button type="button" class="btn btn-ghost btn-sm" data-crpc-cliente="${cliente.id}" data-crpc-id="${tramite.id}">Planilla del CRPC</button>` : ''}
               <button type="button" class="btn btn-ghost btn-sm" data-emitir-comp-cliente="${cliente.id}" data-emitir-comp-id="${tramite.id}">Emitir comprobante</button>
               <button type="button" class="btn btn-ghost btn-sm" data-ultimo-tramite="${cliente.id}">Ver último trámite</button>
               <button type="button" class="btn btn-danger-outline btn-sm" data-borrar-tramite-cliente="${cliente.id}" data-borrar-tramite-id="${tramite.id}">Eliminar trámite</button>
@@ -10563,6 +10564,25 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     }
     root.querySelectorAll('[data-reimprimir-cliente]').forEach(btn => {
       btn.addEventListener('click', () => abrirPdfTramite(btn.getAttribute('data-reimprimir-cliente'), btn.getAttribute('data-reimprimir-id'), 'ficha'));
+    });
+    // Planilla del centro de reprueba de un trámite YA guardado. Antes sólo se
+    // podía sacar en el momento de cargarlo: si el cilindro volvía a los días,
+    // no había forma de reimprimirla sin rehacer el trámite.
+    root.querySelectorAll('[data-crpc-cliente]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const c = clientes.find(x => x.id === btn.getAttribute('data-crpc-cliente'));
+        const t = c && (c.tramites || []).find(x => x.id === btn.getAttribute('data-crpc-id'));
+        if (!c || !t) return;
+        btn.disabled = true;
+        try {
+          const blob = await generarCrpcPdfSoloDatos(c, t);
+          await abrirOCompartirPdf(blob, `Planilla_reprueba_${(c.patente || '').toString().replace(/\s+/g, '_')}.pdf`, 'Planilla del centro de reprueba.');
+        } catch (e) {
+          console.error(e);
+          await customAlert('No se pudo generar la planilla de reprueba: ' + ((e && e.message) || e), 'Error');
+        }
+        btn.disabled = false;
+      });
     });
     // Emitir comprobante: se elige ticket fiscal o comprobante de pago, y se
     // abre el facturador con los datos del cliente y el trámite ya cargados —
