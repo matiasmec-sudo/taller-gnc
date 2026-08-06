@@ -838,6 +838,8 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 #gnc-app .presu-res-item:hover { background: rgba(29,91,216,.08); }
 #gnc-app .presu-ss { background: rgba(227,84,58,.15); color: var(--danger); font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 999px; margin-left: 4px; }
 #gnc-app .lp-h { font-size: 13px; font-weight: 700; margin: 16px 0 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+/* Subtítulo dentro de un bloque numerado: sin la línea de arriba. */
+#gnc-app .lp-h2 { font-size: 12.5px; font-weight: 700; color: var(--text-muted); margin: 12px 0 4px; }
 #gnc-app .config-item-body > .lp-h:first-child { border-top: 0; padding-top: 0; margin-top: 12px; }
 #gnc-app .lp-ej { font-style: italic; }
 #gnc-app .lp-mo-fila { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; font-size: 13px; }
@@ -6157,12 +6159,49 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     // de GNC (que es la ganancia del taller) y, si hace falta, el ítem suelto.
     const lp = t.listaPrecios || {};
     const nPropios = Object.keys(lp.items || {}).length;
+    // Equipos completos. La grilla la define CADA taller: qué sistemas trabaja
+    // (los nombres los pone su proveedor, no hay dos iguales) y con qué medidas
+    // de cilindro. Traerle una lista hecha sería imponerle el proveedor ajeno.
+    const eqSistemas = (tallerConfig.equipoSistemas || []).filter(s => String(s).trim());
+    const eqMedidas = (tallerConfig.equipoMedidas || []).filter(m => String(m).trim());
+    const eqPrecios = tallerConfig.equipoPrecios || {};
+    const eqClave = (medida, sistema) => `${medida}||${sistema}`;
+    const secEquipos = `
+      <label class="serv-switch"><input type="checkbox" id="tc-hace-instalaciones" ${tallerConfig.haceInstalaciones !== false ? 'checked' : ''}> El taller realiza instalaciones de GNC</label>
+      <div class="agent-hint" style="margin-top:0;">El asistente de WhatsApp responde con estos precios. Un renglón sin precio se responde como “lo hacemos, el precio se confirma en el taller”. Si desactivás la sección, se responde que el taller no presta ese servicio.</div>
+
+      <div class="lp-h" style="margin-top:16px;">2. Instalación de equipos</div>
+      <div class="lp-h2">Los sistemas que trabajás</div>
+      <div class="agent-hint" style="margin-top:0;">Poné los nombres como se los decís al cliente. Uno por renglón.</div>
+      <textarea id="tc-eq-sistemas" rows="3" placeholder="5ta generación&#10;4ta generación">${escapeHtml(eqSistemas.join('\n'))}</textarea>
+
+      <div class="lp-h2">Las medidas de cilindro</div>
+      <textarea id="tc-eq-medidas" rows="3" placeholder="30 L&#10;40 L&#10;60 L">${escapeHtml(eqMedidas.join('\n'))}</textarea>
+
+      <div class="lp-h2">El precio de cada combinación</div>
+      ${(eqSistemas.length && eqMedidas.length) ? `
+        <div class="agent-hint" style="margin-top:0;">El equipo completo con el cilindro incluido. Tu mano de obra va abajo.</div>
+        <div class="reg-wrap"><table class="reg-tabla">
+          <thead><tr><th>Cilindro</th>${eqSistemas.map(s => `<th>${escapeHtml(s)}</th>`).join('')}</tr></thead>
+          <tbody>${eqMedidas.map(m => `<tr>
+            <td>${escapeHtml(m)}</td>
+            ${eqSistemas.map(s => `<td><input type="number" min="0" step="1000" class="serv-precio" style="width:110px;" data-eqp="${escapeHtml(eqClave(m, s))}" value="${eqPrecios[eqClave(m, s)] || ''}" placeholder="—" inputmode="numeric"></td>`).join('')}
+          </tr>`).join('')}</tbody>
+        </table></div>`
+        : '<p class="scan-sub">Cargá al menos un sistema y una medida para que aparezca la grilla.</p>'}
+
+      <label style="margin-top:12px;">Mano de obra de instalación
+        <input type="number" min="0" step="1000" id="tc-presu-instalacion" value="${escapeHtml(String(tallerConfig.presuInstalacion || 0))}" inputmode="numeric">
+        <span class="hint">Tu trabajo, aparte del equipo. Se suma sola cuando cargás un equipo completo en un presupuesto.</span>
+      </label>`;
+
     // Precios finales: un renglón por servicio, sin sumas ni recetas. Es lo que
     // ve el cliente y lo que va a contestar el asistente de WhatsApp.
     const filasServicios = serviciosPrecios();
     const secServicios = `
       <label class="serv-switch"><input type="checkbox" id="tc-hace-tramites" ${tallerConfig.haceTramitesGnc !== false ? 'checked' : ''}> El taller realiza trámites de GNC</label>
       <div class="agent-hint" style="margin-top:0;">El asistente de WhatsApp responde con estos precios. Un renglón sin precio se responde como “lo hacemos, el precio se confirma en el taller”. Si desactivás la sección, se responde que el taller no presta ese servicio.</div>
+      <div class="lp-h">1. Servicios frecuentes</div>
       <div class="serv-lista">
         ${filasServicios.map(f => `
           <div class="serv-fila">
@@ -6180,47 +6219,18 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         <button type="button" class="btn btn-ghost btn-sm" id="btn-serv-agregar">+ Agregar un servicio propio</button>
       </div>
 
-      <div class="lp-h" style="margin-top:18px;">Componentes y repuestos de GNC</div>
-      <div class="agent-hint" style="margin-top:0;">Bajá la planilla, tocá la columna “Tu precio” y volvé a subirla. La primera columna es un código: <b>no la toques</b>, es la que empareja cada ítem. Lo que dejes vacío sigue tomando el precio de lista.</div>
-      <div class="form-actions">
+      ${secEquipos}
+
+      <div class="lp-h" style="margin-top:18px;">3. Componentes y repuestos</div>
+      <div class="agent-hint" style="margin-top:0;">Bajá la planilla, tocá la columna “Tu precio” y volvé a subirla. La primera columna es un código: <b>no la toques</b>, es la que empareja cada ítem. Lo que dejes vacío sigue tomando el precio de lista, así te siguen llegando las actualizaciones.</div>
+      <label>Ajuste general de componentes y equipos (%)
+        <input type="number" step="1" id="tc-aj-gnc" value="${escapeHtml(String((tallerConfig.listaPrecios || {}).ajusteGnc || ''))}" placeholder="0">
+        <span class="hint">Si tus precios están parejo por encima (o por debajo) de la lista, con esto solo alcanza.</span>
+      </label>
+      <div class="form-actions" style="margin-top:8px;">
         <button type="button" class="btn btn-ghost btn-sm" data-precios-bajar="gnc">${btnIco('upload')}Descargar Excel</button>
         <label class="btn btn-ghost btn-sm" style="cursor:pointer;">${btnIco('download')}Subir Excel<input type="file" accept=".xlsx,.xls,.csv" data-precios-subir="gnc" style="display:none;"></label>
       </div>`;
-
-    // Equipos completos. La grilla la define CADA taller: qué sistemas trabaja
-    // (los nombres los pone su proveedor, no hay dos iguales) y con qué medidas
-    // de cilindro. Traerle una lista hecha sería imponerle el proveedor ajeno.
-    const eqSistemas = (tallerConfig.equipoSistemas || []).filter(s => String(s).trim());
-    const eqMedidas = (tallerConfig.equipoMedidas || []).filter(m => String(m).trim());
-    const eqPrecios = tallerConfig.equipoPrecios || {};
-    const eqClave = (medida, sistema) => `${medida}||${sistema}`;
-    const secEquipos = `
-      <label class="serv-switch"><input type="checkbox" id="tc-hace-instalaciones" ${tallerConfig.haceInstalaciones !== false ? 'checked' : ''}> El taller realiza instalaciones de GNC</label>
-      <div class="agent-hint" style="margin-top:0;">El asistente de WhatsApp responde con estos precios. Un renglón sin precio se responde como “lo hacemos, el precio se confirma en el taller”. Si desactivás la sección, se responde que el taller no presta ese servicio.</div>
-
-      <div class="lp-h">1. Los sistemas que trabajás</div>
-      <div class="agent-hint" style="margin-top:0;">Poné los nombres como se los decís al cliente. Uno por renglón.</div>
-      <textarea id="tc-eq-sistemas" rows="3" placeholder="5ta generación&#10;4ta generación">${escapeHtml(eqSistemas.join('\n'))}</textarea>
-
-      <div class="lp-h">2. Las medidas de cilindro</div>
-      <textarea id="tc-eq-medidas" rows="3" placeholder="30 L&#10;40 L&#10;60 L">${escapeHtml(eqMedidas.join('\n'))}</textarea>
-
-      <div class="lp-h">3. El precio de cada combinación</div>
-      ${(eqSistemas.length && eqMedidas.length) ? `
-        <div class="agent-hint" style="margin-top:0;">El equipo completo con el cilindro incluido. Tu mano de obra va abajo.</div>
-        <div class="reg-wrap"><table class="reg-tabla">
-          <thead><tr><th>Cilindro</th>${eqSistemas.map(s => `<th>${escapeHtml(s)}</th>`).join('')}</tr></thead>
-          <tbody>${eqMedidas.map(m => `<tr>
-            <td>${escapeHtml(m)}</td>
-            ${eqSistemas.map(s => `<td><input type="number" min="0" step="1000" class="serv-precio" style="width:110px;" data-eqp="${escapeHtml(eqClave(m, s))}" value="${eqPrecios[eqClave(m, s)] || ''}" placeholder="—" inputmode="numeric"></td>`).join('')}
-          </tr>`).join('')}</tbody>
-        </table></div>`
-        : '<p class="scan-sub">Cargá al menos un sistema y una medida para que aparezca la grilla.</p>'}
-
-      <label style="margin-top:12px;">Mano de obra de instalación
-        <input type="number" min="0" step="1000" id="tc-presu-instalacion" value="${escapeHtml(String(tallerConfig.presuInstalacion || 0))}" inputmode="numeric">
-        <span class="hint">Tu trabajo, aparte del equipo. Se suma sola cuando cargás un equipo completo en un presupuesto.</span>
-      </label>`;
 
     const secListas = `
       <label class="serv-switch"><input type="checkbox" id="tc-hace-mecanica" ${tallerConfig.haceMecanica !== false ? 'checked' : ''}> El taller realiza trabajos de mecánica</label>
@@ -6228,14 +6238,9 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
 
       <div class="lp-h">1. Ajuste general</div>
       <div class="agent-hint" style="margin-top:0;">Si tus precios están parejo por encima (o por debajo) de la lista, con esto solo alcanza. Poné cuánto por ciento, o dejá 0 para usar la lista tal cual.</div>
-      <div class="form-grid">
-        <label>GNC: componentes y equipos (%)
-          <input type="number" step="1" id="tc-aj-gnc" value="${escapeHtml(String(lp.ajusteGnc || ''))}" placeholder="0">
-        </label>
-        <label>Mecánica: mano de obra (%)
-          <input type="number" step="1" id="tc-aj-mec" value="${escapeHtml(String(lp.ajusteMec || ''))}" placeholder="0">
-        </label>
-      </div>
+      <label>Mano de obra de mecánica (%)
+        <input type="number" step="1" id="tc-aj-mec" value="${escapeHtml(String(lp.ajusteMec || ''))}" placeholder="0">
+      </label>
       <div class="agent-hint lp-ej" id="tc-aj-ej">${escapeHtml(ajusteEjemplo(lp.ajusteGnc, lp.ajusteMec))}</div>
 
       <div class="lp-h">2. La lista completa, por Excel</div>
@@ -6276,9 +6281,8 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       ${configSeccionCard('tecnico', 'App del técnico', secTecnico)}
       ${configSeccionCard('mensajes', 'Mensajes de WhatsApp', secMensajes)}
       ${configSeccionCard('logo', 'Logo del taller', secLogo)}
-      ${configSeccionCard('servicios', 'GNC — Servicios frecuentes', secServicios)}
-      ${configSeccionCard('equipos', 'GNC — Cilindros y equipos', secEquipos)}
-      ${configSeccionCard('listas', 'Mecánica — Lista de precios', secListas)}
+      ${configSeccionCard('servicios', 'Lista de precios GNC', secServicios)}
+      ${configSeccionCard('listas', 'Precios de mecánica', secListas)}
       ${configSeccionCard('impresion', 'Impresión sobre la planilla', secImpresion)}
       ${configSeccionCard('licencia', 'Licencia del equipo', secLicencia)}
       ${configSeccionCard('sugerencias', 'Sugerencias para mejorar Estelita', secSugerencias)}
@@ -6377,11 +6381,13 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     setNum('tc-ajuste-y', 'impresionAjusteY');
     // Listas de precios. El ajuste general y la mano de obra de cada servicio;
     // los precios propios de ítems sueltos se guardan solos al tipearlos.
-    if (el('tc-aj-gnc')) {
+    // Cada ajuste se guarda por su cuenta: viven en tarjetas distintas y sólo
+    // hay una abierta por vez, así que nunca están los dos en pantalla.
+    if (el('tc-aj-gnc') || el('tc-aj-mec')) {
       tallerConfig.listaPrecios = tallerConfig.listaPrecios || { ajusteGnc: 0, ajusteMec: 0, items: {} };
       const lp = tallerConfig.listaPrecios;
-      lp.ajusteGnc = Number(el('tc-aj-gnc').value) || 0;
-      lp.ajusteMec = Number(el('tc-aj-mec').value) || 0;
+      if (el('tc-aj-gnc')) lp.ajusteGnc = Number(el('tc-aj-gnc').value) || 0;
+      if (el('tc-aj-mec')) lp.ajusteMec = Number(el('tc-aj-mec').value) || 0;
       lp.mo = lp.mo || {};
       PRESU_SERVICIOS.forEach((s, i) => {
         // Se guarda solo lo que difiere de la receta, así una actualización
@@ -10980,7 +10986,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
     // teclado y borraría lo que se está escribiendo.
     const lpBusca = root.querySelector('#tc-lp-busca');
     const ajGnc = root.querySelector('#tc-aj-gnc'), ajMec = root.querySelector('#tc-aj-mec');
-    if (lpBusca && ajGnc && ajMec) {
+    if (lpBusca) {
       const contarPropios = () => {
         const n = Object.keys((tallerConfig.listaPrecios || {}).items || {}).length;
         const b = root.querySelector('#tc-lp-n');
@@ -11047,14 +11053,14 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       // como "precio propio" algo que en realidad ya daba la lista.
       const refrescarAjuste = () => {
         tallerConfig.listaPrecios = tallerConfig.listaPrecios || { ajusteGnc: 0, ajusteMec: 0, items: {} };
-        tallerConfig.listaPrecios.ajusteGnc = Number(ajGnc.value) || 0;
-        tallerConfig.listaPrecios.ajusteMec = Number(ajMec.value) || 0;
+        if (ajGnc) tallerConfig.listaPrecios.ajusteGnc = Number(ajGnc.value) || 0;
+        if (ajMec) tallerConfig.listaPrecios.ajusteMec = Number(ajMec.value) || 0;
         const e = root.querySelector('#tc-aj-ej');
-        if (e) e.textContent = ajusteEjemplo(ajGnc.value, ajMec.value);
+        if (e) e.textContent = ajusteEjemplo(ajGnc ? ajGnc.value : tallerConfig.listaPrecios.ajusteGnc, ajMec ? ajMec.value : tallerConfig.listaPrecios.ajusteMec);
         buscar();
       };
-      ajGnc.addEventListener('input', refrescarAjuste);
-      ajMec.addEventListener('input', refrescarAjuste);
+      if (ajGnc) ajGnc.addEventListener('input', refrescarAjuste);
+      if (ajMec) ajMec.addEventListener('input', refrescarAjuste);
       const btnLpReset = root.querySelector('#btn-lp-reset');
       if (btnLpReset) btnLpReset.addEventListener('click', async () => {
         const n = Object.keys((tallerConfig.listaPrecios || {}).items || {}).length;
