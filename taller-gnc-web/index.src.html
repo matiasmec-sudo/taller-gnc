@@ -6322,14 +6322,8 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     setStr('tc-codigo-taller', 'codigoTaller');
     // Equipos: los sistemas y las medidas los define el taller (una por
     // renglón), y la grilla se arma con eso.
-    const eqSisEl = el('tc-eq-sistemas');
-    if (eqSisEl) {
-      tallerConfig.equipoSistemas = eqSisEl.value.split('\n').map(s => s.trim()).filter(Boolean);
-    }
-    const eqMedEl = el('tc-eq-medidas');
-    if (eqMedEl) {
-      tallerConfig.equipoMedidas = eqMedEl.value.split('\n').map(s => s.trim()).filter(Boolean);
-    }
+    // PRIMERO lo que está en la grilla en pantalla (las claves de los inputs
+    // son las de ANTES de tocar los nombres), y recién después el renombre.
     if (root.querySelector('[data-eqp]')) {
       tallerConfig.equipoPrecios = tallerConfig.equipoPrecios || {};
       root.querySelectorAll('[data-eqp]').forEach(inp => {
@@ -6339,6 +6333,42 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         if (valor != null && valor > 0) tallerConfig.equipoPrecios[clave] = valor;
         else delete tallerConfig.equipoPrecios[clave];
       });
+    }
+    const eqSisEl = el('tc-eq-sistemas');
+    const eqMedEl = el('tc-eq-medidas');
+    if (eqSisEl || eqMedEl) {
+      const enLista = t => t.value.split('\n').map(s => s.trim()).filter(Boolean);
+      const sisViejos = tallerConfig.equipoSistemas || [];
+      const medViejas = tallerConfig.equipoMedidas || [];
+      const sisNuevos = eqSisEl ? enLista(eqSisEl) : sisViejos;
+      const medNuevas = eqMedEl ? enLista(eqMedEl) : medViejas;
+      // El precio se guarda con la clave "medida||sistema", así que renombrar
+      // un sistema dejaba los precios huérfanos y la grilla aparecía vacía.
+      // Si un nombre desaparece y en su MISMA posición hay uno que antes no
+      // estaba, es un renombre: se arrastran los precios.
+      const renombres = (viejos, nuevos) => {
+        const m = {};
+        viejos.forEach((v, i) => {
+          if (nuevos.includes(v)) return;
+          const n = nuevos[i];
+          if (n && !viejos.includes(n)) m[v] = n;
+        });
+        return m;
+      };
+      const rS = renombres(sisViejos, sisNuevos);
+      const rM = renombres(medViejas, medNuevas);
+      if (Object.keys(rS).length || Object.keys(rM).length) {
+        const viejos = tallerConfig.equipoPrecios || {};
+        const nuevos = {};
+        Object.keys(viejos).forEach(k => {
+          const i = k.indexOf('||');
+          const med = k.slice(0, i), sis = k.slice(i + 2);
+          nuevos[`${rM[med] || med}||${rS[sis] || sis}`] = viejos[k];
+        });
+        tallerConfig.equipoPrecios = nuevos;
+      }
+      tallerConfig.equipoSistemas = sisNuevos;
+      tallerConfig.equipoMedidas = medNuevas;
     }
     setNum('tc-presu-instalacion', 'presuInstalacion');
     // Qué presta el taller: define qué contesta el asistente.
