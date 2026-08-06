@@ -1072,7 +1072,9 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
     // distinto según el proveedor, así que no se puede traer una lista hecha.
     // Las medidas sí arrancan con las habituales, que son de norma.
     equipoSistemas: ['5ta generación', '4ta generación'],
-    equipoMedidas: ['30 L', '40 L', '45 L', '60 L', '65 L', '80 L'],
+    // Las de un cilindro y las de dos, que es lo habitual cuando el auto no
+    // llega con uno solo.
+    equipoMedidas: ['30 L', '40 L', '45 L', '60 L', '65 L', '80 L', '2 x 30 L', '2 x 40 L', '2 x 45 L'],
     equipoPrecios: {},
     // Precios propios del taller para el catálogo de presupuestos:
     // { ajusteGnc: %, ajusteMec: %, items: { 'nombre del ítem': precio } }.
@@ -2616,6 +2618,10 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   // La receta NO se borra: sigue existiendo y sirve para calcular el precio de
   // arranque de cada renglón, así el taller abre la pantalla y ya están sus
   // números en vez de una lista vacía.
+  // Las combinaciones de dos cilindros más habituales, para no hacerlas tipear:
+  // el precio de dos NO es el doble de uno, así que van como renglones propios.
+  const MEDIDAS_DOS_CIL = ['2 x 30 L', '2 x 40 L', '2 x 45 L'];
+
   const SERVICIOS_ESTANDAR = [
     { id: 'oblea', nombre: 'Renovación de oblea', srv: 'Renovación de oblea' },
     { id: 'ph1', nombre: 'Prueba hidráulica — 1 cilindro', srv: 'Prueba hidráulica', cil: 1 },
@@ -6176,7 +6182,11 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       <textarea id="tc-eq-sistemas" rows="3" placeholder="5ta generación&#10;4ta generación">${escapeHtml(eqSistemas.join('\n'))}</textarea>
 
       <div class="lp-h2">Las medidas de cilindro</div>
-      <textarea id="tc-eq-medidas" rows="3" placeholder="30 L&#10;40 L&#10;60 L">${escapeHtml(eqMedidas.join('\n'))}</textarea>
+      <div class="agent-hint" style="margin-top:0;">Una por renglón, como se la decís al cliente. Para los autos que llevan dos cilindros, escribilas aparte (por ejemplo <b>2 x 40 L</b>): el precio de dos no es el doble de uno.</div>
+      <textarea id="tc-eq-medidas" rows="4" placeholder="30 L&#10;40 L&#10;60 L&#10;2 x 40 L">${escapeHtml(eqMedidas.join('\n'))}</textarea>
+      ${MEDIDAS_DOS_CIL.some(m => !eqMedidas.includes(m)) ? `<div class="form-actions" style="margin-top:6px;">
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-eq-dos-cil">+ Agregar las medidas de 2 cilindros</button>
+      </div>` : ''}
 
       <div class="lp-h2">El precio de cada combinación</div>
       ${(eqSistemas.length && eqMedidas.length) ? `
@@ -9888,6 +9898,14 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
           await customAlert(e && e.message ? e.message : 'No se pudo leer la planilla.', 'Error');
         }
       });
+    });
+
+    const btnDosCil = root.querySelector('#btn-eq-dos-cil');
+    if (btnDosCil) btnDosCil.addEventListener('click', () => {
+      syncTallerConfigFromDOM();
+      const actuales = tallerConfig.equipoMedidas || [];
+      tallerConfig.equipoMedidas = [...actuales, ...MEDIDAS_DOS_CIL.filter(m => !actuales.includes(m))];
+      render();
     });
 
     // Al cambiar los sistemas o las medidas hay que redibujar la grilla.
