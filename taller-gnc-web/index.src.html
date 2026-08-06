@@ -772,6 +772,8 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 #gnc-app .reg-filtros label { display: block; font-size: 12px; }
 
 /* Precios finales de servicios: un renglón por servicio. */
+#gnc-app .ficha-pasos { margin: 8px 0 10px 20px; font-size: 13px; color: var(--text-muted); line-height: 1.6; }
+#gnc-app #tc-ficha-texto { font-family: var(--mono); font-size: 12px; line-height: 1.5; }
 #gnc-app .serv-switch {
   display: flex; align-items: center; gap: 9px; font-size: 14px; font-weight: 700;
   padding: 10px 12px; background: var(--surface-alt); border-radius: 10px; margin-bottom: 10px; cursor: pointer;
@@ -2618,6 +2620,79 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   // La receta NO se borra: sigue existiendo y sirve para calcular el precio de
   // arranque de cada renglón, así el taller abre la pantalla y ya están sus
   // números en vez de una lista vacía.
+  /**
+   * Ficha para el asistente de WhatsApp.
+   *
+   * El CRM se configura APARTE y a mano, a propósito: lo que el asistente le
+   * contesta a un cliente lo escribe una persona, no una tabla. Pero eso no
+   * quiere decir que el taller tenga que tipear dos veces lo que ya cargó.
+   *
+   * Esto arma el borrador: todo lo que Estelita ya sabe queda escrito, y lo que
+   * no sabe queda como pregunta para completar. El taller lo revisa, lo corrige
+   * y lo manda. Es un borrador que pasa por una persona, no una sincronización.
+   */
+  function fichaParaAsistente() {
+    const t = tallerConfig || {};
+    const L = [];
+    const money = n => '$' + Number(n || 0).toLocaleString('es-AR');
+    const dato = (rotulo, valor) => L.push(`${rotulo}: ${valor || '(completar)'}`);
+
+    L.push('=== FICHA PARA EL ASISTENTE DE WHATSAPP ===');
+    L.push('');
+    L.push('-- EL TALLER --');
+    dato('Nombre', tallerNombre);
+    dato('Razón social', t.razonSocial);
+    dato('Dirección', t.direccion);
+    dato('Horarios', t.horario);
+    dato('Teléfono', (t.pecs && t.pecs[0] && t.pecs[0].telefono) || '');
+    L.push('');
+    L.push('-- QUÉ HACE EL TALLER --');
+    L.push(`Trámites de GNC (oblea, hidráulica): ${t.haceTramitesGnc !== false ? 'SÍ' : 'NO'}`);
+    L.push(`Instalación de equipos de GNC: ${t.haceInstalaciones !== false ? 'SÍ' : 'NO'}`);
+    L.push(`Trabajos de mecánica: ${t.haceMecanica !== false ? 'SÍ' : 'NO'}`);
+
+    if (t.haceTramitesGnc !== false) {
+      L.push('');
+      L.push('-- PRECIOS DE SERVICIOS --');
+      serviciosPrecios().forEach(s => {
+        if (!s.nombre) return;
+        L.push(`${s.nombre}: ${s.precio ? money(s.precio) : '(sin precio publicado — se confirma en el taller)'}`);
+      });
+    }
+
+    if (t.haceInstalaciones !== false) {
+      const sis = (t.equipoSistemas || []).filter(Boolean);
+      const med = (t.equipoMedidas || []).filter(Boolean);
+      const pr = t.equipoPrecios || {};
+      L.push('');
+      L.push('-- INSTALACIÓN DE EQUIPOS --');
+      L.push(`Mano de obra de instalación: ${money(t.presuInstalacion)}`);
+      if (sis.length && med.length) {
+        L.push('Precio del equipo completo (cilindro incluido), sin la mano de obra:');
+        med.forEach(m => {
+          const partes = sis.map(s => {
+            const v = pr[`${m}||${s}`];
+            return v ? `${s} ${money(v)}` : null;
+          }).filter(Boolean);
+          if (partes.length) L.push(`  ${m}: ${partes.join(' · ')}`);
+        });
+      } else {
+        L.push('(completar: qué sistemas trabajás y el precio por medida de cilindro)');
+      }
+    }
+
+    L.push('');
+    L.push('-- ESTO NO LO SABE ESTELITA, COMPLETALO VOS --');
+    L.push('¿Se atiende con turno o sin turno? ¿Para qué servicios?:');
+    L.push('¿Cuánto tarda la oblea? (ej: si viene antes de las 10, sale a las 13):');
+    L.push('¿En cuánto entregás una instalación? ¿Qué garantía das?:');
+    L.push('Formas de pago (efectivo, transferencia, tarjeta, cuotas y recargo):');
+    L.push('¿Qué NO hacés? (VTV, etc.), para que el asistente no prometa de más:');
+    L.push('¿Qué temas querés atender vos sí o sí, sin que conteste el asistente?:');
+    L.push('Cualquier otra cosa que tu asistente tenga que saber:');
+    return L.join('\n');
+  }
+
   // Las combinaciones de dos cilindros más habituales, para no hacerlas tipear:
   // el precio de dos NO es el doble de uno, así que van como renglones propios.
   const MEDIDAS_DOS_CIL = ['2 x 30 L', '2 x 40 L', '2 x 45 L'];
@@ -6242,6 +6317,21 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         <label class="btn btn-ghost btn-sm" style="cursor:pointer;">${btnIco('download')}Subir Excel<input type="file" accept=".xlsx,.xls,.csv" data-precios-subir="gnc" style="display:none;"></label>
       </div>`;
 
+    const secFicha = `
+      <div class="agent-hint" style="margin-top:0;">Tu asistente de WhatsApp lo configuramos nosotros a mano, para que lo que le conteste a tus clientes esté bien escrito. Pero no hace falta que tipees de nuevo lo que ya cargaste: acá sale todo junto, listo para revisar y mandar.</div>
+      <ol class="ficha-pasos">
+        <li>Leé el texto de abajo y corregí lo que quieras.</li>
+        <li>Completá las preguntas del final, que son las que Estelita no puede saber.</li>
+        <li>Mandanoslo y te lo dejamos funcionando.</li>
+      </ol>
+      <textarea id="tc-ficha-texto" rows="14" spellcheck="false">${escapeHtml(fichaParaAsistente())}</textarea>
+      <div class="form-actions" style="margin-top:8px;">
+        <button type="button" class="btn btn-primary btn-sm" id="btn-ficha-wa">Enviar por WhatsApp</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-ficha-copiar">Copiar</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-ficha-rehacer">Rehacer con mis datos actuales</button>
+      </div>
+      <div class="agent-hint" style="margin-top:6px;">Cuando cambies precios, volvé acá, tocá <b>Rehacer</b> y mandala de nuevo. Así el asistente nunca queda con precios viejos.</div>`;
+
     const secListas = `
       <label class="serv-switch"><input type="checkbox" id="tc-hace-mecanica" ${tallerConfig.haceMecanica !== false ? 'checked' : ''}> El taller realiza trabajos de mecánica</label>
       <div class="agent-hint" style="margin-top:0;">Estos precios se usan para armar presupuestos. El asistente no cotiza mecánica por WhatsApp: responde que el taller lo hace y que el trabajo se presupuesta con el vehículo a la vista. Si desactivás la sección, responde que el taller no hace mecánica.</div>
@@ -6293,6 +6383,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       ${configSeccionCard('logo', 'Logo del taller', secLogo)}
       ${configSeccionCard('servicios', 'Lista de precios GNC', secServicios)}
       ${configSeccionCard('listas', 'Precios de mecánica', secListas)}
+      ${configSeccionCard('ficha', 'Ficha para el asistente de WhatsApp', secFicha)}
       ${configSeccionCard('impresion', 'Impresión sobre la planilla', secImpresion)}
       ${configSeccionCard('licencia', 'Licencia del equipo', secLicencia)}
       ${configSeccionCard('sugerencias', 'Sugerencias para mejorar Estelita', secSugerencias)}
@@ -9929,6 +10020,35 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         }
       });
     });
+
+    // --- Ficha para el asistente ---
+    const fichaEl = root.querySelector('#tc-ficha-texto');
+    if (fichaEl) {
+      const btnWa = root.querySelector('#btn-ficha-wa');
+      if (btnWa) btnWa.addEventListener('click', () => {
+        abrirWhatsapp(REGISTRO_WHATSAPP, fichaEl.value);
+      });
+      const btnCopiar = root.querySelector('#btn-ficha-copiar');
+      if (btnCopiar) btnCopiar.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(fichaEl.value);
+          btnCopiar.textContent = 'Copiado ✓';
+          setTimeout(() => { btnCopiar.textContent = 'Copiar'; }, 1800);
+        } catch (e) {
+          // Sin permiso de portapapeles: se selecciona para que copie a mano.
+          fichaEl.focus(); fichaEl.select();
+          await customAlert('No pude copiarlo solo. Ya te lo dejé seleccionado: apretá Ctrl+C.', 'Copiar la ficha');
+        }
+      });
+      // "Rehacer" pisa lo tipeado a propósito: es para cuando cambiaron los
+      // precios y se quiere el texto nuevo, no para recuperar un borrador.
+      const btnRehacer = root.querySelector('#btn-ficha-rehacer');
+      if (btnRehacer) btnRehacer.addEventListener('click', async () => {
+        const ok = await customConfirm('Se va a rearmar la ficha con tus datos de ahora. Si escribiste respuestas en el texto, se pierden.', { titulo: 'Rehacer la ficha', okLabel: 'Rehacer' });
+        if (!ok) return;
+        fichaEl.value = fichaParaAsistente();
+      });
+    }
 
     const btnDosCil = root.querySelector('#btn-eq-dos-cil');
     if (btnDosCil) btnDosCil.addEventListener('click', () => {
