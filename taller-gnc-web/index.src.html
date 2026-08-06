@@ -2438,6 +2438,69 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     _presuCatalogo = out;
     return out;
   }
+  // ===== PRECIOS POR EXCEL =====
+  // Nadie carga doscientos precios a mano, pero cualquiera los edita en una
+  // planilla — y encima es donde el proveedor se los manda. Se baja el Excel,
+  // se toca la columna "Tu precio" y se vuelve a subir.
+  //
+  // La primera columna es un CÓDIGO y NO se toca: si el emparejamiento fuera
+  // por nombre, con que alguien corrija una tilde se crearían duplicados en vez
+  // de actualizar el ítem que ya estaba.
+  async function descargarPreciosExcel(tipo) {
+    await cargarXlsxLib();
+    const XLSX = window.XLSX;
+    const filas = presuCatalogo().filter(e => e.tipo === tipo).map(e => ({
+      'Codigo (no tocar)': e.clave,
+      'Rubro': e.sec,
+      'Item': e.nom,
+      'Precio de lista': presuPrecioLista(e),
+      'Tu precio': (tallerConfig.listaPrecios && tallerConfig.listaPrecios.items || {})[e.clave] ?? '',
+    }));
+    const hoja = XLSX.utils.json_to_sheet(filas);
+    hoja['!cols'] = [{ wch: 42 }, { wch: 26 }, { wch: 46 }, { wch: 15 }, { wch: 13 }];
+    const libro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(libro, hoja, tipo === 'mec' ? 'Mecanica' : 'GNC');
+    XLSX.writeFile(libro, `precios_${tipo === 'mec' ? 'mecanica' : 'gnc'}_${fechaLocalISO()}.xlsx`);
+  }
+
+  /** Lee el Excel y devuelve qué cambiaría, SIN aplicar nada todavía. */
+  async function leerPreciosExcel(file, tipo) {
+    await cargarXlsxLib();
+    const XLSX = window.XLSX;
+    const buf = await file.arrayBuffer();
+    const libro = XLSX.read(buf, { type: 'array' });
+    const filas = XLSX.utils.sheet_to_json(libro.Sheets[libro.SheetNames[0]], { defval: '' });
+    const porClave = {};
+    presuCatalogo().filter(e => e.tipo === tipo).forEach(e => { porClave[e.clave] = e; });
+    const cambios = []; const noEncontrados = [];
+    filas.forEach(f => {
+      const clave = String(f['Codigo (no tocar)'] || '').trim();
+      if (!clave) return;
+      const e = porClave[clave];
+      if (!e) { noEncontrados.push(clave); return; }
+      const crudo = String(f['Tu precio'] ?? '').trim();
+      // Vacío = "seguí usando el de lista", no "precio cero".
+      const valor = crudo === '' ? null : Number(crudo.replace(/[^\d.-]/g, ''));
+      if (crudo !== '' && !(valor > 0)) return;
+      const actual = (tallerConfig.listaPrecios && tallerConfig.listaPrecios.items || {})[clave] ?? null;
+      const lista = presuPrecioLista(e);
+      // Sólo es una excepción real si difiere del precio de lista: así una
+      // actualización futura de la lista base sigue llegando al resto.
+      const nuevo = (valor == null || valor === lista) ? null : valor;
+      if (nuevo !== actual) cambios.push({ clave, nom: e.nom, antes: actual, ahora: nuevo });
+    });
+    return { cambios, noEncontrados, leidas: filas.length };
+  }
+
+  function aplicarPreciosExcel(cambios) {
+    tallerConfig.listaPrecios = tallerConfig.listaPrecios || { ajusteGnc: 0, ajusteMec: 0, items: {} };
+    tallerConfig.listaPrecios.items = tallerConfig.listaPrecios.items || {};
+    cambios.forEach(c => {
+      if (c.ahora == null) delete tallerConfig.listaPrecios.items[c.clave];
+      else tallerConfig.listaPrecios.items[c.clave] = c.ahora;
+    });
+  }
+
   // El precio de lista con el ajuste general ya aplicado, ignorando cualquier
   // precio propio: es contra este número que se decide si lo tipeado es una
   // excepción real o simplemente lo mismo que ya daba la lista.
@@ -6115,6 +6178,13 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       </div>
       <div class="form-actions" style="margin-top:10px;">
         <button type="button" class="btn btn-ghost btn-sm" id="btn-serv-agregar">+ Agregar un servicio propio</button>
+      </div>
+
+      <div class="lp-h" style="margin-top:18px;">Componentes y repuestos de GNC</div>
+      <div class="agent-hint" style="margin-top:0;">Bajá la planilla, tocá la columna “Tu precio” y volvé a subirla. La primera columna es un código: <b>no la toques</b>, es la que empareja cada ítem. Lo que dejes vacío sigue tomando el precio de lista.</div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost btn-sm" data-precios-bajar="gnc">${btnIco('upload')}Descargar Excel</button>
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer;">${btnIco('download')}Subir Excel<input type="file" accept=".xlsx,.xls,.csv" data-precios-subir="gnc" style="display:none;"></label>
       </div>`;
 
     // Equipos completos. La grilla la define CADA taller: qué sistemas trabaja
@@ -6168,7 +6238,14 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       </div>
       <div class="agent-hint lp-ej" id="tc-aj-ej">${escapeHtml(ajusteEjemplo(lp.ajusteGnc, lp.ajusteMec))}</div>
 
-      <div class="lp-h">2. Un ítem puntual</div>
+      <div class="lp-h">2. La lista completa, por Excel</div>
+      <div class="agent-hint" style="margin-top:0;">Los precios de mecánica los cargamos nosotros y se actualizan solos. Si querés los tuyos, bajá la planilla, tocá la columna “Tu precio” y volvé a subirla. La primera columna es un código: <b>no la toques</b>. Lo que dejes vacío sigue tomando el precio de lista, así te siguen llegando las actualizaciones.</div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost btn-sm" data-precios-bajar="mec">${btnIco('upload')}Descargar Excel</button>
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer;">${btnIco('download')}Subir Excel<input type="file" accept=".xlsx,.xls,.csv" data-precios-subir="mec" style="display:none;"></label>
+      </div>
+
+      <div class="lp-h">3. Un ítem puntual</div>
       <div class="agent-hint" style="margin-top:0;">Buscá cualquier componente, equipo o trabajo de mecánica y ponele tu precio. Se guarda apenas lo escribís${nPropios ? ` — hoy tenés <b id="tc-lp-n">${nPropios}</b> ${nPropios === 1 ? 'ítem con precio propio' : 'ítems con precio propio'}` : '. <b id="tc-lp-n" hidden>0</b>'}.</div>
       <input type="text" id="tc-lp-busca" placeholder="Ej: reductor SGV, embrague, cilindro 30/244…" autocomplete="off">
       <div id="tc-lp-res" class="presu-res lp-res"></div>
@@ -9768,6 +9845,43 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     if (btnCrm) btnCrm.addEventListener('click', () => {
       menuOpen = false;
       setTimeout(render, 0);
+    });
+
+    // --- Precios por Excel ---
+    root.querySelectorAll('[data-precios-bajar]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try { await descargarPreciosExcel(btn.getAttribute('data-precios-bajar')); }
+        catch (e) { await customAlert(e && e.message ? e.message : 'No se pudo generar la planilla.', 'Error'); }
+        btn.disabled = false;
+      });
+    });
+    root.querySelectorAll('[data-precios-subir]').forEach(inp => {
+      inp.addEventListener('change', async () => {
+        const file = inp.files && inp.files[0];
+        inp.value = '';
+        if (!file) return;
+        try {
+          const { cambios, noEncontrados, leidas } = await leerPreciosExcel(file, inp.getAttribute('data-precios-subir'));
+          if (!cambios.length) {
+            await customAlert(`Se leyeron ${leidas} renglones y no hay ningún precio distinto del que ya tenías.`, 'Sin cambios');
+            return;
+          }
+          // Subir un Excel PISA precios: se muestra qué va a pasar antes de tocar nada.
+          const muestra = cambios.slice(0, 8).map(c =>
+            `• ${c.nom}: ${c.antes == null ? 'precio de lista' : presuMoney(c.antes)} → ${c.ahora == null ? 'precio de lista' : presuMoney(c.ahora)}`).join('\n');
+          const ok = await customConfirm(
+            `Se van a cambiar ${cambios.length} precio(s)${noEncontrados.length ? `, y ${noEncontrados.length} renglón(es) no se encontraron (¿se tocó la columna del código?)` : ''}.\n\n${muestra}${cambios.length > 8 ? `\n… y ${cambios.length - 8} más.` : ''}`,
+            { titulo: 'Confirmar los precios nuevos', okLabel: 'Aplicar' });
+          if (!ok) return;
+          syncTallerConfigFromDOM();
+          aplicarPreciosExcel(cambios);
+          await saveTallerConfig();
+          render();
+        } catch (e) {
+          await customAlert(e && e.message ? e.message : 'No se pudo leer la planilla.', 'Error');
+        }
+      });
     });
 
     // Al cambiar los sistemas o las medidas hay que redibujar la grilla.
