@@ -675,8 +675,13 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
 #gnc-app .ag-cell.hoy { background: color-mix(in srgb, var(--flame) 7%, transparent); }
 #gnc-app .ag-row-par .ag-cell.hoy { background: color-mix(in srgb, var(--flame) 12%, transparent); }
 #gnc-app .ag-cell:last-child { border-right: 1px solid var(--line); }
-#gnc-app .ag-turno { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--flame); border-radius: 6px; padding: 5px 6px; margin-bottom: 4px; cursor: pointer; }
+#gnc-app .ag-turno { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--flame); border-radius: 6px; padding: 5px 6px; margin-bottom: 4px; cursor: pointer; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 #gnc-app .ag-turno:hover { border-color: var(--flame-dim); }
+/* Arrastrar un turno a otro día u horario: el original queda apagado en su
+   lugar, la copia sigue al dedo y el casillero de destino se marca. */
+#gnc-app .ag-turno.ag-tomado { opacity: .28; }
+#gnc-app .ag-cell.ag-destino { background: color-mix(in srgb, var(--flame) 20%, transparent); outline: 2px dashed var(--flame); outline-offset: -2px; }
+#gnc-app .ag-fantasma { position: fixed; z-index: 9999; margin: 0; pointer-events: none; opacity: .96; box-shadow: 0 10px 24px rgba(0, 0, 0, .3); }
 #gnc-app .ag-turno .h { font-size: 12px; font-weight: 800; }
 #gnc-app .ag-turno .p { font-size: 12.5px; font-weight: 700; letter-spacing: .3px; }
 #gnc-app .ag-turno .m { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
@@ -4946,7 +4951,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     const bloque = ({ c, t }) => {
       const nom = nombreFicha(c);
       const sub = (t.motivo || '') + (nom && nom !== c.patente ? ' · ' + nom : '');
-      return `<div class="ag-turno" style="border-left-color:${tipoTurnoColor(t.motivo)}" data-agenda-turno="${c.id}">
+      return `<div class="ag-turno" style="border-left-color:${tipoTurnoColor(t.motivo)}" data-agenda-turno="${c.id}" data-turno-id="${t.id}">
         ${t.hora ? `<div class="h">${escapeHtml(t.hora)}</div>` : ''}
         <div class="p">${escapeHtml(c.patente || '—')}</div>
         ${sub ? `<div class="m">${escapeHtml(sub)}</div>` : ''}
@@ -11368,9 +11373,130 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       });
     });
 
+    // Correr un turno a otro día u horario arrastrándolo. En la computadora se
+    // toma y se lleva directo; en el celular hay que mantenerlo apretado un
+    // momento, porque si no arrastrar sería desplazar la pantalla.
+    let agArrastrePasado = 0;
+    (function arrastreDeTurnos() {
+      const bloques = Array.from(root.querySelectorAll('.ag-turno[data-turno-id]'));
+      if (!bloques.length) return;
+      const scroller = root.querySelector('.ag-scroll');
+      let origen = null, fantasma = null, destino = null, timer = null, raf = 0;
+      let activo = false, tipo = 'mouse', offX = 0, offY = 0, x0 = 0, y0 = 0, ultX = 0, ultY = 0;
+
+      // Mientras se arrastra, el dedo no tiene que mover la pantalla.
+      const frenarScroll = (e) => { if (activo) e.preventDefault(); };
+
+      function largar() {
+        if (timer) { clearTimeout(timer); timer = null; }
+        if (raf) { clearInterval(raf); raf = 0; }
+        if (fantasma) { fantasma.remove(); fantasma = null; }
+        if (origen) origen.classList.remove('ag-tomado');
+        if (destino) destino.classList.remove('ag-destino');
+        document.removeEventListener('touchmove', frenarScroll, { passive: false });
+        if (activo) agArrastrePasado = Date.now();
+        origen = null; destino = null; activo = false;
+      }
+
+      function tomar(x, y) {
+        const r = origen.getBoundingClientRect();
+        offX = x - r.left; offY = y - r.top;
+        fantasma = origen.cloneNode(true);
+        fantasma.classList.add('ag-fantasma');
+        fantasma.style.width = r.width + 'px';
+        fantasma.style.left = r.left + 'px';
+        fantasma.style.top = r.top + 'px';
+        root.appendChild(fantasma);
+        origen.classList.add('ag-tomado');
+        activo = true; ultX = x; ultY = y;
+        document.addEventListener('touchmove', frenarScroll, { passive: false });
+        if (navigator.vibrate) { try { navigator.vibrate(15); } catch (_) {} }
+        raf = setInterval(acercarBordes, 16);
+      }
+
+      function marcarDestino(x, y) {
+        const bajo = document.elementFromPoint(x, y);
+        const celda = bajo ? bajo.closest('[data-ag-celda]') : null;
+        if (celda === destino) return;
+        if (destino) destino.classList.remove('ag-destino');
+        destino = celda;
+        if (destino) destino.classList.add('ag-destino');
+      }
+
+      // Con el turno en la mano, llevarlo contra un borde corre la agenda sola:
+      // así se llega a otro día o a un horario que quedó fuera de la pantalla.
+      function acercarBordes() {
+        if (!activo) return;
+        let movio = false;
+        if (scroller) {
+          const rs = scroller.getBoundingClientRect();
+          if (ultX > rs.right - 44 && scroller.scrollLeft < scroller.scrollWidth - scroller.clientWidth) { scroller.scrollLeft += 12; movio = true; }
+          else if (ultX < rs.left + 44 && scroller.scrollLeft > 0) { scroller.scrollLeft -= 12; movio = true; }
+        }
+        if (ultY > window.innerHeight - 80) { window.scrollBy(0, 12); movio = true; }
+        else if (ultY < 80 && window.scrollY > 0) { window.scrollBy(0, -12); movio = true; }
+        if (movio) marcarDestino(ultX, ultY);
+      }
+
+      function arrastrar(x, y) {
+        ultX = x; ultY = y;
+        fantasma.style.left = (x - offX) + 'px';
+        fantasma.style.top = (y - offY) + 'px';
+        marcarDestino(x, y);
+      }
+
+      async function aterrizar() {
+        const celda = destino, el = origen;
+        largar();
+        if (!celda || !el) return;
+        const partes = (celda.getAttribute('data-ag-celda') || '').split('|');
+        const fecha = partes[0];
+        if (!fecha || !partes[1]) return;
+        const c = clientes.find(x => x.id === el.getAttribute('data-agenda-turno'));
+        const t = c && (c.turnos || []).find(x => x.id === el.getAttribute('data-turno-id'));
+        if (!t) return;
+        // Se conservan los minutos: correr un turno de 10:30 al casillero de las
+        // 14 lo deja a las 14:30, no a las 14 en punto.
+        const min = /^\d{1,2}:(\d{2})/.test(t.hora || '') ? (t.hora || '').split(':')[1] : '00';
+        const hora = partes[1] + ':' + min;
+        if (t.fecha === fecha && t.hora === hora) return;
+        t.fecha = fecha; t.hora = hora;
+        t.avisoEnviado = false; // cambió el horario: hay que volver a avisarle
+        await saveClientes();
+        render();
+      }
+
+      bloques.forEach(el => {
+        el.addEventListener('pointerdown', (e) => {
+          if (e.button) return;
+          largar();
+          origen = el; tipo = e.pointerType || 'mouse'; x0 = e.clientX; y0 = e.clientY;
+          try { el.setPointerCapture(e.pointerId); } catch (_) {}
+          // Con el dedo hay que sostenerlo; con el mouse alcanza con moverlo.
+          if (tipo !== 'mouse') timer = setTimeout(() => { timer = null; if (origen) tomar(x0, y0); }, 320);
+        });
+        el.addEventListener('pointermove', (e) => {
+          if (!origen) return;
+          const dx = Math.abs(e.clientX - x0), dy = Math.abs(e.clientY - y0);
+          if (!activo) {
+            if (tipo === 'mouse') { if (dx > 4 || dy > 4) tomar(e.clientX, e.clientY); else return; }
+            // Se movió antes de tiempo: no quería arrastrar, quería desplazar.
+            else { if (dx > 10 || dy > 10) largar(); return; }
+          }
+          e.preventDefault();
+          arrastrar(e.clientX, e.clientY);
+        });
+        el.addEventListener('pointerup', () => { if (activo) aterrizar(); else largar(); });
+        el.addEventListener('pointercancel', largar);
+        // El menú de "mantener apretado" del celular arruinaría el arrastre.
+        el.addEventListener('contextmenu', (e) => { if (activo || timer) e.preventDefault(); });
+      });
+    })();
+
     // Tocar un turno de la agenda abre la ficha del cliente (lo busca por patente).
     root.querySelectorAll('[data-agenda-turno]').forEach(el => {
       el.addEventListener('click', () => {
+        if (Date.now() - agArrastrePasado < 400) return; // venía de arrastrarlo
         const c = clientes.find(x => x.id === el.getAttribute('data-agenda-turno'));
         if (!c) return;
         showTurnos = false; agendaSemana = false;
