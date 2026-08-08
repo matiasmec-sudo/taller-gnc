@@ -2231,6 +2231,15 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         obleaLista: !!(ultimo && ultimo.obleaLista),
         obleaListaEn: (ultimo && ultimo.obleaListaEn) || null,
         proximoTurno: pt ? { fecha: pt.fecha, hora: pt.hora || '' } : null,
+        // Vencimientos, para que el asistente pueda contestar cuándo hay que
+        // volver. Va la fecha de la oblea de papel, la del cilindro y la que
+        // manda de verdad (la más cercana de las dos: la oblea no puede durar
+        // más que el cilindro habilitado).
+        vencOblea: c.fecha_oblea || null,
+        vencCilindro: phVencimientoISO(c.fecha_crpc, c.tipo_cilindro),
+        vencReal: obleaVenceISO(c),
+        aniosCilindro: c.tipo_cilindro === '3' ? 3 : 5,
+        sinGnc: sinGnc(c), // desmontaje o baja: a este no hay que ofrecerle renovar
       };
     });
     try {
