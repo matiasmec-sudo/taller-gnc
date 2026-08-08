@@ -1672,6 +1672,11 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     render();
     if (syncActiva()) sincronizar('apertura');
     fetchPedidosWa(); // Nivel 2: traer pedidos de turno que llegaron por WhatsApp.
+    // Nivel 2 al revés: refrescar en el CRM el estado y los vencimientos de
+    // cada patente. Va también en la apertura y no sólo al guardar, porque si
+    // no, el asistente puede pasarse días contestando con datos viejos (o sin
+    // datos nuevos) hasta que al taller le toque cambiar algo.
+    programarPushEstado();
     iniciarAvisoPendientesDiario();
     // En segundo plano: saber si hay técnicos vinculados (muestra u oculta
     // el botón "Enviar al técnico" del paso 1).
