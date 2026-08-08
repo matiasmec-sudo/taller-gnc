@@ -1,7 +1,8 @@
 // Estado de trámites por patente (Nivel 2: integración con el CRM de WhatsApp).
 //
 // POST: Estelita empuja el índice de estados del taller {license, estados}.
-//   estados = { "AA123BB": { nombre, estado, obleaLista, obleaListaEn, proximoTurno }, ... }
+//   estados = { "AA123BB": { nombre, estado, obleaLista, obleaListaEn, proximoTurno,
+//                            vencOblea, vencCilindro, vencReal, aniosCilindro, sinGnc }, ... }
 // GET ?license=X&patente=Y: el CRM consulta el estado de una patente para que
 //   el agente responda "¿está lista tu oblea?" con datos reales.
 //
