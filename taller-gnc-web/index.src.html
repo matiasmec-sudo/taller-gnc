@@ -8852,10 +8852,22 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
           clientesConFotos.add(id);
         } catch (e) { /* puede no haberse subido todavía: la próxima pasada la trae */ }
       }
+      // Cada foto va en su propio intento. Si una falla —muy pesada, se cortó
+      // la señal— se anota y se sigue: lo que NO puede pasar es que una foto
+      // impida guardar los clientes y los trámites. Antes, una sola foto que
+      // rebotaba abortaba la sincronización entera: no se subía datos.json ni
+      // se marcaba la fecha, y el taller quedaba días sin respaldo de verdad
+      // creyendo que era un problema de señal.
+      let fotosQueFallaron = 0;
       for (const id of subirFotosDe) {
-        const fotos = await fotosGuardadas(id);
-        if (fotos.foto1 || fotos.foto2) {
-          await apiRespaldo({ accion: 'subir', nombre: `fotos-${id}.json`, contenido: await cifrarParaRespaldo(fotos, clave) });
+        try {
+          const fotos = await fotosGuardadas(id);
+          if (fotos.foto1 || fotos.foto2) {
+            await apiRespaldo({ accion: 'subir', nombre: `fotos-${id}.json`, contenido: await cifrarParaRespaldo(fotos, clave) });
+          }
+        } catch (e) {
+          fotosQueFallaron++;
+          console.warn('[respaldo] no subió la foto de ' + id + ': ' + (e && e.message));
         }
       }
 
@@ -8870,6 +8882,10 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
 
       syncUltima = new Date().toISOString();
       try { localStorage.setItem(SYNC_ULTIMA_KEY, syncUltima); } catch (e) { /* ok */ }
+      // La copia quedó guardada igual: se avisa por las fotos, sin alarmar.
+      if (fotosQueFallaron) {
+        syncEstado = `La copia se guardó. ${fotosQueFallaron} foto${fotosQueFallaron === 1 ? '' : 's'} no pudo subir (suele ser por el tamaño); se reintenta sola en la próxima sincronización.`;
+      }
       // Redibujar solo si cambió algo y no hay un trámite a medias en pantalla.
       if (cambioLocal && !showForm && !editingId) render();
       else actualizarEstadoSyncUI();
