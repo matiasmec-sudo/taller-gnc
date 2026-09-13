@@ -4,7 +4,7 @@
 // eliminar. La primera vez importa (seed) los códigos de LICENSE_CODES para
 // que el panel muestre también los que ya estaban en uso.
 import crypto from 'crypto';
-import { leerLicenciasEstricto, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, sumarMesISO, leerSugerencias, guardarSugerencias, leerCredito, guardarCredito } from './_licencias.js';
+import { leerLicenciasEstricto, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, PRODUCTOS, sumarMesISO, leerSugerencias, guardarSugerencias, leerCredito, guardarCredito } from './_licencias.js';
 
 // Ritmo de consumo de la IA. El consumo se guarda por MES (no por día), así que
 // el ritmo se estima como: gastado del mes / días transcurridos del mes. Se
@@ -144,9 +144,10 @@ export default async function handler(req, res) {
     if (accion === 'agregar') {
       const taller = String(req.body.taller || '').trim();
       const topeDia = Number(req.body.topeDia) > 0 ? Number(req.body.topeDia) : 50;
-      const codigo = nuevoCodigo(lics.map(l => l.codigo).concat(codigosEnv()));
+      const producto = Object.keys(PRODUCTOS).includes(req.body.producto) ? req.body.producto : 'taller';
+      const codigo = nuevoCodigo(lics.map(l => l.codigo).concat(codigosEnv()), producto);
       lics.push({
-        codigo, taller, estado: 'activo', alta: new Date().toISOString().slice(0, 10),
+        codigo, taller, producto, estado: 'activo', alta: new Date().toISOString().slice(0, 10),
         topeDia, notas: '',
         plan: PLANES.includes(req.body.plan) ? req.body.plan : '',
         medioPago: MEDIOS.includes(req.body.medioPago) ? req.body.medioPago : '',

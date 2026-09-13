@@ -23,11 +23,16 @@ export const PLAN_PRECIOS = { basico: 15000, profesional: 22000, full: 35000 };
 export const PLAN_NOMBRES = { basico: 'Básico', profesional: 'Profesional', full: 'Full' };
 
 // Genera un código de licencia único (sin O/0/I/1/L, fácil de dictar).
+// El prefijo dice de qué producto es: GNC- (Estelita, el taller) o REP-
+// (Estelita Repuestos, la casa de repuestos). Los dos se validan igual por
+// /api/licencia; el prefijo es para que a simple vista se sepa cuál es cuál.
 const ALFA_COD = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-export function nuevoCodigo(existentes) {
+export const PRODUCTOS = { taller: 'GNC', repuestos: 'REP' };
+export function nuevoCodigo(existentes, producto = 'taller') {
   const set = new Set(existentes || []);
+  const prefijo = PRODUCTOS[producto] || PRODUCTOS.taller;
   let c;
-  do { c = 'GNC-' + Array.from({ length: 4 }, () => ALFA_COD[crypto.randomInt(ALFA_COD.length)]).join(''); } while (set.has(c));
+  do { c = prefijo + '-' + Array.from({ length: 4 }, () => ALFA_COD[crypto.randomInt(ALFA_COD.length)]).join(''); } while (set.has(c));
   return c;
 }
 

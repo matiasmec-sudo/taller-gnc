@@ -388,7 +388,10 @@
   }
 
   $('#btn-nueva').addEventListener('click', async () => {
-    const taller = prompt('Nombre del taller (opcional, para tu referencia):', '');
+    const prodStr = prompt('Producto — escribí: taller (Estelita, código GNC-) o repuestos (Estelita Repuestos, código REP-):', 'taller');
+    if (prodStr === null) return;
+    const producto = prodStr.trim().toLowerCase() === 'repuestos' ? 'repuestos' : 'taller';
+    const taller = prompt(producto === 'repuestos' ? 'Nombre de la casa de repuestos (opcional, para tu referencia):' : 'Nombre del taller (opcional, para tu referencia):', '');
     if (taller === null) return;
     const email = prompt('Email del taller (opcional):', '');
     if (email === null) return;
@@ -398,9 +401,9 @@
     const topeStr = prompt('Tope de lecturas por día para este código:', '50');
     if (topeStr === null) return;
     try {
-      const data = await api('agregar', { taller: taller.trim(), email: email.trim(), plan, pagoHasta: pago.trim(), medioPago: 'transferencia', topeDia: Number(topeStr) || 50 });
+      const data = await api('agregar', { taller: taller.trim(), email: email.trim(), plan, pagoHasta: pago.trim(), medioPago: 'transferencia', topeDia: Number(topeStr) || 50, producto });
       await cargar();
-      prompt('Licencia creada. Copiá este código y entregáselo al taller:', data.codigo);
+      prompt(producto === 'repuestos' ? 'Licencia creada. Copiá este código y entregáselo a la casa de repuestos (lo carga en Ajustes de Estelita Repuestos):' : 'Licencia creada. Copiá este código y entregáselo al taller:', data.codigo);
     } catch (e) { alert('No se pudo crear: ' + e.message); }
   });
 
