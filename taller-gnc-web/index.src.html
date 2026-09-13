@@ -5206,10 +5206,21 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     let list = clientes.slice();
     if (query) {
       const q = query.toLowerCase();
+      // Teléfono: el que vuelve a escribir por WhatsApp muchas veces no está
+      // agendado, así que hay que poder encontrarlo por su número. Se comparan
+      // solo los dígitos y, con 6 o más, también el final: así "223 400-3384",
+      // "+54 9 223 4003384" y "0223 15 400-3384" encuentran al mismo cliente.
+      const qDig = query.replace(/\D/g, '');
+      const porTelefono = (c) => {
+        if (qDig.length < 6) return false;
+        const t = String(c.telefono || '').replace(/\D/g, '');
+        return !!t && (t.includes(qDig) || t.slice(-7) === qDig.slice(-7));
+      };
       list = list.filter(c =>
         (c.nombre || '').toLowerCase().includes(q) ||
         (c.cliNombre || '').toLowerCase().includes(q) ||
-        (c.patente || '').toLowerCase().includes(q)
+        (c.patente || '').toLowerCase().includes(q) ||
+        porTelefono(c)
       );
     }
     const order = { danger: 0, warn: 1, ok: 2, none: 3 };
@@ -6652,6 +6663,22 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       propio: false,
     };
   }
+  // Quién FIRMA la ficha del PEC y la planilla de la prueba hidráulica: la
+  // persona que se presentó con el DNI. Si el que trajo el auto no es el
+  // titular, firma él, y la aclaración tiene que llevar SU nombre y SU
+  // documento: una firma con la aclaración de otra persona no vale. Los datos
+  // del titular siguen en el resto de la ficha, como exige ENARGAS.
+  function firmanteFicha(c) {
+    const d = clienteDatos(c);
+    if (d.propio && d.nombre) {
+      return { nombre: d.nombre, documento: [d.tipoDoc, d.dni].filter(Boolean).join(' ') };
+    }
+    return {
+      nombre: (c && c.nombre) || '',
+      documento: [c && c.tipo_documento, c && c.dni].filter(Boolean).join(' '),
+    };
+  }
+
   // Nombre para la FICHA DEL TALLER (tarjeta, búsqueda, historial, WhatsApp):
   // el del cliente. OJO: el PEC SIEMPRE usa cliente.nombre (titular de la
   // cédula, exigencia de ENARGAS), nunca el del cliente del taller.
@@ -7228,8 +7255,8 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
             </div>
             <div style="flex:1; text-align:center; font-size:8px;">
               ${firmaDataUrl ? `<img class="pec-valor" src="${firmaDataUrl}" style="height:28px; max-width:100%;">` : `<div style="height:28px;"></div>`}
-              <div class="pec-valor" style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(cliente.nombre || '')}</div>
-              <div class="pec-valor" style="font-size:7px;">${escapeHtml([cliente.tipo_documento, cliente.dni].filter(Boolean).join(' '))}</div>
+              <div class="pec-valor" style="border-top:1px solid #000; font-weight:bold;">${escapeHtml(firmanteFicha(cliente).nombre)}</div>
+              <div class="pec-valor" style="font-size:7px;">${escapeHtml(firmanteFicha(cliente).documento)}</div>
               <div style="font-size:6px; color:#666;">Firma, aclaración y N° Documento del Propietario</div>
             </div>
           </div>
@@ -7535,7 +7562,9 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     T(tramite.detalle, M.observaciones.x, M.observaciones.y, 8, M.observaciones.maxW);
     // Aclaración del propietario en una sola línea (la del formulario):
     // "NOMBRE — DNI 12345678". La firma la hace el cliente a mano.
-    const acl = [cliente.nombre, [cliente.tipo_documento, cliente.dni].filter(Boolean).join(' ')].filter(Boolean).join(' — ');
+    // La aclaración es de quien firma: el que se presentó con el DNI.
+    const firmante = firmanteFicha(cliente);
+    const acl = [firmante.nombre, firmante.documento].filter(Boolean).join(' — ');
     T(acl, M.aclNombre.x, M.aclNombre.y, 8);
 
     // Para el envío al PEC: se adjuntan las fotos de la documentación como
@@ -7655,7 +7684,9 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     T(pec.telefono, M.telPec.x, M.telPec.y, 8);
 
     // Aclaración del propietario (la firma la hace a mano).
-    T([cliente.nombre, [cliente.tipo_documento, cliente.dni].filter(Boolean).join(' ')].filter(Boolean).join(' — '), M.aclNombre.x, M.aclNombre.y, 8);
+    // La aclaración es de quien firma: el que se presentó con el DNI.
+    const firmanteCrpc = firmanteFicha(cliente);
+    T([firmanteCrpc.nombre, firmanteCrpc.documento].filter(Boolean).join(' — '), M.aclNombre.x, M.aclNombre.y, 8);
 
     return doc.output('blob');
   }
@@ -9453,7 +9484,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         ${algunPanelAbierto ? '' : `<div class="controls">
           <div class="search-wrap">
             <svg class="search-ico" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-            <input class="search-input" type="text" id="search-input" placeholder="Buscar por nombre o patente..." value="${escapeHtml(currentQuery)}">
+            <input class="search-input" type="text" id="search-input" placeholder="Buscar por nombre, patente o teléfono..." value="${escapeHtml(currentQuery)}">
             ${currentQuery ? '<button type="button" class="search-clear" id="btn-clear-search" title="Limpiar búsqueda" aria-label="Limpiar búsqueda">✕</button>' : ''}
           </div>
           <div class="controls-actions">
