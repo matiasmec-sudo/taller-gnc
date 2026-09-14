@@ -489,6 +489,62 @@
 .fact-aviso { font-size: 12px; margin-top: 8px; line-height: 1.4; }
 .fact-aviso.err { color: #C0281A; }
 .fact-aviso.ok { color: #157A44; }
+/* Caja del mostrador: panel (dentro de #gnc-app, con los colores del tema) */
+#gnc-app .caja-tabs { display: flex; gap: 4px; background: var(--surface-alt); border-radius: 12px; padding: 3px; margin-bottom: 14px; }
+#gnc-app .caja-tabs button { flex: 1; border: 0; background: transparent; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--text-muted); padding: 8px 6px; border-radius: 9px; cursor: pointer; }
+#gnc-app .caja-tabs button.si { background: var(--surface); color: var(--text); box-shadow: var(--sombra); }
+#gnc-app .caja-dia-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+#gnc-app .caja-dia-head > div { flex: 1; min-width: 0; }
+#gnc-app .caja-sub { font-size: 12.5px; color: var(--text-muted); }
+#gnc-app .caja-pill { font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+#gnc-app .caja-pill.abierta { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+#gnc-app .caja-pill.cerrada { color: var(--text-muted); background: var(--surface-alt); }
+#gnc-app .caja-pill.atraso { color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); }
+#gnc-app .caja-grande { background: color-mix(in srgb, var(--flame) 10%, var(--surface)); border-radius: 14px; padding: 13px 14px; margin-bottom: 10px; }
+#gnc-app .caja-etq { font-size: 12.5px; color: var(--text-muted); }
+#gnc-app .caja-valor { font-size: 30px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+#gnc-app .caja-dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+#gnc-app .caja-num { border: 1px solid var(--line); border-radius: 12px; padding: 9px 11px; }
+#gnc-app .caja-valor-m { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+#gnc-app .caja-panel .mas { color: var(--ok); }
+#gnc-app .caja-panel .menos { color: var(--danger); }
+#gnc-app .caja-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+#gnc-app .caja-bloque { margin-bottom: 14px; }
+#gnc-app .caja-seccion { font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; margin-bottom: 4px; }
+#gnc-app .caja-linea { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+#gnc-app .caja-mov { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto 22px; gap: 8px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--line); }
+#gnc-app .caja-hora { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+#gnc-app .caja-concepto { font-size: 14px; line-height: 1.3; min-width: 0; overflow-wrap: anywhere; }
+#gnc-app .caja-concepto small { display: block; font-size: 12px; color: var(--text-muted); }
+#gnc-app .caja-monto { white-space: nowrap; font-variant-numeric: tabular-nums; }
+#gnc-app .caja-borrar { border: 0; background: none; color: var(--text-muted); cursor: pointer; font-size: 14px; padding: 0 2px; }
+#gnc-app .caja-borrar:hover { color: var(--danger); }
+#gnc-app .caja-vacio { color: var(--text-muted); font-size: 14px; padding: 10px 0; }
+#gnc-app .caja-link { border: 0; background: none; padding: 0; color: var(--flame); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; }
+#gnc-app .caja-cierre-info { font-size: 13.5px; color: var(--text-muted); background: var(--surface-alt); border-radius: 12px; padding: 10px 12px; }
+#gnc-app .caja-deuda { border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; display: grid; gap: 6px; margin-bottom: 10px; }
+#gnc-app .caja-deuda.atrasada { border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); }
+#gnc-app .caja-barra { height: 7px; border-radius: 999px; background: var(--surface-alt); overflow: hidden; }
+#gnc-app .caja-barra i { display: block; height: 100%; background: var(--ok); border-radius: 999px; }
+#gnc-app .caja-deuda-pie { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+#gnc-app .caja-deuda-botones { display: flex; gap: 6px; flex-wrap: wrap; }
+/* Caja del mostrador: ventanas (viven fuera de #gnc-app, como los demás modales) */
+.gnc-modal-box.caja-modal { max-width: 420px; max-height: 92vh; overflow: auto; }
+.caja-modal .caja-monto-in { font-size: 22px !important; font-weight: 700; font-variant-numeric: tabular-nums; }
+.caja-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.caja-chip { font: inherit; font-size: 13px; border: 1px solid #E3E8F0; border-radius: 999px; padding: 6px 12px; background: #fff; color: #1A2333; cursor: pointer; }
+.caja-chip.si { background: #1D5BD8; border-color: #1D5BD8; color: #fff; font-weight: 600; }
+.caja-chip:focus-visible, .caja-segmento button:focus-visible { outline: 2px solid #1D5BD8; outline-offset: 2px; }
+.caja-segmento { display: grid; grid-template-columns: 1fr 1fr; background: #EEF2F9; border-radius: 11px; padding: 3px; margin-bottom: 10px; }
+.caja-segmento button { font: inherit; font-size: 13px; border: 0; background: transparent; padding: 8px 4px; border-radius: 9px; color: #6B7688; cursor: pointer; }
+.caja-segmento button.si { background: #fff; color: #1A2333; font-weight: 700; box-shadow: 0 1px 4px rgba(20, 40, 90, 0.12); }
+.caja-queda { background: #FCF0DA; border: 1px solid #F0C98A; border-radius: 12px; padding: 9px 11px; font-size: 13px; margin: 4px 0 6px; }
+.caja-queda b { color: #9A5B00; }
+.caja-queda.ok { background: #E3F3EA; border-color: #BFE3CD; }
+.caja-queda.ok b { color: #157A44; }
+.caja-cuenta { display: grid; gap: 3px; font-size: 13.5px; margin-bottom: 10px; font-variant-numeric: tabular-nums; }
+.caja-cuenta div { display: flex; justify-content: space-between; }
+.caja-cuenta .total { border-top: 1.5px solid #1A2333; padding-top: 5px; font-weight: 800; }
 /* Los modales viven fuera de #gnc-app, así que sus botones necesitan
    estilos propios (si no, quedan con el look gris nativo del navegador). */
 .gnc-modal-box .btn {
@@ -1510,6 +1566,11 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       etiquetas: ['nombre', 'fecha', 'taller'],
       texto: `¡Hola {nombre}! Vimos que no pudiste venir a tu turno del {fecha}. ¿Reprogramamos? Decinos qué día te queda cómodo y te esperamos. ¡Saludos!`,
     },
+    recordatorioSaldo: {
+      label: 'Recordatorio de saldo pendiente (caja)',
+      etiquetas: ['nombre', 'patente', 'trabajo', 'saldo', 'taller'],
+      texto: `¡Hola {nombre}! Te escribimos de {taller} por el saldo de {trabajo} del vehículo {patente}: quedan {saldo}. Cuando puedas, avisanos cómo lo abonás. ¡Gracias!`,
+    },
     adjuntoPc: {
       label: 'Aclaración del PDF (solo al enviar desde la computadora)',
       etiquetas: [],
@@ -1660,6 +1721,10 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       const res4 = await window.storage.get(PRESUPUESTOS_KEY, false);
       presupuestos = res4 ? JSON.parse(res4.value) : [];
     } catch (e) { presupuestos = []; }
+    try {
+      const res5 = await window.storage.get(CAJA_KEY, false);
+      caja = cajaNormalizar(res5 ? JSON.parse(res5.value) : null);
+    } catch (e) { caja = cajaNormalizar(null); }
     migrarPecsConfig(tallerConfig);
     if (migrateClientes()) await saveClientes(false);
     tomarSnapshotClientes();
@@ -3446,7 +3511,9 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
           }, items, total);
           const nombreArchivo = `Comprobante_${(q('#fact-nombre').value.trim() || 'cliente').replace(/\s+/g, '_')}_${fechaLocalISO()}.pdf`;
           await compartirComprobantePago(blob, nombreArchivo, datos.telefono, datos.nombre, total);
+          const nombreCobro = q('#fact-nombre').value.trim() || datos.nombre || '';
           cerrar();
+          cajaTrasComprobante({ ...datos, items, nombre: nombreCobro }, total);
         } catch (e) {
           aviso.className = 'fact-aviso err';
           aviso.textContent = 'No se pudo generar el comprobante: ' + ((e && e.message) || e);
@@ -3476,8 +3543,10 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         if (!r.ok) throw new Error(resp.error || 'No se pudo emitir la factura.');
         aviso.textContent = `✔ Factura autorizada. CAE: ${resp.comprobante.cae}. Abriendo para compartir…`;
         await factCompartirPdf(resp, datos.telefono, datos.nombre);
+        const nombreCobro = q('#fact-nombre').value.trim() || datos.nombre || '';
         cerrar();
         if (datos.alTerminar) datos.alTerminar();
+        cajaTrasComprobante({ ...datos, items, nombre: nombreCobro }, Number(resp.comprobante && resp.comprobante.imp_total) || 0);
       } catch (e) {
         aviso.className = 'fact-aviso err';
         aviso.textContent = (e && e.message) || 'Error de conexión con el facturador.';
@@ -3594,6 +3663,710 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       }).join('')}</div>`
       : `<div class="empty" style="margin-top:14px;">${emptyIconSvg()}Todavía no emitiste ninguna factura desde Estelita.</div>`}
     </div>`;
+  }
+
+  // ===== CAJA DEL MOSTRADOR =====
+  // Cobros de cada trabajo, gastos del taller y cierre diario contando el
+  // efectivo. Diseño acordado con el taller el 13/09/2026 sobre una muestra:
+  // - Cada cobro, gasto, saldo, apertura y cierre es un registro con id propio y
+  //   fecha de modificación. La sincronización los une de a uno, así dos
+  //   personas cargando a la vez desde aparatos distintos no se pisan.
+  // - Nada se elimina: lo borrado se marca `borrado` para que no resucite al
+  //   sincronizar con otro equipo.
+  // - Efectivo que tendría que haber = apertura + cobrado en efectivo − gastado
+  //   en efectivo. Los otros medios no se cuentan al cerrar.
+  // - Un pago parcial abre un saldo (cuenta). Lo que debe = total − cobros de
+  //   esa cuenta. Cuando llega a cero, sale solo de Saldos.
+  const CAJA_KEY = 'gnc_caja_v1';
+  const CAJA_QUIEN_KEY = 'gnc_caja_quien_v1';
+  const CAJA_MEDIOS = ['Efectivo', 'Transferencia', 'Débito', 'Crédito', 'Mercado Pago', 'Cheque'];
+  const CAJA_CATEGORIAS = ['Proveedor', 'Sueldos', 'Alquiler', 'Servicios', 'Impuestos', 'Viáticos', 'Otro'];
+  const CAJA_DIAS_ATRASO = 7;
+  let caja = { movimientos: [], cuentas: [], cierres: [], aperturas: [] };
+
+  function cajaNormalizar(c) {
+    const x = (c && typeof c === 'object') ? c : {};
+    const lista = k => (Array.isArray(x[k]) ? x[k] : []);
+    return { movimientos: lista('movimientos'), cuentas: lista('cuentas'), cierres: lista('cierres'), aperturas: lista('aperturas') };
+  }
+
+  async function saveCaja(bumpTs) {
+    if (bumpTs !== false) programarSync('caja');
+    try { await window.storage.set(CAJA_KEY, JSON.stringify(caja), false); }
+    catch (e) {
+      console.error('Error guardando la caja', e);
+      customAlert('No se pudo guardar la caja en este equipo: puede estar sin espacio. Liberá espacio antes de seguir cargando.', 'Atención: no se pudo guardar');
+    }
+  }
+
+  const cajaId = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const cajaVivos = arr => (arr || []).filter(x => x && !x.borrado);
+  const cajaCap = s => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
+  // Pesos enteros: "500.000", "$ 500000" y "500000" dan lo mismo.
+  const cajaNumero = v => Math.round(Number(String(v == null ? '' : v).replace(/[^\d]/g, '')) || 0);
+  function cajaQuien() { try { return localStorage.getItem(CAJA_QUIEN_KEY) || ''; } catch (e) { return ''; } }
+  function cajaGuardarQuien(n) { try { localStorage.setItem(CAJA_QUIEN_KEY, n); } catch (e) { /* ok */ } }
+  function cajaHora(iso) {
+    const d = new Date(iso || Date.now());
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  function cajaDiasDesde(iso) {
+    if (!iso) return 0;
+    const a = new Date(fechaLocalISO(new Date(iso)) + 'T12:00:00');
+    const b = new Date(fechaLocalISO() + 'T12:00:00');
+    return Math.round((b - a) / 86400000);
+  }
+  function cajaNombreDia(fecha) {
+    const dia = new Date(fecha + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'long' });
+    return cajaCap(dia) + ' ' + fecha.slice(8, 10) + '/' + fecha.slice(5, 7);
+  }
+
+  // Une la caja de este equipo con la de la nube, registro por registro. Gana
+  // la versión más nueva de cada uno.
+  function cajaFusionar(local, remota) {
+    const L = cajaNormalizar(local), R = cajaNormalizar(remota);
+    const out = { movimientos: [], cuentas: [], cierres: [], aperturas: [] };
+    let cambioLocal = false, cambioRemoto = false;
+    Object.keys(out).forEach(k => {
+      const porId = new Map();
+      L[k].forEach(x => { if (x && x.id) porId.set(x.id, { l: x }); });
+      R[k].forEach(x => { if (!x || !x.id) return; const p = porId.get(x.id) || {}; p.r = x; porId.set(x.id, p); });
+      porId.forEach(p => {
+        const tl = (p.l && p.l.actualizadoEn) || '', tr = (p.r && p.r.actualizadoEn) || '';
+        if (p.l && !p.r) { out[k].push(p.l); cambioRemoto = true; }
+        else if (p.r && !p.l) { out[k].push(p.r); cambioLocal = true; }
+        else if (tr > tl) { out[k].push(p.r); cambioLocal = true; }
+        else { out[k].push(p.l); if (tl > tr) cambioRemoto = true; }
+      });
+    });
+    return { caja: out, cambioLocal, cambioRemoto };
+  }
+
+  // ---- Cuentas ----
+  function cajaMovsDelDia(fecha) {
+    return cajaVivos(caja.movimientos).filter(m => m.fecha === fecha)
+      .sort((a, b) => (b.creadoEn || '').localeCompare(a.creadoEn || ''));
+  }
+  function cajaCierreDe(fecha) {
+    return cajaVivos(caja.cierres).find(c => c.fecha === fecha) || null;
+  }
+  function cajaApertura(fecha) {
+    const ap = cajaVivos(caja.aperturas).filter(a => a.fecha === fecha)
+      .sort((a, b) => (b.actualizadoEn || '').localeCompare(a.actualizadoEn || ''))[0];
+    if (ap) return { monto: Number(ap.monto) || 0, origen: 'manual' };
+    const previo = cajaVivos(caja.cierres).filter(c => c.fecha < fecha).sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
+    if (previo) return { monto: Number(previo.contado) || 0, origen: 'cierre' };
+    return { monto: 0, origen: 'nada' };
+  }
+  function cajaResumen(fecha) {
+    const movs = cajaMovsDelDia(fecha);
+    const porMedio = {};
+    let cobrado = 0, gastado = 0, cobradoEf = 0, gastadoEf = 0;
+    movs.forEach(m => {
+      const monto = Number(m.monto) || 0;
+      if (m.tipo === 'cobro') {
+        cobrado += monto;
+        porMedio[m.medio] = (porMedio[m.medio] || 0) + monto;
+        if (m.medio === 'Efectivo') cobradoEf += monto;
+      } else {
+        gastado += monto;
+        if (m.medio === 'Efectivo') gastadoEf += monto;
+      }
+    });
+    const apertura = cajaApertura(fecha);
+    return { movs, porMedio, cobrado, gastado, cobradoEf, gastadoEf, apertura, esperado: apertura.monto + cobradoEf - gastadoEf, cierre: cajaCierreDe(fecha) };
+  }
+  function cajaCuentaEstado(cuenta) {
+    const pagos = cajaVivos(caja.movimientos).filter(m => m.tipo === 'cobro' && m.cuentaId === cuenta.id);
+    const pagado = pagos.reduce((s, m) => s + (Number(m.monto) || 0), 0);
+    const ultimo = pagos.map(m => m.creadoEn || '').sort().pop() || cuenta.creadoEn;
+    return { pagado, debe: Math.max(0, (Number(cuenta.total) || 0) - pagado), pagos: pagos.length, ultimo };
+  }
+  function cajaSaldosPendientes() {
+    return cajaVivos(caja.cuentas).map(c => ({ c, e: cajaCuentaEstado(c) }))
+      .filter(x => x.e.debe > 0)
+      .sort((a, b) => (a.e.ultimo || '').localeCompare(b.e.ultimo || ''));
+  }
+  function cajaMes(ym) {
+    const movs = cajaVivos(caja.movimientos).filter(m => (m.fecha || '').slice(0, 7) === ym);
+    let cobrado = 0, gastado = 0;
+    const porCat = {};
+    movs.forEach(m => {
+      const n = Number(m.monto) || 0;
+      if (m.tipo === 'cobro') cobrado += n;
+      else { gastado += n; const k = m.categoria || 'Otro'; porCat[k] = (porCat[k] || 0) + n; }
+    });
+    return { cobrado, gastado, porCat };
+  }
+  function cajaClientePorPatente(pat) {
+    const p = (pat || '').toUpperCase().replace(/\s+/g, '');
+    return p ? (clientes.find(c => (c.patente || '').toUpperCase().replace(/\s+/g, '') === p) || null) : null;
+  }
+  function cajaTelefonoDe(cu) {
+    if (cu.telefono) return cu.telefono;
+    const c = (cu.clienteId && clientes.find(x => x.id === cu.clienteId)) || cajaClientePorPatente(cu.patente);
+    return (c && c.telefono) || '';
+  }
+  // Día al que va un movimiento nuevo: el que se está mirando, o hoy. Si esa
+  // caja ya se cerró, no se carga nada (hay que reabrirla).
+  function cajaFechaParaCargar(soloHoy) {
+    const f = soloHoy ? fechaLocalISO() : (cajaFecha || fechaLocalISO());
+    return cajaCierreDe(f) ? null : f;
+  }
+
+  // ---- Panel ----
+  function cajaPanel(entrando) {
+    const saldos = cajaSaldosPendientes();
+    const tab = (v, txt) => `<button type="button" class="${cajaVista === v ? 'si' : ''}" data-caja-vista="${v}" aria-pressed="${cajaVista === v}">${txt}</button>`;
+    const cuerpo = cajaVista === 'saldos' ? cajaVistaSaldos(saldos) : cajaVista === 'mes' ? cajaVistaMes() : cajaVistaDia();
+    return `<div class="panel caja-panel ${entrando ? 'panel-entrando' : ''}" id="caja-panel">
+      ${panelVolver()}
+      <div class="caja-tabs">
+        ${tab('dia', 'Caja del día')}
+        ${tab('saldos', 'Saldos' + (saldos.length ? ` <span class="menu-badge-inline">${saldos.length}</span>` : ''))}
+        ${tab('mes', 'Mes')}
+      </div>
+      ${cuerpo}
+    </div>`;
+  }
+
+  function cajaVistaDia() {
+    const hoy = fechaLocalISO();
+    const fecha = cajaFecha || hoy;
+    const esHoy = fecha === hoy;
+    const r = cajaResumen(fecha);
+    const etiquetaMov = mv => (mv.esSena ? 'Seña · ' : mv.cuentaId ? 'Saldo · ' : '') + (mv.concepto || (mv.tipo === 'cobro' ? 'Cobro' : 'Gasto'));
+    const detalleMov = mv => [mv.medio, mv.tipo === 'gasto' ? mv.categoria : '', mv.quien ? 'cargó ' + mv.quien : '', mv.nota].filter(Boolean).join(' · ');
+    const medios = CAJA_MEDIOS.filter(x => r.porMedio[x]);
+    let apertura = `Arrancó con ${presuMoney(r.apertura.monto)}`;
+    if (!r.cierre) {
+      if (r.apertura.origen === 'nada') apertura += ` · <button type="button" class="caja-link" id="btn-caja-apertura">Cargar con cuánto arrancó</button>`;
+      else if (r.apertura.origen === 'manual') apertura += ` · <button type="button" class="caja-link" id="btn-caja-apertura">Cambiar</button>`;
+    }
+    return `
+      <div class="caja-dia-head">
+        <button type="button" class="btn btn-ghost btn-sm" data-caja-dia="-1" aria-label="Día anterior">‹</button>
+        <div>
+          <h2 style="margin:0;">${esHoy ? 'Caja de hoy' : 'Caja del día'} ${infoAyuda('ayuda-caja')}</h2>
+          <div class="caja-sub">${cajaNombreDia(fecha)}</div>
+        </div>
+        <span class="caja-pill ${r.cierre ? 'cerrada' : 'abierta'}">${r.cierre ? 'Cerrada' : 'Abierta'}</span>
+        <button type="button" class="btn btn-ghost btn-sm" data-caja-dia="1" aria-label="Día siguiente" ${esHoy ? 'disabled' : ''}>›</button>
+      </div>
+      ${ayudaBloque('ayuda-caja', 'Cada cobro y cada gasto queda anotado con el medio de pago y quién lo cargó, desde cualquier aparato que use la app. El efectivo que tendría que haber es lo que había al abrir, más lo cobrado en efectivo, menos lo gastado en efectivo. Al final del día contás la plata y cerrás la caja: el día siguiente arranca con lo que contaste.')}
+      <div class="caja-grande">
+        <div class="caja-etq">${r.cierre ? 'Efectivo contado al cerrar' : 'Efectivo que tendría que haber en la caja'}</div>
+        <div class="caja-valor">${presuMoney(r.cierre ? r.cierre.contado : r.esperado)}</div>
+        <div class="caja-sub">${apertura}</div>
+      </div>
+      <div class="caja-dos">
+        <div class="caja-num"><div class="caja-etq">Cobrado</div><div class="caja-valor-m mas">${presuMoney(r.cobrado)}</div></div>
+        <div class="caja-num"><div class="caja-etq">Gastos</div><div class="caja-valor-m menos">${presuMoney(r.gastado)}</div></div>
+      </div>
+      ${r.cierre ? '' : `<div class="caja-acciones">
+        <button type="button" class="btn btn-primary" id="btn-caja-cobrar">Cobrar</button>
+        <button type="button" class="btn btn-outline" id="btn-caja-gasto">Cargar gasto</button>
+      </div>`}
+      ${medios.length ? `<div class="caja-bloque">
+        <div class="caja-seccion">Cobrado por medio de pago</div>
+        ${medios.map(x => `<div class="caja-linea"><span>${x}</span><b>${presuMoney(r.porMedio[x])}</b></div>`).join('')}
+      </div>` : ''}
+      <div class="caja-bloque">
+        <div class="caja-seccion">Movimientos</div>
+        ${r.movs.length ? r.movs.map(mv => `<div class="caja-mov">
+          <span class="caja-hora">${cajaHora(mv.creadoEn)}</span>
+          <span class="caja-concepto">${escapeHtml(etiquetaMov(mv))}${mv.patente ? ' · ' + escapeHtml(mv.patente) : ''}<small>${escapeHtml(detalleMov(mv))}</small></span>
+          <b class="caja-monto ${mv.tipo === 'cobro' ? 'mas' : 'menos'}">${mv.tipo === 'cobro' ? '+' : '−'}${presuMoney(mv.monto)}</b>
+          ${r.cierre ? '<span></span>' : `<button type="button" class="caja-borrar" data-caja-borrar="${escapeHtml(mv.id)}" title="Borrar este movimiento" aria-label="Borrar este movimiento">✕</button>`}
+        </div>`).join('') : `<div class="caja-vacio">Todavía no hay movimientos ${esHoy ? 'hoy' : 'ese día'}.</div>`}
+      </div>
+      ${r.cierre
+        ? `<div class="caja-cierre-info">Cerrada${r.cierre.quien ? ' por ' + escapeHtml(r.cierre.quien) : ''}. Tendría que haber ${presuMoney(r.cierre.esperado)} y se contaron ${presuMoney(r.cierre.contado)}.${r.cierre.diferencia ? ` ${r.cierre.diferencia > 0 ? 'Sobraron' : 'Faltaron'} ${presuMoney(Math.abs(r.cierre.diferencia))}: ${escapeHtml(r.cierre.motivo || '')}.` : ''} <button type="button" class="caja-link" id="btn-caja-reabrir">Reabrir</button></div>`
+        : `<button type="button" class="btn btn-ghost" id="btn-caja-cerrar" style="width:100%;">Cerrar la caja</button>`}`;
+  }
+
+  function cajaVistaSaldos(saldos) {
+    const total = saldos.reduce((s, x) => s + x.e.debe, 0);
+    return `
+      <h2 style="margin:0 0 10px;">Saldos pendientes</h2>
+      <div class="caja-grande">
+        <div class="caja-etq">Te deben en total</div>
+        <div class="caja-valor">${presuMoney(total)}</div>
+        <div class="caja-sub">${saldos.length === 1 ? '1 cliente' : saldos.length + ' clientes'}</div>
+      </div>
+      ${saldos.length ? saldos.map(({ c, e }) => {
+        const dias = cajaDiasDesde(e.ultimo);
+        const atrasada = dias >= CAJA_DIAS_ATRASO;
+        const cuando = dias <= 0 ? 'Hoy' : dias === 1 ? 'Ayer' : `Hace ${dias} días`;
+        const pct = c.total ? Math.min(100, Math.round(e.pagado / c.total * 100)) : 0;
+        const tel = cleanPhone(cajaTelefonoDe(c));
+        return `<div class="caja-deuda ${atrasada ? 'atrasada' : ''}">
+          <div class="caja-deuda-pie">
+            <span><b>${escapeHtml(c.patente || 'Sin patente')}</b>${c.nombre ? ' <span class="caja-sub">' + escapeHtml(c.nombre) + '</span>' : ''}</span>
+            <span class="caja-pill ${atrasada ? 'atraso' : 'cerrada'}">${cuando}</span>
+          </div>
+          <div class="caja-concepto">${escapeHtml(c.trabajo || '')}</div>
+          <div class="caja-barra" aria-hidden="true"><i style="width:${pct}%"></i></div>
+          <div class="caja-sub">Pagó ${presuMoney(e.pagado)} de ${presuMoney(c.total)}${e.pagos > 1 ? ` en ${e.pagos} pagos` : ''}</div>
+          <div class="caja-deuda-pie">
+            <b>Debe ${presuMoney(e.debe)}</b>
+            <span class="caja-deuda-botones">
+              ${tel ? `<button type="button" class="btn btn-ghost btn-sm" data-caja-recordar="${escapeHtml(c.id)}">Recordarle por WhatsApp</button>` : ''}
+              <button type="button" class="btn btn-outline btn-sm" data-caja-resto="${escapeHtml(c.id)}">Cobrar</button>
+            </span>
+          </div>
+        </div>`;
+      }).join('') : '<div class="caja-vacio">No hay saldos pendientes. Cuando un cliente paga una parte de un trabajo, aparece acá hasta que termina de pagar.</div>'}`;
+  }
+
+  function cajaVistaMes() {
+    const actual = fechaLocalISO().slice(0, 7);
+    const ym = cajaMesSel || actual;
+    const [y, mo] = ym.split('-').map(Number);
+    const nombre = cajaCap(new Date(y, mo - 1, 1).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }));
+    const r = cajaMes(ym);
+    const res = r.cobrado - r.gastado;
+    const cats = Object.entries(r.porCat).sort((a, b) => b[1] - a[1]);
+    return `
+      <div class="caja-dia-head">
+        <button type="button" class="btn btn-ghost btn-sm" data-caja-mes="-1" aria-label="Mes anterior">‹</button>
+        <div>
+          <h2 style="margin:0;">Resumen del mes</h2>
+          <div class="caja-sub">${nombre}</div>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" data-caja-mes="1" aria-label="Mes siguiente" ${ym === actual ? 'disabled' : ''}>›</button>
+      </div>
+      <div class="caja-dos">
+        <div class="caja-num"><div class="caja-etq">Cobrado</div><div class="caja-valor-m mas">${presuMoney(r.cobrado)}</div></div>
+        <div class="caja-num"><div class="caja-etq">Gastos</div><div class="caja-valor-m menos">${presuMoney(r.gastado)}</div></div>
+      </div>
+      <div class="caja-grande">
+        <div class="caja-etq">Lo que quedó</div>
+        <div class="caja-valor ${res < 0 ? 'menos' : ''}">${res < 0 ? '−' : ''}${presuMoney(Math.abs(res))}</div>
+        <div class="caja-sub">Cobrado menos gastos, con todos los medios de pago</div>
+      </div>
+      ${cats.length ? `<div class="caja-bloque">
+        <div class="caja-seccion">Gastos por categoría</div>
+        ${cats.map(([k, v]) => `<div class="caja-linea"><span>${escapeHtml(k)}</span><b>${presuMoney(v)}</b></div>`).join('')}
+      </div>` : '<div class="caja-vacio">No hay gastos cargados este mes.</div>'}`;
+  }
+
+  // ---- Ventanas ----
+  function cajaModal(html) {
+    const overlay = document.createElement('div');
+    overlay.className = 'gnc-modal-overlay';
+    overlay.innerHTML = `<div class="gnc-modal-box caja-modal" role="dialog" aria-modal="true">${html}</div>`;
+    document.body.appendChild(overlay);
+    const cerrar = () => { overlay.classList.add('closing'); setTimeout(() => overlay.remove(), 150); };
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
+    return { overlay, q: s => overlay.querySelector(s), qa: s => overlay.querySelectorAll(s), cerrar };
+  }
+  function cajaChips(nombre, opciones, elegida) {
+    return `<div class="caja-chips" data-chips="${nombre}">${opciones.map(o => `<button type="button" class="caja-chip ${o === elegida ? 'si' : ''}" data-valor="${escapeHtml(o)}" aria-pressed="${o === elegida}">${escapeHtml(o)}</button>`).join('')}</div>`;
+  }
+  function cajaEnlazarChips(m) {
+    m.qa('.caja-chips').forEach(g => g.addEventListener('click', e => {
+      const b = e.target.closest('.caja-chip');
+      if (!b) return;
+      g.querySelectorAll('.caja-chip').forEach(x => { x.classList.toggle('si', x === b); x.setAttribute('aria-pressed', String(x === b)); });
+      g.dispatchEvent(new Event('cambio'));
+    }));
+  }
+  const cajaChipValor = (m, nombre) => {
+    const b = m.q(`[data-chips="${nombre}"] .caja-chip.si`);
+    return b ? b.getAttribute('data-valor') : '';
+  };
+
+  function cajaCobrar(pre) {
+    pre = pre || {};
+    const cuenta = pre.cuentaId ? cajaVivos(caja.cuentas).find(c => c.id === pre.cuentaId) : null;
+    const estado = cuenta ? cajaCuentaEstado(cuenta) : null;
+    const fecha = cajaFechaParaCargar(!!pre.desdeComprobante);
+    if (!fecha) {
+      if (!pre.desdeComprobante) customAlert('La caja de ese día ya está cerrada. Reabrila para cargar movimientos.', 'Caja cerrada');
+      return;
+    }
+    const m = cajaModal(`
+      <div class="gnc-modal-head">
+        <div class="gnc-modal-icon">$</div>
+        <div>
+          <div class="gnc-modal-title">${cuenta ? 'Cobrar el saldo' : pre.desdeComprobante ? '¿Se cobró?' : 'Registrar un cobro'}</div>
+          <div class="gnc-modal-msg">${cuenta
+            ? `${escapeHtml([cuenta.patente, cuenta.nombre].filter(Boolean).join(' · '))} debe ${presuMoney(estado.debe)} de ${escapeHtml(cuenta.trabajo || 'un trabajo')}.`
+            : 'Queda anotado en la caja del día con el medio de pago y quién lo cargó.'}</div>
+        </div>
+      </div>
+      ${cuenta ? '' : `
+        <div class="fact-campo"><label for="cj-concepto">Qué se cobra</label>
+          <input id="cj-concepto" value="${escapeHtml(pre.concepto || '')}" placeholder="Ej: oblea, prueba hidráulica, instalación"></div>
+        <div class="fact-fila2">
+          <div class="fact-campo"><label for="cj-patente">Patente</label>
+            <input id="cj-patente" value="${escapeHtml(pre.patente || '')}" placeholder="Opcional"></div>
+          <div class="fact-campo"><label for="cj-nombre">Cliente</label>
+            <input id="cj-nombre" value="${escapeHtml(pre.nombre || '')}" placeholder="Opcional"></div>
+        </div>
+        <div class="caja-segmento" id="cj-pago">
+          <button type="button" class="si" data-valor="todo">Pagó todo</button>
+          <button type="button" data-valor="parte">Pagó una parte</button>
+        </div>
+        <div class="fact-campo" id="cj-total-wrap" hidden><label for="cj-total">Total del trabajo</label>
+          <input id="cj-total" inputmode="numeric" value="${pre.total ? Math.round(pre.total) : ''}" placeholder="Lo que sale el trabajo completo"></div>`}
+      <div class="fact-campo"><label for="cj-monto">${cuenta ? 'Cuánto paga ahora' : 'Cuánto pagó'}</label>
+        <input id="cj-monto" class="caja-monto-in" inputmode="numeric" value="${cuenta ? estado.debe : (pre.total ? Math.round(pre.total) : '')}" placeholder="0"></div>
+      <div class="fact-campo"><label>Con qué pagó</label>${cajaChips('medio', CAJA_MEDIOS, 'Efectivo')}</div>
+      <div class="fact-campo"><label for="cj-quien">Quién lo carga</label>
+        <input id="cj-quien" value="${escapeHtml(cajaQuien())}" placeholder="Tu nombre"></div>
+      <div class="caja-queda" id="cj-queda" hidden></div>
+      <div class="fact-aviso err" id="cj-err"></div>
+      <div class="gnc-modal-actions">
+        <button type="button" class="btn btn-ghost" id="cj-no">${pre.desdeComprobante ? 'No se cobró' : 'Cancelar'}</button>
+        <button type="button" class="btn btn-primary" id="cj-ok">Registrar el cobro</button>
+      </div>`);
+    cajaEnlazarChips(m);
+    let modo = 'todo';
+    const actualizar = () => {
+      const monto = cajaNumero(m.q('#cj-monto').value);
+      const queda = m.q('#cj-queda');
+      let resta = null;
+      if (cuenta) resta = estado.debe - monto;
+      else if (modo === 'parte') resta = cajaNumero(m.q('#cj-total').value) - monto;
+      if (resta === null || !(monto > 0)) { queda.hidden = true; return; }
+      queda.hidden = false;
+      queda.className = 'caja-queda' + (resta <= 0 ? ' ok' : '');
+      queda.innerHTML = resta > 0
+        ? `<b>Queda debiendo ${presuMoney(resta)}</b><br>Aparece en Saldos hasta que termine de pagar.`
+        : '<b>Con esto termina de pagar.</b>';
+    };
+    const seg = m.q('#cj-pago');
+    if (seg) seg.addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      modo = b.getAttribute('data-valor');
+      seg.querySelectorAll('button').forEach(x => x.classList.toggle('si', x === b));
+      m.q('#cj-total-wrap').hidden = modo !== 'parte';
+      if (modo === 'parte') {
+        if (!cajaNumero(m.q('#cj-total').value)) m.q('#cj-total').value = cajaNumero(m.q('#cj-monto').value) || '';
+        m.q('#cj-monto').value = '';
+        m.q('#cj-monto').focus();
+      }
+      actualizar();
+    });
+    ['#cj-monto', '#cj-total'].forEach(s => { const el = m.q(s); if (el) el.addEventListener('input', actualizar); });
+    m.q('#cj-no').addEventListener('click', m.cerrar);
+    m.q('#cj-ok').addEventListener('click', async () => {
+      const err = m.q('#cj-err');
+      const monto = cajaNumero(m.q('#cj-monto').value);
+      const medio = cajaChipValor(m, 'medio') || 'Efectivo';
+      const quien = m.q('#cj-quien').value.trim();
+      if (!(monto > 0)) { err.textContent = 'Poné cuánto pagó.'; return; }
+      if (cuenta && monto > estado.debe) { err.textContent = `Debe ${presuMoney(estado.debe)}: no puede pagar más que eso.`; return; }
+      const ahora = new Date().toISOString();
+      let cuentaId = cuenta ? cuenta.id : null;
+      let concepto, patente, nombre, clienteId, esSena = false;
+      if (cuenta) {
+        concepto = cuenta.trabajo || 'Saldo';
+        patente = cuenta.patente || '';
+        nombre = cuenta.nombre || '';
+        clienteId = cuenta.clienteId || null;
+      } else {
+        concepto = m.q('#cj-concepto').value.trim();
+        patente = m.q('#cj-patente').value.trim().toUpperCase();
+        nombre = m.q('#cj-nombre').value.trim();
+        const cli = (pre.clienteId && clientes.find(x => x.id === pre.clienteId)) || cajaClientePorPatente(patente);
+        clienteId = cli ? cli.id : null;
+        if (modo === 'parte') {
+          const total = cajaNumero(m.q('#cj-total').value);
+          if (!(total > monto)) { err.textContent = 'Si pagó una parte, el total del trabajo tiene que ser mayor a lo que pagó.'; return; }
+          if (!concepto) { err.textContent = 'Poné qué trabajo es, así se reconoce en Saldos.'; return; }
+          const nueva = {
+            id: cajaId('cu'), fecha, trabajo: concepto, patente,
+            nombre: nombre || (cli ? nombreFicha(cli) : ''),
+            telefono: pre.telefono || (cli && cli.telefono) || '',
+            clienteId, total, creadoEn: ahora, actualizadoEn: ahora,
+          };
+          caja.cuentas.push(nueva);
+          cuentaId = nueva.id;
+          esSena = true;
+        }
+      }
+      caja.movimientos.push({ id: cajaId('mv'), tipo: 'cobro', fecha, concepto: concepto || 'Cobro', patente, nombre, clienteId, monto, medio, quien, cuentaId, esSena, creadoEn: ahora, actualizadoEn: ahora });
+      if (quien) cajaGuardarQuien(quien);
+      m.cerrar();
+      await saveCaja();
+      render();
+    });
+    setTimeout(() => {
+      const el = m.q(cuenta || pre.concepto ? '#cj-monto' : '#cj-concepto');
+      if (el) el.focus();
+    }, 60);
+    actualizar();
+  }
+
+  function cajaGasto() {
+    const fecha = cajaFechaParaCargar(false);
+    if (!fecha) { customAlert('La caja de ese día ya está cerrada. Reabrila para cargar movimientos.', 'Caja cerrada'); return; }
+    const m = cajaModal(`
+      <div class="gnc-modal-head">
+        <div class="gnc-modal-icon">−</div>
+        <div>
+          <div class="gnc-modal-title">Cargar un gasto</div>
+          <div class="gnc-modal-msg">Sale de la caja del día. Si lo pagaste en efectivo, se descuenta de lo que tiene que haber en el cajón.</div>
+        </div>
+      </div>
+      <div class="fact-campo"><label for="cg-monto">Monto</label>
+        <input id="cg-monto" class="caja-monto-in" inputmode="numeric" placeholder="0"></div>
+      <div class="fact-campo"><label>Qué es</label>${cajaChips('categoria', CAJA_CATEGORIAS, 'Proveedor')}</div>
+      <div class="fact-campo"><label for="cg-detalle" id="cg-detalle-label">Proveedor</label>
+        <input id="cg-detalle" placeholder="Ej: PecMar"></div>
+      <div class="fact-campo"><label>Con qué pagaste</label>${cajaChips('medio', CAJA_MEDIOS, 'Efectivo')}</div>
+      <div class="fact-fila2">
+        <div class="fact-campo"><label for="cg-patente">¿Para un trabajo?</label>
+          <input id="cg-patente" placeholder="Patente, opcional"></div>
+        <div class="fact-campo"><label for="cg-quien">Quién lo carga</label>
+          <input id="cg-quien" value="${escapeHtml(cajaQuien())}" placeholder="Tu nombre"></div>
+      </div>
+      <div class="fact-campo"><label for="cg-nota">Nota</label>
+        <input id="cg-nota" placeholder="Opcional, ej: cilindro 60/273"></div>
+      <div class="fact-aviso err" id="cg-err"></div>
+      <div class="gnc-modal-actions">
+        <button type="button" class="btn btn-ghost" id="cg-no">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="cg-ok">Guardar gasto</button>
+      </div>`);
+    cajaEnlazarChips(m);
+    const etiquetas = {
+      Proveedor: ['Proveedor', 'Ej: PecMar'],
+      Sueldos: ['A quién', 'Nombre del empleado'],
+      Alquiler: ['Detalle', 'Ej: alquiler del local'],
+      Servicios: ['Cuál', 'Ej: luz, gas, internet'],
+      Impuestos: ['Cuál', 'Ej: monotributo, ingresos brutos'],
+      Viáticos: ['Detalle', 'Ej: nafta del flete'],
+      Otro: ['Detalle', 'Qué fue'],
+    };
+    m.q('[data-chips="categoria"]').addEventListener('cambio', () => {
+      const [lab, ph] = etiquetas[cajaChipValor(m, 'categoria')] || ['Detalle', ''];
+      m.q('#cg-detalle-label').textContent = lab;
+      m.q('#cg-detalle').placeholder = ph;
+    });
+    m.q('#cg-no').addEventListener('click', m.cerrar);
+    m.q('#cg-ok').addEventListener('click', async () => {
+      const monto = cajaNumero(m.q('#cg-monto').value);
+      if (!(monto > 0)) { m.q('#cg-err').textContent = 'Poné el monto del gasto.'; return; }
+      const categoria = cajaChipValor(m, 'categoria') || 'Otro';
+      const detalle = m.q('#cg-detalle').value.trim();
+      const quien = m.q('#cg-quien').value.trim();
+      const ahora = new Date().toISOString();
+      caja.movimientos.push({
+        id: cajaId('mv'), tipo: 'gasto', fecha, categoria,
+        concepto: detalle || categoria,
+        patente: m.q('#cg-patente').value.trim().toUpperCase(),
+        monto, medio: cajaChipValor(m, 'medio') || 'Efectivo',
+        nota: m.q('#cg-nota').value.trim(), quien, creadoEn: ahora, actualizadoEn: ahora,
+      });
+      if (quien) cajaGuardarQuien(quien);
+      m.cerrar();
+      await saveCaja();
+      render();
+    });
+    setTimeout(() => m.q('#cg-monto').focus(), 60);
+  }
+
+  function cajaCerrar() {
+    const fecha = cajaFecha || fechaLocalISO();
+    const r = cajaResumen(fecha);
+    if (r.cierre) return;
+    const m = cajaModal(`
+      <div class="gnc-modal-head">
+        <div class="gnc-modal-icon">$</div>
+        <div>
+          <div class="gnc-modal-title">Cerrar la caja</div>
+          <div class="gnc-modal-msg">${cajaNombreDia(fecha)}. Contá el efectivo del cajón y anotá cuánto hay.</div>
+        </div>
+      </div>
+      <div class="caja-cuenta">
+        <div><span>Arrancó con</span><span>${presuMoney(r.apertura.monto)}</span></div>
+        <div><span>Cobrado en efectivo</span><span>+${presuMoney(r.cobradoEf)}</span></div>
+        <div><span>Gastado en efectivo</span><span>−${presuMoney(r.gastadoEf)}</span></div>
+        <div class="total"><span>Tendría que haber</span><span>${presuMoney(r.esperado)}</span></div>
+      </div>
+      <div class="fact-campo"><label for="cc-contado">¿Cuánto contaste?</label>
+        <input id="cc-contado" class="caja-monto-in" inputmode="numeric" placeholder="0"></div>
+      <div class="caja-queda" id="cc-dif" hidden></div>
+      <div class="fact-campo" id="cc-motivo-wrap" hidden><label for="cc-motivo">Qué pasó</label>
+        <input id="cc-motivo" placeholder="Ej: vuelto de más a un cliente"></div>
+      <div class="fact-campo"><label for="cc-quien">Quién cierra</label>
+        <input id="cc-quien" value="${escapeHtml(cajaQuien())}" placeholder="Tu nombre"></div>
+      <div class="gnc-modal-msg">Transferencias, tarjetas, cheques y Mercado Pago no se cuentan: se controlan con el resumen del banco y de la cuenta.</div>
+      <div class="fact-aviso err" id="cc-err"></div>
+      <div class="gnc-modal-actions">
+        <button type="button" class="btn btn-ghost" id="cc-no">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="cc-ok">Cerrar la caja</button>
+      </div>`);
+    const actualizar = () => {
+      const raw = m.q('#cc-contado').value.trim();
+      const dif = cajaNumero(raw) - r.esperado;
+      const box = m.q('#cc-dif');
+      m.q('#cc-motivo-wrap').hidden = !raw || dif === 0;
+      if (!raw) { box.hidden = true; return; }
+      box.hidden = false;
+      box.className = 'caja-queda' + (dif === 0 ? ' ok' : '');
+      box.innerHTML = dif === 0
+        ? '<b>Coincide con lo que tendría que haber.</b>'
+        : `<b>${dif > 0 ? 'Sobran' : 'Faltan'} ${presuMoney(Math.abs(dif))}</b><br>Anotá qué pasó para que quede registrado.`;
+    };
+    m.q('#cc-contado').addEventListener('input', actualizar);
+    m.q('#cc-no').addEventListener('click', m.cerrar);
+    m.q('#cc-ok').addEventListener('click', async () => {
+      const raw = m.q('#cc-contado').value.trim();
+      if (!raw) { m.q('#cc-err').textContent = 'Poné cuánto efectivo contaste. Si no hay nada, poné 0.'; return; }
+      const contado = cajaNumero(raw);
+      const diferencia = contado - r.esperado;
+      const motivo = m.q('#cc-motivo').value.trim();
+      if (diferencia !== 0 && !motivo) { m.q('#cc-err').textContent = 'La cuenta no coincide: anotá qué pasó.'; return; }
+      const quien = m.q('#cc-quien').value.trim();
+      const ahora = new Date().toISOString();
+      caja.cierres.push({ id: cajaId('ci'), fecha, apertura: r.apertura.monto, cobradoEf: r.cobradoEf, gastadoEf: r.gastadoEf, esperado: r.esperado, contado, diferencia, motivo, quien, creadoEn: ahora, actualizadoEn: ahora });
+      if (quien) cajaGuardarQuien(quien);
+      m.cerrar();
+      await saveCaja();
+      render();
+      customAlert(`Caja cerrada. La próxima arranca con ${presuMoney(contado)}.`, 'Listo');
+    });
+    setTimeout(() => m.q('#cc-contado').focus(), 60);
+  }
+
+  function cajaAbrirCon() {
+    const fecha = cajaFecha || fechaLocalISO();
+    const actual = cajaApertura(fecha);
+    const m = cajaModal(`
+      <div class="gnc-modal-head">
+        <div class="gnc-modal-icon">$</div>
+        <div>
+          <div class="gnc-modal-title">¿Con cuánto efectivo arrancó la caja?</div>
+          <div class="gnc-modal-msg">Lo que había en el cajón al abrir. Después del primer cierre, cada día arranca solo con lo que se contó al cerrar el anterior.</div>
+        </div>
+      </div>
+      <div class="fact-campo"><label for="ca-monto">Efectivo al abrir</label>
+        <input id="ca-monto" class="caja-monto-in" inputmode="numeric" value="${actual.origen === 'nada' ? '' : actual.monto}" placeholder="0"></div>
+      <div class="gnc-modal-actions">
+        <button type="button" class="btn btn-ghost" id="ca-no">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="ca-ok">Guardar</button>
+      </div>`);
+    m.q('#ca-no').addEventListener('click', m.cerrar);
+    m.q('#ca-ok').addEventListener('click', async () => {
+      const ahora = new Date().toISOString();
+      caja.aperturas.forEach(a => { if (a.fecha === fecha && !a.borrado) { a.borrado = true; a.actualizadoEn = ahora; } });
+      caja.aperturas.push({ id: cajaId('ap'), fecha, monto: cajaNumero(m.q('#ca-monto').value), creadoEn: ahora, actualizadoEn: ahora });
+      m.cerrar();
+      await saveCaja();
+      render();
+    });
+    setTimeout(() => m.q('#ca-monto').focus(), 60);
+  }
+
+  async function cajaBorrarMovimiento(id) {
+    const mov = cajaVivos(caja.movimientos).find(x => x.id === id);
+    if (!mov) return;
+    const ok = await customConfirm(`¿Borrar ${mov.tipo === 'cobro' ? 'este cobro' : 'este gasto'} de ${presuMoney(mov.monto)}?`, { titulo: 'Borrar movimiento', danger: true, okLabel: 'Borrar' });
+    if (!ok) return;
+    const ahora = new Date().toISOString();
+    mov.borrado = true;
+    mov.actualizadoEn = ahora;
+    // Si era la seña que abrió un saldo y no quedan otros pagos, el saldo se va
+    // con ella: si no, el cliente quedaría debiendo el trabajo entero.
+    if (mov.esSena && mov.cuentaId) {
+      const otros = cajaVivos(caja.movimientos).some(x => x.cuentaId === mov.cuentaId);
+      const cu = caja.cuentas.find(x => x.id === mov.cuentaId);
+      if (cu && !otros) { cu.borrado = true; cu.actualizadoEn = ahora; }
+    }
+    await saveCaja();
+    render();
+  }
+
+  async function cajaReabrir() {
+    const ci = cajaCierreDe(cajaFecha || fechaLocalISO());
+    if (!ci) return;
+    const ok = await customConfirm('La caja vuelve a quedar abierta para corregir movimientos. Después la tenés que cerrar de nuevo contando el efectivo.', { titulo: 'Reabrir la caja', okLabel: 'Reabrir' });
+    if (!ok) return;
+    ci.borrado = true;
+    ci.actualizadoEn = new Date().toISOString();
+    await saveCaja();
+    render();
+  }
+
+  function cajaRecordar(cuentaId) {
+    const cu = cajaVivos(caja.cuentas).find(x => x.id === cuentaId);
+    if (!cu) return;
+    const tel = cajaTelefonoDe(cu);
+    if (!cleanPhone(tel)) { customAlert('No hay un teléfono cargado para este cliente. Cargalo en su ficha y probá de nuevo.', 'Sin teléfono'); return; }
+    const e = cajaCuentaEstado(cu);
+    const texto = renderMensaje('recordatorioSaldo', {
+      ...varsTaller(),
+      nombre: cu.nombre || '',
+      patente: cu.patente || '',
+      trabajo: cu.trabajo || 'el trabajo',
+      saldo: presuMoney(e.debe),
+    });
+    abrirWhatsapp(tel, texto);
+  }
+
+  // Después de emitir un comprobante o una factura: preguntar si se cobró y
+  // anotarlo en la caja. Si la caja de hoy ya está cerrada, no se pregunta.
+  function cajaTrasComprobante(datos, total) {
+    if (!(total > 0)) return;
+    if (cajaCierreDe(fechaLocalISO())) return;
+    const primero = (datos.items || []).find(i => i && i.descripcion);
+    cajaCobrar({
+      desdeComprobante: true,
+      concepto: primero ? String(primero.descripcion).slice(0, 80) : '',
+      patente: datos.patente || '',
+      nombre: datos.nombre || '',
+      telefono: datos.telefono || '',
+      clienteId: datos.clienteId || null,
+      total,
+    });
+  }
+
+  function attachCaja() {
+    const q = s => root.querySelector(s);
+    const btnPanel = q('#btn-caja');
+    if (btnPanel) btnPanel.addEventListener('click', () => {
+      const abierto = showCaja;
+      cerrarPanelesConsulta();
+      menuOpen = false;
+      showCaja = !abierto;
+      if (showCaja) { cajaFecha = null; cajaVista = 'dia'; cajaMesSel = null; }
+      render();
+      const panel = root.querySelector('#caja-panel');
+      if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    if (!showCaja) return;
+    root.querySelectorAll('[data-caja-vista]').forEach(b => b.addEventListener('click', () => {
+      cajaVista = b.getAttribute('data-caja-vista');
+      render();
+    }));
+    root.querySelectorAll('[data-caja-dia]').forEach(b => b.addEventListener('click', () => {
+      const d = new Date((cajaFecha || fechaLocalISO()) + 'T12:00:00');
+      d.setDate(d.getDate() + Number(b.getAttribute('data-caja-dia')));
+      const f = fechaLocalISO(d);
+      cajaFecha = f >= fechaLocalISO() ? null : f;
+      render();
+    }));
+    root.querySelectorAll('[data-caja-mes]').forEach(b => b.addEventListener('click', () => {
+      const actual = fechaLocalISO().slice(0, 7);
+      const [y, mo] = (cajaMesSel || actual).split('-').map(Number);
+      const d = new Date(y, mo - 1 + Number(b.getAttribute('data-caja-mes')), 1);
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      cajaMesSel = ym >= actual ? null : ym;
+      render();
+    }));
+    if (q('#btn-caja-cobrar')) q('#btn-caja-cobrar').addEventListener('click', () => cajaCobrar({}));
+    if (q('#btn-caja-gasto')) q('#btn-caja-gasto').addEventListener('click', () => cajaGasto());
+    if (q('#btn-caja-cerrar')) q('#btn-caja-cerrar').addEventListener('click', () => cajaCerrar());
+    if (q('#btn-caja-apertura')) q('#btn-caja-apertura').addEventListener('click', () => cajaAbrirCon());
+    if (q('#btn-caja-reabrir')) q('#btn-caja-reabrir').addEventListener('click', () => cajaReabrir());
+    root.querySelectorAll('[data-caja-borrar]').forEach(b => b.addEventListener('click', () => cajaBorrarMovimiento(b.getAttribute('data-caja-borrar'))));
+    root.querySelectorAll('[data-caja-resto]').forEach(b => b.addEventListener('click', () => cajaCobrar({ cuentaId: b.getAttribute('data-caja-resto') })));
+    root.querySelectorAll('[data-caja-recordar]').forEach(b => b.addEventListener('click', () => cajaRecordar(b.getAttribute('data-caja-recordar'))));
   }
 
   function attachFacturacion() {
@@ -3882,6 +4655,8 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         items: factItemsDePresupuesto(p),
         nombre: p.nombre || '',
         telefono: presuTelefonoDe(p),
+        patente: p.patente || '',
+        clienteId: p.clienteId || null,
       });
     });
   }
@@ -5438,6 +6213,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.93 4.93l1.41 1.41"/><path d="M17.66 17.66l1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M6.34 17.66l-1.41 1.41"/><path d="M19.07 4.93l-1.41 1.41"/>',
     smartphone: '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>',
     camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/>',
+    wallet: '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
     image: '<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
   };
   function menuIco(name) {
@@ -8028,6 +8804,10 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   let showPresupuestos = false;
   // Facturación electrónica: panel del menú + datos traídos del facturador.
   let showFacturacion = false;
+  let showCaja = false;
+  let cajaFecha = null;
+  let cajaVista = 'dia';
+  let cajaMesSel = null;
   let factComprobantes = null;   // null = sin cargar; [] = cargado y vacío
   let factEstadoTaller = null;   // respuesta de GET /api/facturar/taller
   let factCargando = false;
@@ -8868,6 +9648,12 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         cambioRemoto = true;
       }
 
+      // 4b) Caja del mostrador: se une registro por registro, así dos personas
+      // cargando a la vez desde aparatos distintos no se pisan.
+      const fusionCaja = cajaFusionar(caja, remoto && remoto.caja);
+      if (fusionCaja.cambioLocal) { caja = fusionCaja.caja; await saveCaja(false); cambioLocal = true; }
+      if (fusionCaja.cambioRemoto) cambioRemoto = true;
+
       // 5) Aplicar el resultado local.
       if (cambioLocal) {
         clientes = fusionados;
@@ -8906,7 +9692,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       const tumbasLista = Object.entries(tumbas).map(([id, en]) => ({ id, en }))
         .filter(t => (Date.now() - new Date(t.en).getTime()) < 90 * 24 * 3600 * 1000);
       if (cambioRemoto) {
-        const datos = { v: 2, guardadoEn: new Date().toISOString(), tallerNombre, tallerConfig, clientes, eliminados: tumbasLista };
+        const datos = { v: 2, guardadoEn: new Date().toISOString(), tallerNombre, tallerConfig, clientes, eliminados: tumbasLista, caja };
         await apiRespaldo({ accion: 'subir', nombre: 'datos.json', contenido: await cifrarParaRespaldo(datos, clave) });
       }
       try { localStorage.setItem(TOMBSTONES_KEY, JSON.stringify(tumbasLista)); } catch (e) { /* ok */ }
@@ -9383,7 +10169,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     // buscador y los botones Nuevo/ENARGAS y las tarjetas de clientes, que
     // abajo del panel no tenían sentido y confundían.
     const pendCount = pendientesItems().length;
-    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo || showTurnos || showHoy || showEstadisticas || showRecuperar || showRegistro || showFacturacion || !!verUltimoTramiteId;
+    const algunPanelAbierto = showForm || !!editing || !!showFotosFor || showHistorial || showPendientes || showBulkImport || showTallerConfig || showQuickAdd || showRespaldo || showTurnos || showHoy || showEstadisticas || showRecuperar || showRegistro || showFacturacion || showCaja || !!verUltimoTramiteId;
     // Para el botón "atrás" del celular: qué paneles cuentan como "algo abierto
     // que hay que cerrar". El asistente de trámite queda afuera a propósito.
     panelAbiertoAhora = showHistorial || showPendientes || showBulkImport || showTallerConfig
@@ -9413,6 +10199,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       turnos: showTurnos && !prevPanelState.turnos,
       presupuestos: showPresupuestos && !prevPanelState.presupuestos,
       facturacion: showFacturacion && !prevPanelState.facturacion,
+      caja: showCaja && !prevPanelState.caja,
       hoy: showHoy && !prevPanelState.hoy,
       estadisticas: showEstadisticas && !prevPanelState.estadisticas,
       registro: showRegistro && !prevPanelState.registro,
@@ -9424,7 +10211,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       pendientes: showPendientes, bulkImport: showBulkImport, tallerConfig: showTallerConfig,
       enargasPaste: enargasPasteOpen, quickAdd: showQuickAdd, respaldo: showRespaldo,
       turnos: showTurnos, hoy: showHoy, estadisticas: showEstadisticas, recuperar: showRecuperar, registro: showRegistro, ultimoTramite: !!verUltimoTramiteId,
-      facturacion: showFacturacion,
+      facturacion: showFacturacion, caja: showCaja,
     };
 
     root.innerHTML = `
@@ -9438,6 +10225,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
                 <button type="button" class="btn btn-ghost btn-sm" data-nav="pendientes">${menuIco('clipboard')}Pendientes${pendCount ? ` <span class="menu-badge-inline">${pendCount}</span>` : ''}</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-presupuestos">${menuIco('presupuesto')}Presupuestos</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-facturacion">${menuIco('presupuesto')}Facturación</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-caja">${menuIco('wallet')}Caja${cajaSaldosPendientes().length ? ` <span class="menu-badge-inline">${cajaSaldosPendientes().length}</span>` : ''}</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-recuperar">${menuIco('chart')}Recuperar${paraRecuperarLista().ahora.length ? ` <span class="menu-badge-inline">${paraRecuperarLista().ahora.length}</span>` : ''}</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-estadisticas">${menuIco('chart')}Estadísticas</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-registro">${menuIco('clipboard')}Registro de trámites por PEC</button>
@@ -9500,6 +10288,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         ${showTurnos ? turnosPanel(entrando.turnos) : ''}
         ${showPresupuestos ? (presuDraft ? presuFormPanel(entrando.presupuestos) : presupuestosPanel(entrando.presupuestos)) : ''}
         ${showFacturacion ? facturacionPanel(entrando.facturacion) : ''}
+        ${showCaja ? cajaPanel(entrando.caja) : ''}
         ${verUltimoTramiteId ? ultimoTramitePanel(entrando.ultimoTramite) : ''}
 
         ${showForm || editing ? tramiteWizardPanel(editing, entrando.wizard, entrando.wizardPaso, entrando.enargasPaste) : ''}
@@ -9577,6 +10366,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     showPresupuestos = false;
     presuDraft = null;
     showFacturacion = false;
+    showCaja = false;
   }
 
   function attachEvents() {
@@ -10414,7 +11204,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       respaldoBotones(true);
       try {
         respaldoStatus('', 'Cifrando y subiendo los datos del taller...');
-        const datos = { v: 2, guardadoEn: new Date().toISOString(), tallerNombre, tallerConfig, clientes, eliminados: leerTombstones() };
+        const datos = { v: 2, guardadoEn: new Date().toISOString(), tallerNombre, tallerConfig, clientes, eliminados: leerTombstones(), caja };
         await apiRespaldo({ accion: 'subir', nombre: 'datos.json', contenido: await cifrarParaRespaldo(datos, clave) });
         const vigentes = ['datos.json'];
         const ids = Array.from(clientesConFotos);
@@ -10478,6 +11268,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         if (migrateClientes()) { /* defaults al día */ }
         tallerConfig = migrarPecsConfig({ ...TALLER_CONFIG_DEFAULT, ...(datos.tallerConfig || {}) });
         if (datos.tallerNombre) tallerNombre = datos.tallerNombre;
+        if (datos.caja) { caja = cajaNormalizar(datos.caja); await saveCaja(false); }
         await saveClientes();
         await saveTallerConfig();
         try { await window.storage.set(TALLER_KEY, JSON.stringify(tallerNombre), false); } catch (e3) { /* ok */ }
@@ -10670,6 +11461,8 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
           dni: (cli.dni || '').replace(/\D/g, ''),
           domicilio: cli.domicilio,
           telefono: c.telefono || '',
+          clienteId: c.id,
+          patente: c.patente || '',
         });
       });
     });
@@ -11390,6 +12183,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
     });
     attachPresupuestos();
     attachFacturacion();
+    attachCaja();
 
     const btnTurnos = root.querySelector('#btn-turnos');
     if (btnTurnos) btnTurnos.addEventListener('click', () => {
@@ -11584,6 +12378,8 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
           dni: (cli.dni || '').replace(/\D/g, ''),
           domicilio: cli.domicilio,
           telefono: c.telefono || '',
+          clienteId: c.id,
+          patente: c.patente || '',
         });
       });
     });
