@@ -528,6 +528,13 @@
 #gnc-app .caja-barra i { display: block; height: 100%; background: var(--ok); border-radius: 999px; }
 #gnc-app .caja-deuda-pie { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
 #gnc-app .caja-deuda-botones { display: flex; gap: 6px; flex-wrap: wrap; }
+#gnc-app .client-detalle .mas { color: var(--ok); }
+#gnc-app .client-detalle .menos { color: var(--danger); }
+#gnc-app .caja-ficha-resumen { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-bottom: 8px; }
+#gnc-app .caja-ficha-debe { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line)); border-radius: 12px; padding: 9px 11px; margin-bottom: 8px; }
+#gnc-app .caja-ficha-fila { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--line); }
+#gnc-app .caja-ficha-vacio { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--text-muted); font-size: 13.5px; }
+#gnc-app .caja-ficha-pie { margin-top: 8px; }
 /* Caja del mostrador: ventanas (viven fuera de #gnc-app, como los demás modales) */
 .gnc-modal-box.caja-modal { max-width: 420px; max-height: 92vh; overflow: auto; }
 .caja-modal .caja-monto-in { font-size: 22px !important; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -545,6 +552,13 @@
 .caja-cuenta { display: grid; gap: 3px; font-size: 13.5px; margin-bottom: 10px; font-variant-numeric: tabular-nums; }
 .caja-cuenta div { display: flex; justify-content: space-between; }
 .caja-cuenta .total { border-top: 1.5px solid #1A2333; padding-top: 5px; font-weight: 800; }
+.caja-buscador { position: relative; }
+.caja-unido { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #E8F0FD; border: 1px solid #BCD0F5; border-radius: 12px; padding: 9px 11px; font-size: 13.5px; color: #1A2333; }
+.caja-unido button { border: 0; background: none; font-size: 16px; color: #6B7688; cursor: pointer; padding: 0 4px; }
+.caja-sugs { display: grid; gap: 2px; margin-top: 4px; border: 1px solid #E3E8F0; border-radius: 12px; padding: 4px; background: #fff; max-height: 230px; overflow: auto; }
+.caja-sugs button { display: flex; gap: 10px; align-items: baseline; text-align: left; font: inherit; font-size: 13.5px; border: 0; background: transparent; padding: 8px 9px; border-radius: 9px; cursor: pointer; color: #1A2333; }
+.caja-sugs button:hover, .caja-sugs button:focus-visible { background: #EEF2F9; outline: none; }
+.caja-sugs button span { color: #6B7688; overflow-wrap: anywhere; }
 /* Los modales viven fuera de #gnc-app, así que sus botones necesitan
    estilos propios (si no, quedan con el look gris nativo del navegador). */
 .gnc-modal-box .btn {
@@ -3807,6 +3821,218 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     const c = (cu.clienteId && clientes.find(x => x.id === cu.clienteId)) || cajaClientePorPatente(cu.patente);
     return (c && c.telefono) || '';
   }
+
+  // ---- Caja y ficha del cliente ----
+  const cajaPat = p => String(p || '').toUpperCase().replace(/\s+/g, '');
+  // Lo que se cobra por un trámite con oblea (revisión, conversión, etc.). En
+  // una conversión la oblea va incluida en el equipo.
+  const CAJA_CONCEPTO_OBLEA = /oblea|revisi|hidr[aá]ulica|conversi|modificaci|instalaci|equipo|kit/i;
+  // Un cobro es de este cliente si quedó unido a su ficha; los sueltos, si
+  // coincide la patente.
+  function cajaEsDelCliente(x, c) {
+    if (x.clienteId) return x.clienteId === c.id;
+    const p = cajaPat(c.patente);
+    return !!p && cajaPat(x.patente) === p;
+  }
+  function cajaCobrosDe(c) {
+    return cajaVivos(caja.movimientos).filter(m => m.tipo === 'cobro' && cajaEsDelCliente(m, c));
+  }
+  function cajaCuentasDe(c) {
+    return cajaVivos(caja.cuentas).filter(cu => cajaEsDelCliente(cu, c));
+  }
+  // Primer día con algo cargado en la caja: de los trámites de antes no se
+  // sabe si se cobraron, así que de esos no se dice nada.
+  function cajaInicio() {
+    return cajaVivos(caja.movimientos).reduce((min, m) => (m.fecha && (!min || m.fecha < min) ? m.fecha : min), '');
+  }
+  // ¿La oblea del último trámite está paga? null = no corresponde decir nada.
+  function cajaObleaEstado(c) {
+    if (!c || sinGnc(c) || fueraDeCirculacion(c)) return null;
+    const t = latestTramite(c, ['conversion', 'modificacion', 'revision_anual', 'prueba_hidraulica']);
+    const inicio = cajaInicio();
+    if (!t || !t.fecha || !inicio || t.fecha < inicio) return null;
+    if (cajaDiasDesde(t.fecha + 'T12:00:00') > 120) return null;
+    const d = new Date(t.fecha + 'T12:00:00');
+    d.setDate(d.getDate() - 30);
+    const desde = fechaLocalISO(d);
+    const cobros = cajaCobrosDe(c).filter(m => (m.fecha || '') >= desde && CAJA_CONCEPTO_OBLEA.test(m.concepto || ''))
+      .sort((a, b) => (b.creadoEn || '').localeCompare(a.creadoEn || ''));
+    if (!cobros.length) return { estado: 'falta', tramite: t };
+    const ids = [...new Set(cobros.map(m => m.cuentaId).filter(Boolean))];
+    const debe = ids.reduce((sum, id) => {
+      const cu = cajaVivos(caja.cuentas).find(x => x.id === id);
+      return sum + (cu ? cajaCuentaEstado(cu).debe : 0);
+    }, 0);
+    if (debe > 0) return { estado: 'debe', debe, tramite: t, cuentaIds: ids };
+    return { estado: 'paga', mov: cobros[0], tramite: t, cuentaIds: ids };
+  }
+  // Renglones para la tarjeta de la lista de clientes.
+  function cajaFilasTarjeta(c) {
+    const ob = cajaObleaEstado(c);
+    let out = '';
+    if (ob) {
+      const fm = f => (f || '').slice(8, 10) + '/' + (f || '').slice(5, 7);
+      const badge = ob.estado === 'paga'
+        ? `<span class="badge badge-ok">Paga · ${fm(ob.mov.fecha)} · ${escapeHtml((ob.mov.medio || '').toLowerCase())}</span>`
+        : ob.estado === 'debe'
+          ? `<span class="badge badge-danger">Pagó una parte · debe ${presuMoney(ob.debe)}</span>`
+          : `<span class="badge badge-warn">Falta cobrar</span>`;
+      out += `<div class="doc-row"><span class="doc-label">Oblea</span>${badge}</div>`;
+    }
+    const yaDicho = (ob && ob.cuentaIds) || [];
+    const debeOtros = cajaCuentasDe(c).filter(cu => !yaDicho.includes(cu.id))
+      .reduce((sum, cu) => sum + cajaCuentaEstado(cu).debe, 0);
+    if (debeOtros > 0) out += `<div class="doc-row"><span class="doc-label">Saldo</span><span class="badge badge-danger">Debe ${presuMoney(debeOtros)}</span></div>`;
+    return out;
+  }
+  // Sección "Pagos" de la ficha abierta.
+  function cajaFichaPagos(c) {
+    const cobros = cajaCobrosDe(c);
+    const pendientes = cajaCuentasDe(c).map(cu => ({ cu, e: cajaCuentaEstado(cu) })).filter(x => x.e.debe > 0);
+    const btnCobrar = `<button type="button" class="btn btn-ghost btn-sm" data-ficha-cobrar="${escapeHtml(c.id)}">Registrar un cobro</button>`;
+    if (!cobros.length && !pendientes.length) {
+      return `<h4>Pagos</h4><div class="caja-ficha-vacio"><span>Todavía no tiene cobros anotados en la caja.</span>${btnCobrar}</div>`;
+    }
+    const total = cobros.reduce((sum, m) => sum + (Number(m.monto) || 0), 0);
+    const visitas = new Set(cobros.map(m => m.fecha)).size;
+    const debe = pendientes.reduce((sum, x) => sum + x.e.debe, 0);
+    const fm = f => (f || '').slice(8, 10) + '/' + (f || '').slice(5, 7) + '/' + (f || '').slice(2, 4);
+    // Los pagos de un mismo trabajo en cuotas van en un solo renglón.
+    const grupos = [];
+    const porCuenta = {};
+    cobros.slice().sort((a, b) => (a.creadoEn || '').localeCompare(b.creadoEn || '')).forEach(m => {
+      if (m.cuentaId) {
+        if (!porCuenta[m.cuentaId]) { porCuenta[m.cuentaId] = { cuentaId: m.cuentaId, movs: [] }; grupos.push(porCuenta[m.cuentaId]); }
+        porCuenta[m.cuentaId].movs.push(m);
+      } else grupos.push({ movs: [m] });
+    });
+    const filas = grupos.map(g => {
+      const ult = g.movs[g.movs.length - 1];
+      const monto = g.movs.reduce((sum, m) => sum + (Number(m.monto) || 0), 0);
+      const cu = g.cuentaId ? cajaVivos(caja.cuentas).find(x => x.id === g.cuentaId) : null;
+      let sub;
+      if (cu) {
+        const e = cajaCuentaEstado(cu);
+        sub = (g.movs.length > 1 ? `En ${g.movs.length} pagos` : 'Una parte') + ` de ${presuMoney(cu.total)}` + (e.debe > 0 ? ` · <b class="menos">debe ${presuMoney(e.debe)}</b>` : ' · terminó de pagar');
+      } else {
+        sub = escapeHtml([ult.medio, ult.quien ? 'cargó ' + ult.quien : ''].filter(Boolean).join(' · '));
+      }
+      return { orden: ult.creadoEn || '', html: `<div class="caja-ficha-fila">
+        <span class="caja-hora">${fm(ult.fecha)}</span>
+        <span class="caja-concepto">${escapeHtml((cu && cu.trabajo) || ult.concepto || 'Cobro')}<small>${sub}</small></span>
+        <b class="caja-monto mas">${presuMoney(monto)}</b>
+      </div>` };
+    }).sort((a, b) => b.orden.localeCompare(a.orden));
+    const MAX = 20;
+    return `<h4>Pagos</h4>
+      <div class="caja-ficha-resumen">
+        <div><span class="doc-label">Pagó en total</span><div class="caja-valor-m mas">${presuMoney(total)}</div></div>
+        <div><span class="doc-label">Veces que pagó</span><div class="caja-valor-m">${visitas}</div></div>
+        ${debe > 0 ? `<div><span class="doc-label">Debe</span><div class="caja-valor-m menos">${presuMoney(debe)}</div></div>` : ''}
+      </div>
+      ${pendientes.map(({ cu, e }) => `<div class="caja-ficha-debe">
+        <span class="caja-concepto">${escapeHtml(cu.trabajo || 'Trabajo')}<small>Pagó ${presuMoney(e.pagado)} de ${presuMoney(cu.total)} · debe <b class="menos">${presuMoney(e.debe)}</b></small></span>
+        <span class="caja-deuda-botones">
+          ${cleanPhone(cajaTelefonoDe(cu)) ? `<button type="button" class="btn btn-ghost btn-sm" data-ficha-recordar="${escapeHtml(cu.id)}">Recordarle por WhatsApp</button>` : ''}
+          <button type="button" class="btn btn-outline btn-sm" data-ficha-resto="${escapeHtml(cu.id)}">Cobrar</button>
+        </span>
+      </div>`).join('')}
+      <div class="caja-ficha-lista">${filas.slice(0, MAX).map(f => f.html).join('')}</div>
+      ${filas.length > MAX ? `<div class="caja-sub">Se muestran los últimos ${MAX} de ${filas.length}.</div>` : ''}
+      <div class="caja-ficha-pie">${btnCobrar}</div>`;
+  }
+
+  // Buscador de fichas para las ventanas de la caja.
+  function cajaBuscadorHtml(pref, etiqueta) {
+    return `<div class="fact-campo caja-buscador"><label for="${pref}-buscar">${etiqueta}</label>
+      <div class="caja-unido" id="${pref}-unido" hidden></div>
+      <input id="${pref}-buscar" placeholder="Buscá por nombre, patente o teléfono" autocomplete="off">
+      <div class="caja-sugs" id="${pref}-sugs" hidden></div>
+    </div>`;
+  }
+  function cajaEnlazarBuscador(m, pref, inicial, alCambiar) {
+    let elegido = inicial || null;
+    const inp = m.q('#' + pref + '-buscar');
+    const sugs = m.q('#' + pref + '-sugs');
+    const unido = m.q('#' + pref + '-unido');
+    const pintar = () => {
+      unido.hidden = !elegido;
+      inp.hidden = !!elegido;
+      sugs.hidden = true;
+      unido.innerHTML = elegido
+        ? `<span>Unido a la ficha de <b>${escapeHtml(nombreFicha(elegido) || 'sin nombre')}</b>${elegido.patente ? ' · ' + escapeHtml(elegido.patente) : ''}</span><button type="button" aria-label="Soltar la ficha" title="Soltar la ficha">✕</button>`
+        : '';
+      if (alCambiar) alCambiar(elegido);
+    };
+    inp.addEventListener('input', () => {
+      const t = inp.value.trim();
+      if (t.length < 2) { sugs.hidden = true; return; }
+      const lista = sortedFiltered(t).slice(0, 6);
+      sugs.hidden = false;
+      sugs.innerHTML = lista.length
+        ? lista.map(c => `<button type="button" data-cli="${escapeHtml(c.id)}"><b>${escapeHtml(c.patente || 'Sin patente')}</b><span>${escapeHtml(nombreFicha(c))}</span></button>`).join('')
+        : '<div class="caja-sub">No hay ninguna ficha con eso.</div>';
+    });
+    sugs.addEventListener('click', e => {
+      const b = e.target.closest('[data-cli]');
+      if (!b) return;
+      elegido = clientes.find(c => c.id === b.getAttribute('data-cli')) || null;
+      inp.value = '';
+      pintar();
+    });
+    unido.addEventListener('click', e => {
+      if (!e.target.closest('button')) return;
+      elegido = null;
+      pintar();
+      setTimeout(() => inp.focus(), 0);
+    });
+    pintar();
+    return () => elegido;
+  }
+
+  // Unir un cobro suelto a una ficha. No cambia plata, así que se puede aunque
+  // la caja de ese día esté cerrada.
+  function cajaUnirAFicha(movId) {
+    const mov = cajaVivos(caja.movimientos).find(x => x.id === movId);
+    if (!mov) return;
+    const m = cajaModal(`
+      <div class="gnc-modal-head">
+        <div class="gnc-modal-icon">$</div>
+        <div>
+          <div class="gnc-modal-title">Unir a una ficha</div>
+          <div class="gnc-modal-msg">${escapeHtml(mov.concepto || 'Cobro')} de ${presuMoney(mov.monto)}. Pasa a verse en el historial de pagos del cliente.</div>
+        </div>
+      </div>
+      ${cajaBuscadorHtml('cu', 'Cliente')}
+      <div class="fact-aviso err" id="cu-err"></div>
+      <div class="gnc-modal-actions">
+        <button type="button" class="btn btn-ghost" id="cu-no">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="cu-ok">Unir</button>
+      </div>`);
+    const obtener = cajaEnlazarBuscador(m, 'cu', cajaClientePorPatente(mov.patente));
+    m.q('#cu-no').addEventListener('click', m.cerrar);
+    m.q('#cu-ok').addEventListener('click', async () => {
+      const cli = obtener();
+      if (!cli) { m.q('#cu-err').textContent = 'Elegí la ficha del cliente.'; return; }
+      const ahora = new Date().toISOString();
+      const unir = x => {
+        x.clienteId = cli.id;
+        x.patente = cli.patente || x.patente || '';
+        x.nombre = x.nombre || nombreFicha(cli);
+        x.actualizadoEn = ahora;
+      };
+      unir(mov);
+      if (mov.cuentaId) {
+        cajaVivos(caja.movimientos).filter(x => x.cuentaId === mov.cuentaId && x !== mov).forEach(unir);
+        const cu = cajaVivos(caja.cuentas).find(x => x.id === mov.cuentaId);
+        if (cu) { unir(cu); if (!cu.telefono && cli.telefono) cu.telefono = cli.telefono; }
+      }
+      m.cerrar();
+      await saveCaja();
+      render();
+    });
+    setTimeout(() => { const el = m.q('#cu-buscar'); if (el && !el.hidden) el.focus(); }, 60);
+  }
   // Día al que va un movimiento nuevo: el que se está mirando, o hoy. Si esa
   // caja ya se cerró, no se carga nada (hay que reabrirla).
   function cajaFechaParaCargar(soloHoy) {
@@ -3875,7 +4101,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         <div class="caja-seccion">Movimientos</div>
         ${r.movs.length ? r.movs.map(mv => `<div class="caja-mov">
           <span class="caja-hora">${cajaHora(mv.creadoEn)}</span>
-          <span class="caja-concepto">${escapeHtml(etiquetaMov(mv))}${mv.patente ? ' · ' + escapeHtml(mv.patente) : ''}<small>${escapeHtml(detalleMov(mv))}</small></span>
+          <span class="caja-concepto">${escapeHtml(etiquetaMov(mv))}${mv.patente ? ' · ' + escapeHtml(mv.patente) : ''}<small>${escapeHtml(detalleMov(mv))}${mv.tipo === 'cobro' && !mv.clienteId ? ` · <button type="button" class="caja-link" data-caja-unir="${escapeHtml(mv.id)}">Unir a una ficha</button>` : ''}</small></span>
           <b class="caja-monto ${mv.tipo === 'cobro' ? 'mas' : 'menos'}">${mv.tipo === 'cobro' ? '+' : '−'}${presuMoney(mv.monto)}</b>
           ${r.cierre ? '<span></span>' : `<button type="button" class="caja-borrar" data-caja-borrar="${escapeHtml(mv.id)}" title="Borrar este movimiento" aria-label="Borrar este movimiento">✕</button>`}
         </div>`).join('') : `<div class="caja-vacio">Todavía no hay movimientos ${esHoy ? 'hoy' : 'ese día'}.</div>`}
@@ -3981,7 +4207,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     pre = pre || {};
     const cuenta = pre.cuentaId ? cajaVivos(caja.cuentas).find(c => c.id === pre.cuentaId) : null;
     const estado = cuenta ? cajaCuentaEstado(cuenta) : null;
-    const fecha = cajaFechaParaCargar(!!pre.desdeComprobante);
+    const fecha = cajaFechaParaCargar(!!pre.desdeComprobante || !!pre.desdeFicha);
     if (!fecha) {
       if (!pre.desdeComprobante) customAlert('La caja de ese día ya está cerrada. Reabrila para cargar movimientos.', 'Caja cerrada');
       return;
@@ -3999,11 +4225,15 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       ${cuenta ? '' : `
         <div class="fact-campo"><label for="cj-concepto">Qué se cobra</label>
           <input id="cj-concepto" value="${escapeHtml(pre.concepto || '')}" placeholder="Ej: oblea, prueba hidráulica, instalación"></div>
-        <div class="fact-fila2">
-          <div class="fact-campo"><label for="cj-patente">Patente</label>
-            <input id="cj-patente" value="${escapeHtml(pre.patente || '')}" placeholder="Opcional"></div>
-          <div class="fact-campo"><label for="cj-nombre">Cliente</label>
-            <input id="cj-nombre" value="${escapeHtml(pre.nombre || '')}" placeholder="Opcional"></div>
+        ${cajaBuscadorHtml('cj', 'Cliente')}
+        <div id="cj-suelto">
+          <div class="caja-sub" style="margin:-4px 0 6px;">¿No tiene ficha? Anotá la patente o el nombre:</div>
+          <div class="fact-fila2">
+            <div class="fact-campo"><label for="cj-patente">Patente</label>
+              <input id="cj-patente" value="${escapeHtml(pre.patente || '')}" placeholder="Opcional"></div>
+            <div class="fact-campo"><label for="cj-nombre">Nombre</label>
+              <input id="cj-nombre" value="${escapeHtml(pre.nombre || '')}" placeholder="Opcional"></div>
+          </div>
         </div>
         <div class="caja-segmento" id="cj-pago">
           <button type="button" class="si" data-valor="todo">Pagó todo</button>
@@ -4023,6 +4253,8 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         <button type="button" class="btn btn-primary" id="cj-ok">Registrar el cobro</button>
       </div>`);
     cajaEnlazarChips(m);
+    const inicialCli = cuenta ? null : ((pre.clienteId && clientes.find(x => x.id === pre.clienteId)) || cajaClientePorPatente(pre.patente));
+    const fichaElegida = cuenta ? () => null : cajaEnlazarBuscador(m, 'cj', inicialCli, cli => { m.q('#cj-suelto').hidden = !!cli; });
     let modo = 'todo';
     const actualizar = () => {
       const monto = cajaNumero(m.q('#cj-monto').value);
@@ -4070,10 +4302,14 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         clienteId = cuenta.clienteId || null;
       } else {
         concepto = m.q('#cj-concepto').value.trim();
-        patente = m.q('#cj-patente').value.trim().toUpperCase();
-        nombre = m.q('#cj-nombre').value.trim();
-        const cli = (pre.clienteId && clientes.find(x => x.id === pre.clienteId)) || cajaClientePorPatente(patente);
+        const elegida = fichaElegida();
+        patente = elegida ? (elegida.patente || '') : m.q('#cj-patente').value.trim().toUpperCase();
+        nombre = elegida ? (pre.nombre || nombreFicha(elegida)) : m.q('#cj-nombre').value.trim();
+        const cli = elegida || cajaClientePorPatente(patente);
         clienteId = cli ? cli.id : null;
+        // Una oblea a veces se paga el día de la revisión y a veces al retirarla:
+        // sin patente después no se sabe de quién era.
+        if (/oblea/i.test(concepto) && !cli && !patente) { err.textContent = 'Elegí la ficha o poné la patente: así después se sabe si esa oblea está paga.'; return; }
         if (modo === 'parte') {
           const total = cajaNumero(m.q('#cj-total').value);
           if (!(total > monto)) { err.textContent = 'Si pagó una parte, el total del trabajo tiene que ser mayor a lo que pagó.'; return; }
@@ -4339,6 +4575,12 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       const panel = root.querySelector('#caja-panel');
       if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+    root.querySelectorAll('[data-ficha-cobrar]').forEach(b => b.addEventListener('click', () => {
+      const c = clientes.find(x => x.id === b.getAttribute('data-ficha-cobrar'));
+      if (c) cajaCobrar({ desdeFicha: true, clienteId: c.id, patente: c.patente || '', telefono: c.telefono || '' });
+    }));
+    root.querySelectorAll('[data-ficha-resto]').forEach(b => b.addEventListener('click', () => cajaCobrar({ cuentaId: b.getAttribute('data-ficha-resto'), desdeFicha: true })));
+    root.querySelectorAll('[data-ficha-recordar]').forEach(b => b.addEventListener('click', () => cajaRecordar(b.getAttribute('data-ficha-recordar'))));
     if (!showCaja) return;
     root.querySelectorAll('[data-caja-vista]').forEach(b => b.addEventListener('click', () => {
       cajaVista = b.getAttribute('data-caja-vista');
@@ -4367,6 +4609,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     root.querySelectorAll('[data-caja-borrar]').forEach(b => b.addEventListener('click', () => cajaBorrarMovimiento(b.getAttribute('data-caja-borrar'))));
     root.querySelectorAll('[data-caja-resto]').forEach(b => b.addEventListener('click', () => cajaCobrar({ cuentaId: b.getAttribute('data-caja-resto') })));
     root.querySelectorAll('[data-caja-recordar]').forEach(b => b.addEventListener('click', () => cajaRecordar(b.getAttribute('data-caja-recordar'))));
+    root.querySelectorAll('[data-caja-unir]').forEach(b => b.addEventListener('click', () => cajaUnirAFicha(b.getAttribute('data-caja-unir'))));
   }
 
   function attachFacturacion() {
@@ -6369,6 +6612,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
             <button type="button" class="btn btn-ghost btn-sm" data-reactivar="${c.id}">Reactivar</button>
           </div>` : ''}
           ${docRowVencimientos(c)}
+          ${cajaFilasTarjeta(c)}
           ${(() => {
             const t = proximoTurnoDe(c);
             if (!t) return '';
@@ -6428,6 +6672,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       ${clienteDatosBlock(c)}
       ${c.tramites.length ? `<h4>Historial de trámites</h4><div class="tramites-list">${rows}</div>` : '<p class="scan-sub">Todavía no tiene trámites cargados.</p>'}
       ${turnosHist.length ? `<h4>Turnos</h4><div class="tramites-list">${turnosRows}</div>` : ''}
+      ${cajaFichaPagos(c)}
     </div>`;
   }
 
