@@ -42,6 +42,11 @@
   .estado.suspendido { background:#FDE8E5; color:var(--rojo); }
   .estado.warn { background:#FCF1DC; color:#B36F00; }
   .estado.prueba { background:#E7F0FF; color:var(--azul); }
+  .prod { font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px; letter-spacing:.3px; white-space:nowrap; }
+  .prod.taller { background:#E7F0FF; color:var(--azul-osc); }
+  .prod.repuestos { background:#EEE9FB; color:#5B3FA3; }
+  .filtro { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:0 0 10px; }
+  .filtro .btn.activo { background:var(--azul); color:#fff; border-color:var(--azul); }
   .acciones { display:flex; gap:6px; flex-wrap:wrap; }
   .muted { color:var(--suave); font-size:12px; }
   #tabla-msg { color:var(--rojo); font-size:13px; margin:10px 0; }
@@ -82,13 +87,19 @@
     <div id="infra"></div>
     <div id="ritmo"></div>
     <div id="tabla-msg"></div>
+    <div class="filtro" id="filtro">
+      <span class="muted">Ver:</span>
+      <button class="btn btn-ghost btn-sm" data-f="">Todas</button>
+      <button class="btn btn-ghost btn-sm" data-f="taller">Estelita (talleres)</button>
+      <button class="btn btn-ghost btn-sm" data-f="repuestos">Estelita Repuestos</button>
+    </div>
     <table>
       <thead><tr>
-        <th>Código</th><th>Taller</th><th>Plan</th><th>Estado</th><th>Pago al día</th><th>Últ. actividad</th><th>Costo IA (mes)</th><th class="col-notas">Notas</th><th>Acciones</th>
+        <th>Código</th><th>Producto</th><th>Negocio</th><th>Plan</th><th>Estado</th><th>Pago al día</th><th>Últ. actividad</th><th>Costo IA (mes)</th><th class="col-notas">Notas</th><th>Acciones</th>
       </tr></thead>
       <tbody id="filas"></tbody>
     </table>
-    <p class="muted" style="margin-top:14px;"><b>Pago al día:</b> cuando te transfieren, tocá <b>“+1 mes”</b> — se renueva un mes y queda al día; si la fecha vence (+5 días de gracia), la app <b>se corta sola</b>. La columna <b>Estado</b> avisa: Al día / Vence en Xd / Vencida / En prueba / Suspendida. <b>Suspender</b> revoca al instante. (Cuando conectemos Mercado Pago, el “+1 mes” lo hace solo el cobro.) <b>Últ. actividad</b> = lecturas de IA recientes (identifica un código aunque no tenga nombre). <b>Costo IA (mes)</b> = lo que te factura Anthropic por ese código; el total está arriba.</p>
+    <p class="muted" style="margin-top:14px;"><b>Producto:</b> <b>Estelita</b> es el taller (código GNC-), <b>Repuestos</b> es la casa de repuestos (código REP-). Las dos apps verifican la licencia acá; Repuestos además avisa su consumo de IA y respeta el tope diario. El correo de la fila es el titular: si está vacío, queda vinculado al primero que la cargue en su app; otro correo con el mismo código es rechazado. <b>Pago al día:</b> cuando te transfieren, tocá <b>“+1 mes”</b> — se renueva un mes y queda al día; si la fecha vence (+5 días de gracia), la app <b>se corta sola</b>. La columna <b>Estado</b> avisa: Al día / Vence en Xd / Vencida / En prueba / Suspendida. <b>Suspender</b> revoca al instante. (Cuando conectemos Mercado Pago, el “+1 mes” lo hace solo el cobro.) <b>Últ. actividad</b> = lecturas de IA recientes (identifica un código aunque no tenga nombre). <b>Costo IA (mes)</b> = lo que te factura Anthropic por ese código; el total está arriba.</p>
 
     <div id="sug-seccion">
       <div class="top">
@@ -244,8 +255,26 @@
     return { txt: 'Al día', cls: 'activo' };
   }
 
+  // Filtro por producto (Estelita = talleres, Repuestos = casas de repuestos).
+  // Se recuerda entre visitas; el resumen de arriba se calcula sobre lo filtrado.
+  let DATA = null;
+  let FILTRO = localStorage.getItem('estelita_admin_filtro') || '';
+  const PROD_LABELS = { taller: 'Estelita', repuestos: 'Repuestos' };
+  function pintarFiltro() {
+    document.querySelectorAll('#filtro button[data-f]').forEach(b => b.classList.toggle('activo', b.getAttribute('data-f') === FILTRO));
+  }
+  $('#filtro').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button[data-f]');
+    if (!b) return;
+    FILTRO = b.getAttribute('data-f') || '';
+    localStorage.setItem('estelita_admin_filtro', FILTRO);
+    if (DATA) render(DATA);
+  });
+
   function render(data) {
-    const licencias = data.licencias || [];
+    DATA = data;
+    pintarFiltro();
+    const licencias = (data.licencias || []).filter(l => !FILTRO || (l.producto || 'taller') === FILTRO);
     const costoTotal = Number(data.costoTotalMes) || 0;
     const activos = licencias.filter(l => l.estado === 'activo').length;
     const activasHoy = licencias.filter(l => Number(l.usoHoy) > 0).length;
@@ -266,6 +295,7 @@
       return `
       <tr data-cod="${esc(l.codigo)}" data-taller="${esc(l.taller || '')}" data-tope="${esc(l.topeDia || 0)}" data-notas="${esc(l.notas || '')}" data-plan="${esc(l.plan || '')}" data-medio="${esc(l.medioPago || '')}" data-pago="${esc(l.pagoHasta || '')}" data-email="${esc(l.email || '')}"${reciente ? ' style="background:#F3F9F5;"' : ''}>
         <td><span class="cod">${esc(l.codigo)}</span></td>
+        <td><span class="prod ${esc(l.producto || 'taller')}">${esc(PROD_LABELS[l.producto] || 'Estelita')}</span></td>
         <td>${esc(l.taller) || '<span class="muted">— sin nombre —</span>'}${l.email ? '<div class="muted" style="font-size:11px;">' + esc(l.email) + '</div>' : ''}</td>
         <td>${PLAN_LABELS[l.plan] || '<span class="muted">—</span>'}${l.medioPago ? ' <span class="muted">(' + (l.medioPago === 'mp' ? 'MP' : 'transf.') + ')</span>' : ''}</td>
         <td><span class="estado ${e.cls}">${e.txt}</span></td>
@@ -282,7 +312,7 @@
             : '<button class="btn btn-ghost btn-sm" data-a="reactivar">Reactivar</button>'}
           <button class="btn btn-danger btn-sm" data-a="eliminar">Eliminar</button>
         </div></td>
-      </tr>`; }).join('') || '<tr><td colspan="9" class="muted" style="text-align:center;padding:24px;">No hay licencias todavía. Creá la primera con "+ Nueva licencia".</td></tr>';
+      </tr>`; }).join('') || '<tr><td colspan="10" class="muted" style="text-align:center;padding:24px;">' + (FILTRO ? 'No hay licencias de ' + esc(PROD_LABELS[FILTRO]) + ' todavía.' : 'No hay licencias todavía. Creá la primera con "+ Nueva licencia".') + '</td></tr>';
   }
 
   async function cargar() {

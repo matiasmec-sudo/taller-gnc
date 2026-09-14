@@ -4,7 +4,7 @@
 // eliminar. La primera vez importa (seed) los códigos de LICENSE_CODES para
 // que el panel muestre también los que ya estaban en uso.
 import crypto from 'crypto';
-import { leerLicenciasEstricto, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, PRODUCTOS, sumarMesISO, leerSugerencias, guardarSugerencias, leerCredito, guardarCredito } from './_licencias.js';
+import { leerLicenciasEstricto, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, PRODUCTOS, productoDe, sumarMesISO, leerSugerencias, guardarSugerencias, leerCredito, guardarCredito } from './_licencias.js';
 
 // Ritmo de consumo de la IA. El consumo se guarda por MES (no por día), así que
 // el ritmo se estima como: gastado del mes / días transcurridos del mes. Se
@@ -122,6 +122,7 @@ export default async function handler(req, res) {
         readsTotalMes += Number(c.reads) || 0;
         return {
           ...l,
+          producto: productoDe(l),
           usoTotal: a.total || 0, usoHoy: a.hoy || 0, ultimoUso: a.ultimo || null,
           costoMesUSD: Number(c.costoUSD) || 0, readsMes: Number(c.reads) || 0,
         };

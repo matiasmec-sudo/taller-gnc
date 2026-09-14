@@ -54,10 +54,21 @@ export function sumarDiasISO(iso, dias) {
 // — actualizá acá si Anthropic cambia las tarifas. Sirven para estimar el
 // costo real de cada lectura en el panel.
 const PRECIOS_IA = {
+  'claude-opus-5': { in: 5, out: 25 },
+  'claude-sonnet-5': { in: 2, out: 10 },
   'claude-sonnet-4-6': { in: 3, out: 15 },
+  'claude-haiku-4-5': { in: 1, out: 5 },
   'claude-haiku-4-5-20251001': { in: 1, out: 5 },
 };
 const PRECIO_DEFECTO = { in: 3, out: 15 };
+
+// De qué producto es una licencia: lo que guardó el panel o, para las viejas
+// (que no tienen el campo), el prefijo del código.
+export function productoDe(l) {
+  if (l && PRODUCTOS[l.producto]) return l.producto;
+  const cod = String((l && l.codigo) || '').toUpperCase();
+  return cod.startsWith('REP-') ? 'repuestos' : 'taller';
+}
 
 function blobBaseUrl() {
   const partes = (process.env.BLOB_READ_WRITE_TOKEN || '').split('_');
@@ -307,6 +318,58 @@ export async function licenciaValida(codigo) {
     return true;
   }
   return codigosEnv().includes(cod);
+}
+
+/**
+ * Lo mismo que licenciaValida, pero contando el porqué. Es lo que usan los
+ * servidores de Estelita (Repuestos, el CRM) por /api/servidor: además de
+ * "sí/no" necesitan saber si está suspendida, vencida o si el correo que la
+ * reclama no es el del titular.
+ *
+ *   motivo: 'ok' | 'inexistente' | 'suspendida' | 'vencida' | 'producto' | 'email'
+ *
+ * El correo: la primera vez que un servidor verifica una licencia con un
+ * correo, ese correo queda como titular (si el panel no cargó uno). Desde ahí,
+ * otro correo con el mismo código es rechazado. Así un código que se filtra no
+ * alcanza para colgarse del negocio de otro.
+ */
+export async function licenciaDetalle(codigo, { email, producto } = {}) {
+  const cod = (codigo || '').trim().toUpperCase();
+  if (!cod) return { ok: false, motivo: 'inexistente' };
+  const mail = String(email || '').trim().toLowerCase();
+  let lics;
+  try {
+    lics = await leerLicenciasEstricto();
+  } catch (e) {
+    // Sin storage se contesta con el respaldo del env, sin detalle.
+    return codigosEnv().includes(cod) ? { ok: true, motivo: 'ok', licencia: { codigo: cod } } : { ok: false, motivo: 'inexistente' };
+  }
+  const l = lics.find(x => x.codigo === cod);
+  if (!l) {
+    return codigosEnv().includes(cod) ? { ok: true, motivo: 'ok', licencia: { codigo: cod } } : { ok: false, motivo: 'inexistente' };
+  }
+  const publica = () => ({
+    codigo: l.codigo, producto: productoDe(l), plan: l.plan || '', estado: l.estado,
+    pagoHasta: l.pagoHasta || null, prueba: !!l.prueba, topeDia: Number(l.topeDia) || 0,
+    taller: l.taller || '', emailVinculado: !!l.email,
+  });
+  if (l.estado !== 'activo') return { ok: false, motivo: 'suspendida', licencia: publica() };
+  if (l.pagoHasta) {
+    const limite = new Date(l.pagoHasta + 'T00:00:00');
+    limite.setDate(limite.getDate() + GRACIA_DIAS);
+    if (new Date() > limite) return { ok: false, motivo: 'vencida', licencia: publica() };
+  }
+  if (producto && PRODUCTOS[producto] && productoDe(l) !== producto) return { ok: false, motivo: 'producto', licencia: publica() };
+  if (mail) {
+    const titular = String(l.email || '').trim().toLowerCase();
+    if (titular && titular !== mail) return { ok: false, motivo: 'email', licencia: publica() };
+    if (!titular) {
+      l.email = mail;
+      l.notas = [l.notas, `Correo vinculado al primer uso (${new Date().toISOString().slice(0, 10)})`].filter(Boolean).join(' · ');
+      await guardarLicencias(lics);
+    }
+  }
+  return { ok: true, motivo: 'ok', licencia: publica() };
 }
 
 // Actividad por código: agrega los contadores diarios de lecturas de IA
