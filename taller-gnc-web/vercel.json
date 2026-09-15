@@ -1,6 +1,7 @@
 {
   "rewrites": [
-    { "source": "/planes", "destination": "/estelita.html" }
+    { "source": "/planes", "destination": "/estelita.html" },
+    { "source": "/links", "destination": "/links.html" }
   ],
   "headers": [
     {
