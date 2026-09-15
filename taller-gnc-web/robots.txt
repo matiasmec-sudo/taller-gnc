@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin.html
+Disallow: /gracias.html
+Disallow: /tecnico.html
+
+Sitemap: https://estelita.net.ar/sitemap.xml
+Sitemap: https://repuestos.estelita.net.ar/sitemap.xml
