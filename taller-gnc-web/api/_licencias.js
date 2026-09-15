@@ -23,11 +23,16 @@ export const PLAN_PRECIOS = { basico: 15000, profesional: 22000, full: 35000 };
 export const PLAN_NOMBRES = { basico: 'Básico', profesional: 'Profesional', full: 'Full' };
 
 // Genera un código de licencia único (sin O/0/I/1/L, fácil de dictar).
+// El prefijo dice de qué producto es: GNC- (Estelita, el taller) o REP-
+// (Estelita Repuestos, la casa de repuestos). Los dos se validan igual por
+// /api/licencia; el prefijo es para que a simple vista se sepa cuál es cuál.
 const ALFA_COD = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-export function nuevoCodigo(existentes) {
+export const PRODUCTOS = { taller: 'GNC', repuestos: 'REP' };
+export function nuevoCodigo(existentes, producto = 'taller') {
   const set = new Set(existentes || []);
+  const prefijo = PRODUCTOS[producto] || PRODUCTOS.taller;
   let c;
-  do { c = 'GNC-' + Array.from({ length: 4 }, () => ALFA_COD[crypto.randomInt(ALFA_COD.length)]).join(''); } while (set.has(c));
+  do { c = prefijo + '-' + Array.from({ length: 4 }, () => ALFA_COD[crypto.randomInt(ALFA_COD.length)]).join(''); } while (set.has(c));
   return c;
 }
 
@@ -49,10 +54,21 @@ export function sumarDiasISO(iso, dias) {
 // — actualizá acá si Anthropic cambia las tarifas. Sirven para estimar el
 // costo real de cada lectura en el panel.
 const PRECIOS_IA = {
+  'claude-opus-5': { in: 5, out: 25 },
+  'claude-sonnet-5': { in: 2, out: 10 },
   'claude-sonnet-4-6': { in: 3, out: 15 },
+  'claude-haiku-4-5': { in: 1, out: 5 },
   'claude-haiku-4-5-20251001': { in: 1, out: 5 },
 };
 const PRECIO_DEFECTO = { in: 3, out: 15 };
+
+// De qué producto es una licencia: lo que guardó el panel o, para las viejas
+// (que no tienen el campo), el prefijo del código.
+export function productoDe(l) {
+  if (l && PRODUCTOS[l.producto]) return l.producto;
+  const cod = String((l && l.codigo) || '').toUpperCase();
+  return cod.startsWith('REP-') ? 'repuestos' : 'taller';
+}
 
 function blobBaseUrl() {
   const partes = (process.env.BLOB_READ_WRITE_TOKEN || '').split('_');
@@ -304,6 +320,58 @@ export async function licenciaValida(codigo) {
   return codigosEnv().includes(cod);
 }
 
+/**
+ * Lo mismo que licenciaValida, pero contando el porqué. Es lo que usan los
+ * servidores de Estelita (Repuestos, el CRM) por /api/servidor: además de
+ * "sí/no" necesitan saber si está suspendida, vencida o si el correo que la
+ * reclama no es el del titular.
+ *
+ *   motivo: 'ok' | 'inexistente' | 'suspendida' | 'vencida' | 'producto' | 'email'
+ *
+ * El correo: la primera vez que un servidor verifica una licencia con un
+ * correo, ese correo queda como titular (si el panel no cargó uno). Desde ahí,
+ * otro correo con el mismo código es rechazado. Así un código que se filtra no
+ * alcanza para colgarse del negocio de otro.
+ */
+export async function licenciaDetalle(codigo, { email, producto } = {}) {
+  const cod = (codigo || '').trim().toUpperCase();
+  if (!cod) return { ok: false, motivo: 'inexistente' };
+  const mail = String(email || '').trim().toLowerCase();
+  let lics;
+  try {
+    lics = await leerLicenciasEstricto();
+  } catch (e) {
+    // Sin storage se contesta con el respaldo del env, sin detalle.
+    return codigosEnv().includes(cod) ? { ok: true, motivo: 'ok', licencia: { codigo: cod } } : { ok: false, motivo: 'inexistente' };
+  }
+  const l = lics.find(x => x.codigo === cod);
+  if (!l) {
+    return codigosEnv().includes(cod) ? { ok: true, motivo: 'ok', licencia: { codigo: cod } } : { ok: false, motivo: 'inexistente' };
+  }
+  const publica = () => ({
+    codigo: l.codigo, producto: productoDe(l), plan: l.plan || '', estado: l.estado,
+    pagoHasta: l.pagoHasta || null, prueba: !!l.prueba, topeDia: Number(l.topeDia) || 0,
+    taller: l.taller || '', emailVinculado: !!l.email,
+  });
+  if (l.estado !== 'activo') return { ok: false, motivo: 'suspendida', licencia: publica() };
+  if (l.pagoHasta) {
+    const limite = new Date(l.pagoHasta + 'T00:00:00');
+    limite.setDate(limite.getDate() + GRACIA_DIAS);
+    if (new Date() > limite) return { ok: false, motivo: 'vencida', licencia: publica() };
+  }
+  if (producto && PRODUCTOS[producto] && productoDe(l) !== producto) return { ok: false, motivo: 'producto', licencia: publica() };
+  if (mail) {
+    const titular = String(l.email || '').trim().toLowerCase();
+    if (titular && titular !== mail) return { ok: false, motivo: 'email', licencia: publica() };
+    if (!titular) {
+      l.email = mail;
+      l.notas = [l.notas, `Correo vinculado al primer uso (${new Date().toISOString().slice(0, 10)})`].filter(Boolean).join(' · ');
+      await guardarLicencias(lics);
+    }
+  }
+  return { ok: true, motivo: 'ok', licencia: publica() };
+}
+
 // Actividad por código: agrega los contadores diarios de lecturas de IA
 // (los archivos uso-YYYY-MM-DD.json que escribe chequearTope) de los últimos
 // `dias` días. Devuelve { codigo: { total, hoy, ultimo } }. Solo lectura: no
@@ -333,8 +401,11 @@ export async function leerActividad(dias = 30) {
 // Registra el consumo real de IA de una lectura (tokens + costo estimado en
 // US$) por código, acumulado por mes (sistema/consumo-YYYY-MM.json). Se llama
 // DESPUÉS de la respuesta de Anthropic (que trae el detalle de tokens).
+// `origen` separa de dónde salió el gasto: 'lecturas' (la app del taller),
+// 'whatsapp' (el agente del CRM), 'listas' y 'mercadolibre' (Repuestos),
+// 'laboratorio', 'inmobiliaria'. Queda en porOrigen dentro del mismo código.
 // Best-effort: nunca tira error para no afectar la respuesta de la lectura.
-export async function registrarConsumo(codigo, model, usage) {
+export async function registrarConsumo(codigo, model, usage, origen) {
   try {
     const cod = (codigo || '').trim();
     if (!cod || !usage) return;
@@ -348,6 +419,10 @@ export async function registrarConsumo(codigo, model, usage) {
     try { data = (await leerJsonBlob(path)) || {}; } catch (e) { data = {}; }
     const c = data[cod] || (data[cod] = { reads: 0, inTok: 0, outTok: 0, costoUSD: 0 });
     c.reads += 1; c.inTok += inTok; c.outTok += outTok; c.costoUSD += costo;
+    const o = String(origen || 'lecturas').replace(/[^a-z0-9_-]/gi, '').slice(0, 30) || 'lecturas';
+    c.porOrigen = c.porOrigen || {};
+    const po = c.porOrigen[o] || (c.porOrigen[o] = { reads: 0, costoUSD: 0 });
+    po.reads += 1; po.costoUSD += costo;
     await escribirJsonBlob(path, data);
   } catch (e) { /* best-effort */ }
 }

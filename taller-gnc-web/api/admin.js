@@ -4,7 +4,7 @@
 // eliminar. La primera vez importa (seed) los códigos de LICENSE_CODES para
 // que el panel muestre también los que ya estaban en uso.
 import crypto from 'crypto';
-import { leerLicenciasEstricto, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, sumarMesISO, leerSugerencias, guardarSugerencias, leerCredito, guardarCredito } from './_licencias.js';
+import { leerLicenciasEstricto, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, PRODUCTOS, productoDe, sumarMesISO, leerSugerencias, guardarSugerencias, leerCredito, guardarCredito } from './_licencias.js';
 
 // Ritmo de consumo de la IA. El consumo se guarda por MES (no por día), así que
 // el ritmo se estima como: gastado del mes / días transcurridos del mes. Se
@@ -122,10 +122,28 @@ export default async function handler(req, res) {
         readsTotalMes += Number(c.reads) || 0;
         return {
           ...l,
+          producto: productoDe(l),
           usoTotal: a.total || 0, usoHoy: a.hoy || 0, ultimoUso: a.ultimo || null,
           costoMesUSD: Number(c.costoUSD) || 0, readsMes: Number(c.reads) || 0,
+          porOrigen: c.porOrigen || {},
         };
       });
+      // Lo que llegó con un código que no es una licencia (el CRM manda sus
+      // pruebas y el Laboratorio como CRM-SIN-LICENCIA): se suma al total y se
+      // muestra aparte, para que el gasto real no quede escondido.
+      const codigosLic = new Set(lics.map(l => l.codigo));
+      const consumoSinLicencia = { costoUSD: 0, reads: 0, porOrigen: {} };
+      for (const [cod, c] of Object.entries(consumo || {})) {
+        if (codigosLic.has(cod)) continue;
+        consumoSinLicencia.costoUSD += Number(c.costoUSD) || 0;
+        consumoSinLicencia.reads += Number(c.reads) || 0;
+        for (const [o, po] of Object.entries(c.porOrigen || { [cod]: c })) {
+          const d = consumoSinLicencia.porOrigen[o] || (consumoSinLicencia.porOrigen[o] = { reads: 0, costoUSD: 0 });
+          d.reads += Number(po.reads) || 0; d.costoUSD += Number(po.costoUSD) || 0;
+        }
+      }
+      costoTotalMes += consumoSinLicencia.costoUSD;
+      readsTotalMes += consumoSinLicencia.reads;
       // "Infraestructura": costo de Vercel (plano, según el plan) y un ESTIMADO
       // de operaciones de nube (Blob) por la IA — cada lectura hace ~2 escrituras
       // (registro de uso + de costo). La sincronización suma más, pero eso no se
@@ -134,7 +152,7 @@ export default async function handler(req, res) {
       const opsIaMes = readsTotalMes * 2;
       const ritmo = calcularRitmo(costoTotalMes, readsTotalMes, costoMesAnteriorUSD, credito);
       return res.status(200).json({
-        ok: true, licencias: conAct, costoTotalMes, readsTotalMes,
+        ok: true, licencias: conAct, costoTotalMes, readsTotalMes, consumoSinLicencia,
         mes: mesActual,
         infra: { vercel, opsIaMes, limiteOpsGratis: 2000 },
         ritmo,
@@ -144,9 +162,10 @@ export default async function handler(req, res) {
     if (accion === 'agregar') {
       const taller = String(req.body.taller || '').trim();
       const topeDia = Number(req.body.topeDia) > 0 ? Number(req.body.topeDia) : 50;
-      const codigo = nuevoCodigo(lics.map(l => l.codigo).concat(codigosEnv()));
+      const producto = Object.keys(PRODUCTOS).includes(req.body.producto) ? req.body.producto : 'taller';
+      const codigo = nuevoCodigo(lics.map(l => l.codigo).concat(codigosEnv()), producto);
       lics.push({
-        codigo, taller, estado: 'activo', alta: new Date().toISOString().slice(0, 10),
+        codigo, taller, producto, estado: 'activo', alta: new Date().toISOString().slice(0, 10),
         topeDia, notas: '',
         plan: PLANES.includes(req.body.plan) ? req.body.plan : '',
         medioPago: MEDIOS.includes(req.body.medioPago) ? req.body.medioPago : '',
