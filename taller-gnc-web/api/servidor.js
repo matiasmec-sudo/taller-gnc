@@ -17,7 +17,9 @@
 //       → 200 { ok: true, motivo: 'ok', licencia: {...} }
 //       → 403 { ok: false, motivo: 'inexistente'|'suspendida'|'vencida'|'producto'|'email', licencia? }
 //   { accion: 'tope', license }          → { ok, usado, tope }   (cuenta UNA lectura si hay tope)
-//   { accion: 'consumo', license, model, usage: { input_tokens, output_tokens } } → { ok: true }
+//   { accion: 'consumo', license, model, origen?, usage: { input_tokens, output_tokens } } → { ok: true }
+//       (origen: 'whatsapp' | 'listas' | 'mercadolibre' | 'laboratorio' | …; el CRM
+//        manda lo que no tiene licencia a 'CRM-SIN-LICENCIA')
 import crypto from 'crypto';
 import { licenciaDetalle, chequearTope, registrarConsumo, PRODUCTOS } from './_licencias.js';
 
@@ -52,7 +54,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: !!t.ok, usado: t.usado ?? null, tope: t.tope ?? null });
     }
     if (body.accion === 'consumo') {
-      await registrarConsumo(license, String(body.model || ''), body.usage);
+      await registrarConsumo(license, String(body.model || ''), body.usage, String(body.origen || 'app'));
       return res.status(200).json({ ok: true });
     }
     return res.status(400).json({ error: 'Acción desconocida.' });

@@ -132,7 +132,7 @@
 
   // Mini-sección "Infraestructura": costo de Vercel (plano) + estimado de
   // operaciones de nube por la IA, con semáforo. El total exacto vive en Vercel.
-  function renderInfra(inf, costoIaUSD, readsMes) {
+  function renderInfra(inf, costoIaUSD, readsMes, sinLic) {
     const v = inf.vercel || { plan: '—', costoUSD: 0 };
     const ops = inf.opsIaMes || 0;
     const lim = inf.limiteOpsGratis || 2000;
@@ -145,7 +145,8 @@
         <div style="font-weight:800; margin-bottom:8px;">Infraestructura (costos del mes)</div>
         <div style="font-size:14px; line-height:1.9;">
           <b>Vercel:</b> ${esc(v.plan)} — ${vercelCosto}<br>
-          <b>IA (Anthropic):</b> ${fmtUSD(costoIaUSD)} este mes · ${readsMes} lectura(s)<br>
+          <b>IA (Anthropic):</b> ${fmtUSD(costoIaUSD)} este mes · ${readsMes} pedido(s) a la IA<br>
+          ${sinLic && Number(sinLic.costoUSD) > 0 ? '<span class="muted">de eso, sin licencia (pruebas y Laboratorio del CRM): ' + fmtUSD(sinLic.costoUSD) + '</span><br>' : ''}
           <b>Nube (operaciones):</b> ${semaforo} ~${ops} por IA este mes · límite gratis ${lim}
         </div>
         <div class="muted" style="font-size:12px; margin-top:8px;">La sincronización suma más operaciones que no se cuentan acá. El número EXACTO está en Vercel → Almacenamiento → Blob → Uso.</div>
@@ -287,8 +288,19 @@
        <div class="card"><b>${porVencer}</b><span>Por vencer</span></div>
        <div class="card"><b>${activasHoy}</b><span>Usaron hoy</span></div>
        <div class="card"><b>${fmtUSD(costoTotal)}</b><span>Costo IA (mes)</span></div>`;
-    renderInfra(data.infra || {}, costoTotal, data.readsTotalMes || 0);
+    renderInfra(data.infra || {}, costoTotal, data.readsTotalMes || 0, data.consumoSinLicencia);
     renderRitmo(data.ritmo);
+    // De dónde salió el costo de IA de cada código (WhatsApp, lecturas, listas…).
+    const ORIGEN_LABELS = { whatsapp: 'WhatsApp', lecturas: 'Lecturas', app: 'App', listas: 'Listas', mercadolibre: 'Mercado Libre', laboratorio: 'Laboratorio', inmobiliaria: 'Inmobiliaria' };
+    const desgloseIA = (po) => {
+      const partes = Object.entries(po || {})
+        .filter(([, v]) => Number(v.costoUSD) > 0)
+        .sort((a, b) => b[1].costoUSD - a[1].costoUSD)
+        .map(([o, v]) => esc(ORIGEN_LABELS[o] || o) + ' ' + fmtUSD(v.costoUSD));
+      return partes.length > 1 || (partes.length === 1 && !('lecturas' in (po || {})))
+        ? '<div class="muted" style="font-size:11px;">' + partes.join(' · ') + '</div>'
+        : '';
+    };
     $('#filas').innerHTML = orden.map(l => {
       const reciente = l.ultimoUso && diasDesde(l.ultimoUso) <= 7;
       const e = estadoSub(l);
@@ -301,7 +313,7 @@
         <td><span class="estado ${e.cls}">${e.txt}</span></td>
         <td>${l.pagoHasta ? esc(l.pagoHasta) : '<span class="muted">—</span>'}</td>
         <td>${fmtAct(l.ultimoUso)}</td>
-        <td>${fmtUSD(l.costoMesUSD)}${Number(l.readsMes) > 0 ? ' <span class="muted">(' + esc(l.readsMes) + ')</span>' : ''}</td>
+        <td>${fmtUSD(l.costoMesUSD)}${Number(l.readsMes) > 0 ? ' <span class="muted">(' + esc(l.readsMes) + ')</span>' : ''}${desgloseIA(l.porOrigen)}</td>
         <td class="col-notas muted">${esc(l.notas) || ''}</td>
         <td><div class="acciones">
           <button class="btn btn-ghost btn-sm" data-a="pago" title="Registrar pago: +1 mes">+1 mes</button>

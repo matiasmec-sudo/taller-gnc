@@ -401,8 +401,11 @@ export async function leerActividad(dias = 30) {
 // Registra el consumo real de IA de una lectura (tokens + costo estimado en
 // US$) por código, acumulado por mes (sistema/consumo-YYYY-MM.json). Se llama
 // DESPUÉS de la respuesta de Anthropic (que trae el detalle de tokens).
+// `origen` separa de dónde salió el gasto: 'lecturas' (la app del taller),
+// 'whatsapp' (el agente del CRM), 'listas' y 'mercadolibre' (Repuestos),
+// 'laboratorio', 'inmobiliaria'. Queda en porOrigen dentro del mismo código.
 // Best-effort: nunca tira error para no afectar la respuesta de la lectura.
-export async function registrarConsumo(codigo, model, usage) {
+export async function registrarConsumo(codigo, model, usage, origen) {
   try {
     const cod = (codigo || '').trim();
     if (!cod || !usage) return;
@@ -416,6 +419,10 @@ export async function registrarConsumo(codigo, model, usage) {
     try { data = (await leerJsonBlob(path)) || {}; } catch (e) { data = {}; }
     const c = data[cod] || (data[cod] = { reads: 0, inTok: 0, outTok: 0, costoUSD: 0 });
     c.reads += 1; c.inTok += inTok; c.outTok += outTok; c.costoUSD += costo;
+    const o = String(origen || 'lecturas').replace(/[^a-z0-9_-]/gi, '').slice(0, 30) || 'lecturas';
+    c.porOrigen = c.porOrigen || {};
+    const po = c.porOrigen[o] || (c.porOrigen[o] = { reads: 0, costoUSD: 0 });
+    po.reads += 1; po.costoUSD += costo;
     await escribirJsonBlob(path, data);
   } catch (e) { /* best-effort */ }
 }

@@ -125,8 +125,25 @@ export default async function handler(req, res) {
           producto: productoDe(l),
           usoTotal: a.total || 0, usoHoy: a.hoy || 0, ultimoUso: a.ultimo || null,
           costoMesUSD: Number(c.costoUSD) || 0, readsMes: Number(c.reads) || 0,
+          porOrigen: c.porOrigen || {},
         };
       });
+      // Lo que llegó con un código que no es una licencia (el CRM manda sus
+      // pruebas y el Laboratorio como CRM-SIN-LICENCIA): se suma al total y se
+      // muestra aparte, para que el gasto real no quede escondido.
+      const codigosLic = new Set(lics.map(l => l.codigo));
+      const consumoSinLicencia = { costoUSD: 0, reads: 0, porOrigen: {} };
+      for (const [cod, c] of Object.entries(consumo || {})) {
+        if (codigosLic.has(cod)) continue;
+        consumoSinLicencia.costoUSD += Number(c.costoUSD) || 0;
+        consumoSinLicencia.reads += Number(c.reads) || 0;
+        for (const [o, po] of Object.entries(c.porOrigen || { [cod]: c })) {
+          const d = consumoSinLicencia.porOrigen[o] || (consumoSinLicencia.porOrigen[o] = { reads: 0, costoUSD: 0 });
+          d.reads += Number(po.reads) || 0; d.costoUSD += Number(po.costoUSD) || 0;
+        }
+      }
+      costoTotalMes += consumoSinLicencia.costoUSD;
+      readsTotalMes += consumoSinLicencia.reads;
       // "Infraestructura": costo de Vercel (plano, según el plan) y un ESTIMADO
       // de operaciones de nube (Blob) por la IA — cada lectura hace ~2 escrituras
       // (registro de uso + de costo). La sincronización suma más, pero eso no se
@@ -135,7 +152,7 @@ export default async function handler(req, res) {
       const opsIaMes = readsTotalMes * 2;
       const ritmo = calcularRitmo(costoTotalMes, readsTotalMes, costoMesAnteriorUSD, credito);
       return res.status(200).json({
-        ok: true, licencias: conAct, costoTotalMes, readsTotalMes,
+        ok: true, licencias: conAct, costoTotalMes, readsTotalMes, consumoSinLicencia,
         mes: mesActual,
         infra: { vercel, opsIaMes, limiteOpsGratis: 2000 },
         ritmo,
