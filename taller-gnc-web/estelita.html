@@ -10,7 +10,7 @@
 <meta property="og:description" content="Más tiempo, mejor atención y más clientes para tu taller de GNC: trámites en minutos, avisos de renovación, equipo coordinado y datos protegidos. Con inteligencia artificial.">
 <meta property="og:image" content="https://estelita.net.ar/icon-512.png">
 <meta property="og:url" content="https://estelita.net.ar/estelita.html">
-<meta property="og:type" content="website"><link rel="canonical" href="https://estelita.net.ar/estelita.html"><script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://estelita.net.ar/#organizacion","name":"Estelita","url":"https://estelita.net.ar","logo":"https://estelita.net.ar/icon-512.png","email":"estelitagnc@gmail.com","address":{"@type":"PostalAddress","addressLocality":"Mar del Plata","addressRegion":"Buenos Aires","addressCountry":"AR"}},{"@type":"SoftwareApplication","name":"Estelita","url":"https://estelita.net.ar/estelita.html","description":"Software con inteligencia artificial para talleres de GNC: trámites en minutos, avisos de renovación, WhatsApp, turnos, equipo coordinado y datos protegidos, desde el celular.","applicationCategory":"BusinessApplication","applicationSubCategory":"Sistema de gestión para talleres de GNC","operatingSystem":"Web, Android, iOS, Windows","inLanguage":"es-AR","image":"https://estelita.net.ar/icon-512.png","publisher":{"@id":"https://estelita.net.ar/#organizacion"},"areaServed":{"@type":"Country","name":"Argentina"},"offers":{"@type":"AggregateOffer","priceCurrency":"ARS","lowPrice":"48000","highPrice":"120000","offerCount":"3","url":"https://estelita.net.ar/suscribite.html"}}]}</script>
+<meta property="og:type" content="website"><link rel="canonical" href="https://estelita.net.ar/estelita.html"><script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"¿Cuánto cuesta Estelita?","acceptedAnswer":{"@type":"Answer","text":"Tres planes por mes: Básico $48.000, Profesional $85.000 y Full $120.000. Los tres con 14 días gratis, sin costo por usuario y sin implementación. Se cancela cuando quieras."}},{"@type":"Question","name":"¿Necesito instalar algo o comprar una computadora?","acceptedAnswer":{"@type":"Answer","text":"No. Funciona en cualquier PC con navegador y en el celular, donde se instala como una app desde el navegador, sin pasar por el Play Store."}},{"@type":"Question","name":"¿Puedo pasar los datos que ya tengo?","acceptedAnswer":{"@type":"Answer","text":"Sí. Se importan desde Excel y también desde fotos del cuaderno, con la ayuda de la inteligencia artificial."}},{"@type":"Question","name":"¿El asistente de WhatsApp usa mi número?","acceptedAnswer":{"@type":"Answer","text":"Sí, el mismo número del taller, con la API oficial de WhatsApp Business: somos proveedor tecnológico (Tech Provider) de Meta. Vos seguís usando el celular como siempre."}},{"@type":"Question","name":"¿Qué pasa con mis datos?","acceptedAnswer":{"@type":"Answer","text":"Son tuyos. Quedan guardados de forma segura, con copia cifrada en la nube y respaldo diario, y los podés exportar cuando quieras."}},{"@type":"Question","name":"¿Sirve si tengo más de un PEC?","acceptedAnswer":{"@type":"Answer","text":"Sí, con el plan Full, que suma varios PEC, multiusuario y soporte prioritario."}}]},{"@type":"Organization","@id":"https://estelita.net.ar/#organizacion","name":"Estelita","url":"https://estelita.net.ar","logo":"https://estelita.net.ar/icon-512.png","email":"estelitagnc@gmail.com","address":{"@type":"PostalAddress","addressLocality":"Mar del Plata","addressRegion":"Buenos Aires","addressCountry":"AR"}},{"@type":"SoftwareApplication","name":"Estelita","url":"https://estelita.net.ar/estelita.html","description":"Software con inteligencia artificial para talleres de GNC: trámites en minutos, avisos de renovación, WhatsApp, turnos, equipo coordinado y datos protegidos, desde el celular.","applicationCategory":"BusinessApplication","applicationSubCategory":"Sistema de gestión para talleres de GNC","operatingSystem":"Web, Android, iOS, Windows","inLanguage":"es-AR","image":"https://estelita.net.ar/icon-512.png","publisher":{"@id":"https://estelita.net.ar/#organizacion"},"areaServed":{"@type":"Country","name":"Argentina"},"offers":{"@type":"AggregateOffer","priceCurrency":"ARS","lowPrice":"48000","highPrice":"120000","offerCount":"3","url":"https://estelita.net.ar/suscribite.html"}}]}</script>
 <style>
   :root {
     --azul: #1D5BD8;
@@ -238,6 +238,17 @@
   footer .marca { justify-content: center; margin-bottom: 10px; }
   footer .marca img { width: 30px; height: 30px; }
   footer .marca b { font-size: 16px; }
+
+  #preguntas { background: var(--blanco); padding: 72px 0; }
+  .faq-lista { max-width: 780px; margin: 0 auto; border: 1px solid var(--linea); border-radius: 16px; overflow: hidden; background: var(--blanco); }
+  .faq-lista details { padding: 18px 22px; border-top: 1px solid var(--linea); }
+  .faq-lista details:first-child { border-top: 0; }
+  .faq-lista summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+  .faq-lista summary::-webkit-details-marker { display: none; }
+  .faq-lista summary::after { content: "+"; color: var(--tinta-suave); }
+  .faq-lista details[open] summary::after { content: "−"; }
+  .faq-lista p { margin-top: 12px; color: var(--tinta-suave); }
+  .faq-mas { max-width: 780px; margin: 18px auto 0; text-align: center; font-size: 15px; }
 </style>
 </head>
 <body>
@@ -477,6 +488,24 @@
         <small>estelita.net.ar</small>
       </div>
     </div>
+  </div>
+</section>
+
+<section id="preguntas">
+  <div class="contenedor">
+    <div class="titulo-seccion">
+      <p class="kicker">Preguntas</p>
+      <h2>Lo que nos preguntan los talleres</h2>
+    </div>
+    <div class="faq-lista">
+      <details><summary>¿Cuánto cuesta Estelita?</summary><p>Tres planes por mes: Básico $48.000, Profesional $85.000 y Full $120.000. Los tres con 14 días gratis, sin costo por usuario y sin implementación. Se cancela cuando quieras.</p></details>
+      <details><summary>¿Necesito instalar algo o comprar una computadora?</summary><p>No. Funciona en cualquier PC con navegador y en el celular, donde se instala como una app desde el navegador, sin pasar por el Play Store.</p></details>
+      <details><summary>¿Puedo pasar los datos que ya tengo?</summary><p>Sí. Se importan desde Excel y también desde fotos del cuaderno, con la ayuda de la inteligencia artificial.</p></details>
+      <details><summary>¿El asistente de WhatsApp usa mi número?</summary><p>Sí, el mismo número del taller, con la API oficial de WhatsApp Business: somos proveedor tecnológico (Tech Provider) de Meta. Vos seguís usando el celular como siempre.</p></details>
+      <details><summary>¿Qué pasa con mis datos?</summary><p>Son tuyos. Quedan guardados de forma segura, con copia cifrada en la nube y respaldo diario, y los podés exportar cuando quieras.</p></details>
+      <details><summary>¿Sirve si tengo más de un PEC?</summary><p>Sí, con el plan Full, que suma varios PEC, multiusuario y soporte prioritario.</p></details>
+    </div>
+    <p class="faq-mas"><a href="/preguntas/">Ver todas las preguntas del rubro</a> · <a href="/comparacion.html">Cuaderno, planilla o sistema: la comparación</a></p>
   </div>
 </section>
 
