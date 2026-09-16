@@ -461,3 +461,46 @@ export async function chequearTope(codigo) {
     return { ok: true };
   }
 }
+
+// Ritmo de consumo de la IA. El consumo se guarda por MES (no por día), así que
+// el ritmo se estima como: gastado del mes / días transcurridos del mes. Se
+// compara con el mes anterior para ver si se está acelerando.
+// La autonomía sale del saldo declarado a mano (Anthropic no expone el saldo):
+// saldo - (ritmo x días desde que se declaró).
+export function calcularRitmo(costoMesUSD, readsMes, costoMesAnteriorUSD, credito) {
+  const hoy = new Date();
+  const diaDelMes = hoy.getUTCDate(); // días transcurridos (el de hoy, parcial, cuenta)
+  const diasDelMes = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth() + 1, 0)).getUTCDate();
+  const mesAnt = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), 0));
+  const diasMesAnterior = mesAnt.getUTCDate();
+
+  const ritmoEsteMes = diaDelMes > 0 ? costoMesUSD / diaDelMes : 0;
+  const ritmoMesAnterior = diasMesAnterior > 0 ? costoMesAnteriorUSD / diasMesAnterior : 0;
+  // Arranque de mes: 1-2 días es una muestra muy chica. Si todavía no hay
+  // consumo este mes, el ritmo del mes pasado representa mejor la realidad.
+  const muestraChica = diaDelMes <= 2;
+  const ritmoUSDdia = (ritmoEsteMes > 0) ? ritmoEsteMes : ritmoMesAnterior;
+  const lecturasDia = diaDelMes > 0 ? readsMes / diaDelMes : 0;
+
+  let autonomia = null;
+  if (credito && Number(credito.usd) > 0) {
+    const diasDesde = Math.max(0, (hoy - new Date(credito.fecha)) / 86400000);
+    const saldoEstimado = Math.max(0, Number(credito.usd) - ritmoUSDdia * diasDesde);
+    autonomia = {
+      declarado: Number(credito.usd),
+      declaradoEn: credito.fecha,
+      diasDesdeQueLoDeclaraste: Math.floor(diasDesde),
+      saldoEstimadoUSD: saldoEstimado,
+      // Sin consumo no se puede proyectar: días = null (no "infinito").
+      dias: ritmoUSDdia > 0 ? Math.floor(saldoEstimado / ritmoUSDdia) : null,
+    };
+  }
+
+  return {
+    ritmoUSDdia, lecturasDia, muestraChica,
+    ritmoMesAnteriorUSDdia: ritmoMesAnterior,
+    proyeccionMesUSD: ritmoUSDdia * diasDelMes,
+    diaDelMes, diasDelMes,
+    autonomia,
+  };
+}
