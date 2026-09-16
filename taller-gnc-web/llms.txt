@@ -1,0 +1,40 @@
+# Estelita (software para talleres de GNC)
+
+> Sistema de gestión con inteligencia artificial para talleres de GNC de Argentina: trámites en minutos, avisos de vencimiento de oblea por WhatsApp, historial por auto, app del técnico, turnos y un asistente que atiende el WhatsApp del taller.
+
+Hecho en Mar del Plata, Argentina. Nació en GENESUR, un taller de GNC de esa ciudad. La conexión con WhatsApp es la oficial de WhatsApp Business: Estelita es proveedor tecnológico (Tech Provider) de Meta.
+
+## Qué hace
+
+- Trámites: se cargan sacando una foto de la documentación; la IA lee los datos y la persona revisa y confirma.
+- Vencimientos: avisa la renovación de oblea al cliente por WhatsApp, para que vuelva al taller.
+- Historial completo por auto y por cliente, buscable por patente.
+- App del técnico: recibe en el celular lo que tiene que revisar y responde desde ahí.
+- Turnos con recordatorio y confirmación de asistencia.
+- Asistente con IA en el WhatsApp del taller: precios, horarios, documentación, presupuestos con los valores del taller, notas de voz y coordinación de turnos.
+- Números del mes: trámites e ingresos.
+- Datos guardados en el equipo del taller con copia cifrada en la nube y respaldo diario.
+
+## Qué no hace
+
+- No es un ERP ni lleva contabilidad.
+- No reemplaza al PEC ni a los organismos: es el sistema del taller.
+
+## Precio
+
+Tres planes por mes, en pesos argentinos: Básico $48.000, Profesional $85.000, Full $120.000. Incluye 14 días gratis, sin costo por usuario ni implementación. Se paga por Mercado Pago.
+
+## Páginas
+
+- https://estelita.net.ar/estelita.html : qué es y qué resuelve.
+- https://estelita.net.ar/suscribite.html : planes y prueba gratis.
+- https://estelita.net.ar/preguntas/ : preguntas del rubro contestadas.
+- https://estelita.net.ar/preguntas/precio-software-taller-gnc.html : cuánto cuesta un software para taller de GNC.
+- https://estelita.net.ar/preguntas/como-elegir-sistema-taller-gnc.html : cómo elegir un sistema.
+- https://estelita.net.ar/preguntas/whatsapp-con-ia-taller-gnc.html : WhatsApp con inteligencia artificial.
+- https://estelita.net.ar/comparacion.html : cuaderno, planilla o sistema.
+- https://repuestos.estelita.net.ar/ : Estelita Repuestos, el producto hermano para casas de repuestos.
+
+## Contacto
+
+Correo: estelitagnc@gmail.com
