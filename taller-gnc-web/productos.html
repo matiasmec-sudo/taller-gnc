@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estelita · Software con IA para talleres de GNC y casas de repuestos</title>
+<meta name="description" content="Estelita hace software con inteligencia artificial para talleres de GNC y casas de repuestos de Argentina: WhatsApp que atiende solo, trámites, stock, factura ARCA y Mercado Libre. Hecho en Mar del Plata.">
+<link rel="canonical" href="https://estelita.net.ar/productos">
+<link rel="icon" href="icon-192.png">
+<meta property="og:title" content="Estelita · Software para talleres de GNC y casas de repuestos">
+<meta property="og:description" content="WhatsApp que atiende solo, trámites, stock, factura ARCA y Mercado Libre. Hecho en Mar del Plata.">
+<meta property="og:url" content="https://estelita.net.ar/productos">
+<meta property="og:image" content="https://estelita.net.ar/icon-estelita-1024.png">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0C2A66">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://estelita.net.ar/#organizacion","name":"Estelita","url":"https://estelita.net.ar/productos","logo":"https://estelita.net.ar/icon-estelita-1024.png","email":"estelitagnc@gmail.com","description":"Software con inteligencia artificial para talleres de GNC y casas de repuestos de Argentina.","address":{"@type":"PostalAddress","addressLocality":"Mar del Plata","addressRegion":"Buenos Aires","addressCountry":"AR"},"areaServed":{"@type":"Country","name":"Argentina"}},{"@type":"WebPage","name":"Estelita · Software con IA para talleres de GNC y casas de repuestos","url":"https://estelita.net.ar/productos","inLanguage":"es-AR","about":{"@id":"https://estelita.net.ar/#organizacion"},"mainEntity":{"@type":"ItemList","itemListElement":[{"@type":"ListItem","position":1,"item":{"@type":"SoftwareApplication","name":"Estelita","url":"https://estelita.net.ar/estelita.html","applicationCategory":"BusinessApplication","applicationSubCategory":"Sistema de gestión para talleres de GNC","operatingSystem":"Web, Android, iOS, Windows","offers":{"@type":"AggregateOffer","priceCurrency":"ARS","lowPrice":"48000","highPrice":"120000","offerCount":"3"}}},{"@type":"ListItem","position":2,"item":{"@type":"SoftwareApplication","name":"Estelita Repuestos","url":"https://repuestos.estelita.net.ar/","applicationCategory":"BusinessApplication","applicationSubCategory":"Sistema de gestión para casas de repuestos","operatingSystem":"Web, Android, iOS, Windows"}}]}}]}</script>
+<style>
+  :root {
+    --noche: #0C2A66;
+    --oscuro: #123C8F;
+    --azul: #1D5BD8;
+    --celeste: #EAF1FE;
+    --borde: #CCDCF8;
+    --fondo: #F4F6FA;
+    --tinta: #16233B;
+    --suave: #5A6B85;
+    --linea: #E3E8F0;
+    --verde: #1FA971;
+    --ambar: #B86E00;
+    --ambar-fondo: #FFF3E0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; color: var(--tinta); background: var(--fondo); line-height: 1.55; font-size: 17px; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  .ancho { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+
+  .nav { background: var(--noche); }
+  .nav .ancho { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 14px; }
+  .marca { display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; font-weight: 700; font-size: 20px; }
+  .marca img { width: 38px; height: 38px; border-radius: 10px; }
+  .nav nav { display: flex; gap: 20px; }
+  .nav nav a { color: rgba(255,255,255,.82); text-decoration: none; font-weight: 500; font-size: 15px; }
+  .nav nav a:hover, .nav nav a:focus-visible { color: #fff; }
+  @media (max-width: 560px) { .nav nav a.opc { display: none; } }
+
+  .hero { background: linear-gradient(170deg, var(--noche) 0%, var(--oscuro) 70%, #1848B8 100%); color: #fff; padding-block: 64px 120px; }
+  .hero h1 { font-size: 48px; line-height: 1.08; letter-spacing: -.025em; max-width: 820px; text-wrap: balance; }
+  .hero h1 span { color: #9FC0FF; }
+  .hero p { margin-top: 20px; font-size: 20px; color: rgba(255,255,255,.85); max-width: 640px; }
+  .hero .lugar { margin-top: 22px; display: inline-block; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: rgba(255,255,255,.7); font-weight: 600; }
+
+  .productos { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px; margin-top: -80px; }
+  .prod { background: #fff; border: 1px solid var(--borde); border-radius: 22px; padding: 30px; display: flex; flex-direction: column; box-shadow: 0 18px 40px rgba(12,42,102,.12); }
+  .etiqueta { align-self: flex-start; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; padding: 6px 12px; border-radius: 999px; }
+  .gnc .etiqueta { background: var(--celeste); color: var(--oscuro); }
+  .rep .etiqueta { background: var(--ambar-fondo); color: var(--ambar); }
+  .prod h2 { font-size: 30px; letter-spacing: -.02em; margin-top: 14px; }
+  .prod .para { color: var(--suave); margin-top: 4px; }
+  .prod ul { list-style: none; margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+  .prod li { padding-left: 28px; position: relative; }
+  .prod li::before { content: "✓"; position: absolute; left: 0; top: 0; color: var(--verde); font-weight: 700; }
+  .precio { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--linea); font-weight: 600; }
+  .precio small { display: block; font-weight: 400; color: var(--suave); font-size: 15px; }
+  .acciones { display: flex; flex-wrap: wrap; gap: 10px; margin-top: auto; padding-top: 22px; }
+  .btn { display: inline-block; padding: 13px 22px; border-radius: 12px; font-weight: 600; text-decoration: none; font-size: 16px; }
+  .btn-p { background: var(--azul); color: #fff; }
+  .btn-p:hover, .btn-p:focus-visible { background: var(--oscuro); }
+  .btn-s { background: #fff; color: var(--oscuro); border: 1px solid var(--borde); }
+  .btn-s:hover, .btn-s:focus-visible { border-color: var(--azul); }
+  .btn:focus-visible, .nav a:focus-visible { outline: 3px solid #9FC0FF; outline-offset: 2px; }
+
+  section.bloque { padding-block: 64px 0; }
+  section.bloque h2.t { font-size: 32px; letter-spacing: -.02em; text-wrap: balance; }
+  .comun { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; margin-top: 26px; }
+  .comun div { background: #fff; border: 1px solid var(--borde); border-radius: 16px; padding: 22px; }
+  .comun b { display: block; font-size: 18px; }
+  .comun p { color: var(--suave); margin-top: 6px; font-size: 16px; }
+
+  .leer { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-top: 26px; }
+  .leer div { background: #fff; border: 1px solid var(--borde); border-radius: 16px; padding: 22px; }
+  .leer h3 { font-size: 14px; letter-spacing: .1em; text-transform: uppercase; color: var(--suave); }
+  .leer a { display: block; margin-top: 10px; font-weight: 600; color: var(--oscuro); }
+
+  .contacto { margin-block: 64px; background: var(--noche); color: #fff; border-radius: 22px; padding: 36px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; }
+  .contacto h2 { font-size: 28px; letter-spacing: -.02em; }
+  .contacto p { color: rgba(255,255,255,.8); margin-top: 6px; }
+  .contacto .btn-s { border-color: transparent; }
+
+  footer { border-top: 1px solid var(--linea); color: var(--suave); font-size: 14px; }
+  footer .ancho { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; padding-block: 22px; }
+  footer a { color: var(--suave); }
+
+  @media (max-width: 640px) {
+    .hero { padding-block: 44px 100px; }
+    .hero h1 { font-size: 34px; }
+    .hero p { font-size: 18px; }
+    .prod { padding: 24px; }
+    .contacto { padding: 26px; }
+  }
+</style>
+</head>
+<body>
+<header class="nav">
+  <div class="ancho">
+    <a class="marca" href="/productos"><img src="icon-192.png" alt="">Estelita</a>
+    <nav>
+      <a href="/estelita.html">GNC</a>
+      <a href="https://repuestos.estelita.net.ar/">Repuestos</a>
+      <a class="opc" href="#contacto">Contacto</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="ancho">
+    <h1>Software con inteligencia artificial para <span>talleres de GNC</span> y <span>casas de repuestos</span></h1>
+    <p>Atiende el WhatsApp del negocio, ordena el día a día y te avisa lo que no se te puede pasar. Desde la PC y el celular, sin instalar nada.</p>
+    <span class="lugar">Hecho en Mar del Plata, Argentina</span>
+  </div>
+</section>
+
+<main class="ancho">
+  <div class="productos">
+    <article class="prod gnc">
+      <span class="etiqueta">Talleres de GNC</span>
+      <h2>Estelita</h2>
+      <p class="para">Para talleres de GNC</p>
+      <ul>
+        <li>Trámites en minutos: sacás una foto de la documentación y la IA carga los datos</li>
+        <li>Avisos de vencimiento de oblea por WhatsApp, para que el cliente vuelva</li>
+        <li>Historial completo de cada auto y cada cliente</li>
+        <li>App del técnico y turnos con recordatorio</li>
+        <li>Asistente con IA que atiende el WhatsApp del taller</li>
+      </ul>
+      <p class="precio">Desde $48.000 por mes<small>Tres planes · 14 días gratis · sin costo por usuario</small></p>
+      <div class="acciones">
+        <a class="btn btn-p" href="/estelita.html">Conocé Estelita GNC</a>
+        <a class="btn btn-s" href="/suscribite.html">Empezá gratis</a>
+      </div>
+    </article>
+
+    <article class="prod rep">
+      <span class="etiqueta">Casas de repuestos</span>
+      <h2>Estelita Repuestos</h2>
+      <p class="para">Para casas de repuestos automotor</p>
+      <ul>
+        <li>Stock con aplicaciones por auto: buscás por marca, modelo y año</li>
+        <li>Mostrador con lector de código de barras y factura electrónica ARCA</li>
+        <li>Listas de proveedores desde Excel, PDF o foto, con tu margen</li>
+        <li>Mercado Libre con un botón, con precio y stock sincronizados</li>
+        <li>Agente de WhatsApp que consulta tu stock real y reserva la pieza</li>
+      </ul>
+      <p class="precio">Precio de lanzamiento<small>Consultanos y te lo mostramos con tu propia lista</small></p>
+      <div class="acciones">
+        <a class="btn btn-p" href="https://repuestos.estelita.net.ar/">Conocé Estelita Repuestos</a>
+        <a class="btn btn-s" href="https://repuestos.estelita.net.ar/#video">Ver el video</a>
+      </div>
+    </article>
+  </div>
+
+  <section class="bloque">
+    <h2 class="t">Lo que tienen en común</h2>
+    <div class="comun">
+      <div><b>WhatsApp oficial</b><p>Somos Tech Provider de Meta: se conecta el mismo número del negocio, sin riesgo de bloqueo.</p></div>
+      <div><b>En la nube</b><p>En la PC y en el celular, sin servidores ni instalaciones en el local.</p></div>
+      <div><b>Tus datos, tuyos</b><p>Respaldo diario y exportación cuando quieras.</p></div>
+      <div><b>Probado en serio</b><p>Estelita nació en GENESUR, un taller de GNC, y Repuestos se puso a punto con Repuestera Edison.</p></div>
+    </div>
+  </section>
+
+  <section class="bloque">
+    <h2 class="t">Preguntas del rubro, contestadas</h2>
+    <div class="leer">
+      <div>
+        <h3>Talleres de GNC</h3>
+        <a href="/preguntas/precio-software-taller-gnc.html">¿Cuánto cuesta un software para taller de GNC?</a>
+        <a href="/preguntas/como-elegir-sistema-taller-gnc.html">¿Cómo elegir un sistema para un taller de GNC?</a>
+        <a href="/preguntas/whatsapp-con-ia-taller-gnc.html">¿Se puede atender el WhatsApp con inteligencia artificial?</a>
+        <a href="/comparacion.html">Cuaderno, planilla o sistema: la comparación</a>
+      </div>
+      <div>
+        <h3>Casas de repuestos</h3>
+        <a href="https://repuestos.estelita.net.ar/preguntas/mejor-programa-casa-de-repuestos">¿Cuál es el mejor programa para una casa de repuestos?</a>
+        <a href="https://repuestos.estelita.net.ar/preguntas/como-llevar-el-stock-de-una-repuestera">¿Cómo llevar el stock de una repuestera?</a>
+        <a href="https://repuestos.estelita.net.ar/preguntas/whatsapp-repuestera-sin-perder-ventas">¿Cómo contestar el WhatsApp sin perder ventas?</a>
+        <a href="https://repuestos.estelita.net.ar/comparacion">Planilla, sistema genérico o programa de repuestos</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="contacto" id="contacto">
+    <div>
+      <h2>¿Querés verlo funcionando?</h2>
+      <p>Escribinos y te lo mostramos con los datos de tu negocio.</p>
+    </div>
+    <a class="btn btn-s" href="mailto:estelitagnc@gmail.com?subject=Quiero%20conocer%20Estelita&amp;body=Hola!%20Quiero%20saber%20m%C3%A1s%20de%20Estelita.%0A%0ANombre%20del%20negocio%3A%0ARubro%20(GNC%20o%20repuestos)%3A%0ACiudad%3A%0ATel%C3%A9fono%3A">estelitagnc@gmail.com</a>
+  </section>
+</main>
+
+<footer>
+  <div class="ancho">
+    <span>Estelita · Mar del Plata, Argentina</span>
+    <span><a href="/terminos.html">Términos</a> · <a href="/privacidad.html">Privacidad</a></span>
+  </div>
+</footer>
+</body>
+</html>
