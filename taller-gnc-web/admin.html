@@ -253,7 +253,7 @@
     if (!d) return '<span class="estado warn">Sin plan</span><div class="muted" style="font-size:11px;">todo habilitado (legado)</div>';
     const on = Object.entries(d.funciones).filter(([, v]) => v).map(([f]) => FUNC_CORTA[f] || f).join(' ');
     const exc = d.excepciones && d.excepciones.length ? ' <span class="estado prueba" title="Tiene excepciones cargadas a mano">exc.</span>' : '';
-    return `<b>${esc(d.nombre)}</b>${exc}<div class="muted" style="font-size:11px;">${d.usuarios} usuarios · ${d.lecturasDia} IA/día · ${esc(on) || 'sin extras'}</div>`;
+    return `<b>${esc(d.nombre)}</b>${exc}<div class="muted" style="font-size:11px;">${d.usuarios} usuarios · ${d.lecturasDia > 0 ? d.lecturasDia + ' IA/día' : 'IA sin tope'} · ${esc(on) || 'sin extras'}</div>`;
   }
   function diasHasta(iso) { return Math.round((new Date(iso + 'T00:00:00') - new Date(HOY + 'T00:00:00')) / 86400000); }
   function estadoSub(l) {
@@ -455,7 +455,7 @@
     const exc = l.funciones || {};
     const topes = l.topes || {};
     const planActual = planes[l.plan] ? l.plan : 'basico';
-    const opcionesPlan = Object.entries(planes).map(([k, p]) => `<option value="${k}"${k === planActual ? ' selected' : ''}>${esc(p.nombre)} · $${Number(p.precio).toLocaleString('es-AR')} · ${p.usuarios} usuarios · ${p.lecturasDia} IA/día</option>`).join('');
+    const opcionesPlan = Object.entries(planes).map(([k, p]) => `<option value="${k}"${k === planActual ? ' selected' : ''}>${esc(p.nombre)} · $${Number(p.precio).toLocaleString('es-AR')} · ${p.usuarios} usuarios</option>`).join('');
     const filas = Object.entries(funciones).map(([f, nombre]) => {
       const v = typeof exc[f] === 'boolean' ? String(exc[f]) : '';
       return `<label class="plan-fila"><span>${esc(nombre)}</span>
@@ -476,7 +476,7 @@
         ${filas}
         <div class="muted" style="margin:10px 0 4px;">Topes (vacío = el del plan):</div>
         <label class="plan-fila"><span>Usuarios de la app</span><input id="plan-usuarios" type="number" min="1" placeholder="${planes[planActual] ? planes[planActual].usuarios : ''}" value="${topes.usuarios != null ? esc(topes.usuarios) : ''}"></label>
-        <label class="plan-fila"><span>Lecturas con IA por día</span><input id="plan-lecturas" type="number" min="0" placeholder="${planes[planActual] ? planes[planActual].lecturasDia : ''}" value="${topes.lecturasDia != null ? esc(topes.lecturasDia) : ''}"></label>
+        <label class="plan-fila"><span>Lecturas con IA por día (vacío = sin tope)</span><input id="plan-lecturas" type="number" min="0" placeholder="${planes[planActual] && planes[planActual].lecturasDia > 0 ? planes[planActual].lecturasDia : 'sin tope'}" value="${topes.lecturasDia != null ? esc(topes.lecturasDia) : ''}"></label>
         <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
           <button class="btn btn-ghost" data-m="cancelar">Cancelar</button>
           <button class="btn btn-primary" data-m="guardar">Guardar</button>
@@ -491,7 +491,7 @@
       const p = planes[ev.target.value];
       if (!p) return;
       fondo.querySelector('#plan-usuarios').placeholder = p.usuarios;
-      fondo.querySelector('#plan-lecturas').placeholder = p.lecturasDia;
+      fondo.querySelector('#plan-lecturas').placeholder = p.lecturasDia > 0 ? p.lecturasDia : 'sin tope';
     });
     fondo.querySelector('[data-m="guardar"]').addEventListener('click', async () => {
       const btn = fondo.querySelector('[data-m="guardar"]');

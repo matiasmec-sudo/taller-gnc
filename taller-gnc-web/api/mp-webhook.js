@@ -30,9 +30,12 @@ export default async function handler(req, res) {
       const extRef = pre.external_reference || '';
       if (pre.status === 'authorized') {
         const signups = await leerSignups();
-        const plan = (signups[extRef] && signups[extRef].plan) || '';
+        const s = signups[extRef] || {};
         const pagoHasta = sumarDiasISO(new Date().toISOString().slice(0, 10), 14); // fin de la prueba
-        await activarLicenciaMP({ token: extRef, preapprovalId: pre.id, email: pre.payer_email, plan, pagoHasta, prueba: true });
+        await activarLicenciaMP({
+          token: extRef, preapprovalId: pre.id, email: pre.payer_email, plan: s.plan || '', pagoHasta, prueba: true,
+          producto: s.producto || 'taller', nombre: s.taller || '',
+        });
       } else if (pre.status === 'cancelled' || pre.status === 'paused') {
         await suspenderPorPreapproval(pre.id);
       }
