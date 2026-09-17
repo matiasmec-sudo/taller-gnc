@@ -68,6 +68,11 @@ export default async function handler(req, res) {
   for (const v of vencidas) alertas.push(`Licencia ${v.codigo} (${v.negocio || 'sin nombre'}) vencida hace ${-v.dias} días: la app ya se cortó.`);
   for (const v of porVencer) avisos.push(`Licencia ${v.codigo} (${v.negocio || 'sin nombre'}) ${v.dias <= 0 ? 'vence hoy' : `vence en ${v.dias} días`}.`);
   for (const v of pruebaVencida) avisos.push(`Prueba de ${v.codigo} (${v.negocio || 'sin nombre'}) terminó hace ${-v.dias} días sin pago.`);
+  // Hito comercial: al vender la cuarta licencia de Repuestos hay que revisar el
+  // disco y las fotos del servidor (Runbook seccion 12). Avisa mientras sean 4 activas.
+  if ((porProducto.repuestos || {}).activas === 4) {
+    avisos.push('Ya hay 4 licencias activas de Estelita Repuestos: revisar el disco de fotos del servidor (Runbook seccion 12) antes de sumar mas.');
+  }
   if (ritmo.autonomia && ritmo.autonomia.dias != null) {
     if (ritmo.autonomia.dias < 7) alertas.push(`Al ritmo actual, el saldo de Anthropic alcanza para ${ritmo.autonomia.dias} día(s).`);
     else if (ritmo.autonomia.dias < 14) avisos.push(`El saldo de Anthropic alcanza para ${ritmo.autonomia.dias} días.`);
