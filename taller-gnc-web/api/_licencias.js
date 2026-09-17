@@ -18,9 +18,60 @@ const CREDITO_PATH = 'sistema/credito.json';
 const USO_PREFIX = 'sistema/uso-';
 const CONSUMO_PREFIX = 'sistema/consumo-';
 
-// Planes y precios (ARS/mes). Fuente única, usada por el checkout de MP y el panel.
+// Planes y precios (ARS/mes) de Estelita (taller). Fuente única, usada por el checkout de MP y el panel.
 export const PLAN_PRECIOS = { basico: 48000, profesional: 85000, full: 120000 };
 export const PLAN_NOMBRES = { basico: 'Básico', profesional: 'Profesional', full: 'Full' };
+
+// Planes de Estelita Repuestos. Cada plan dice qué funciones incluye y sus
+// topes (usuarios de la app por local, lecturas de listas con IA por día).
+// Lo base (stock, mostrador, clientes, encargos, compras, caja, estadísticas)
+// va en todos y no se lista. La app lee esto por /api/servidor (derechos) y
+// corta del lado del servidor lo que el plan no incluye. La misma tabla vive
+// en repuestos/src/lib/constantes.ts para la pantalla de Ajustes: si cambia
+// acá, cambiarla allá.
+export const FUNCIONES_REPUESTOS = {
+  facturacion: 'Facturación ARCA',
+  ia: 'Lectura de listas con IA',
+  whatsapp: 'WhatsApp (CRM y agente)',
+  mercadopago: 'Cobros con Mercado Pago',
+  vidriera: 'Vidriera pública',
+  mercadolibre: 'Mercado Libre',
+  tiendanube: 'Tienda Nube',
+  multilocal: 'Multilocal',
+};
+export const PLANES_REPUESTOS = {
+  basico: { nombre: 'Básica', precio: 80000, usuarios: 3, lecturasDia: 5, funciones: ['facturacion', 'ia'] },
+  profesional: { nombre: 'Profesional', precio: 150000, usuarios: 5, lecturasDia: 20, funciones: ['facturacion', 'ia', 'whatsapp', 'mercadopago', 'vidriera'] },
+  full: { nombre: 'Full', precio: 220000, usuarios: 10, lecturasDia: 50, funciones: ['facturacion', 'ia', 'whatsapp', 'mercadopago', 'vidriera', 'mercadolibre', 'tiendanube', 'multilocal'] },
+};
+
+/**
+ * Los derechos efectivos de una licencia de Repuestos: lo que trae el plan
+ * más las excepciones cargadas a mano en el panel (`l.funciones` = { funcion:
+ * true|false } sólo para las que se pisan; `l.topes` = { usuarios, lecturasDia }
+ * sólo si se pisan). Sin plan devuelve null: la app lo toma como "legado, todo
+ * habilitado" hasta que se le asigne uno.
+ */
+export function derechosDe(l) {
+  if (!l || productoDe(l) !== 'repuestos') return null;
+  const plan = PLANES_REPUESTOS[l.plan];
+  if (!plan) return null;
+  const funciones = {};
+  const excepciones = l.funciones && typeof l.funciones === 'object' ? l.funciones : {};
+  for (const f of Object.keys(FUNCIONES_REPUESTOS)) {
+    funciones[f] = typeof excepciones[f] === 'boolean' ? excepciones[f] : plan.funciones.includes(f);
+  }
+  const topes = l.topes && typeof l.topes === 'object' ? l.topes : {};
+  return {
+    plan: l.plan,
+    nombre: plan.nombre,
+    precio: plan.precio,
+    funciones,
+    usuarios: Number(topes.usuarios) > 0 ? Number(topes.usuarios) : plan.usuarios,
+    lecturasDia: Number(topes.lecturasDia) >= 0 && topes.lecturasDia !== undefined && topes.lecturasDia !== null && topes.lecturasDia !== '' ? Number(topes.lecturasDia) : plan.lecturasDia,
+    excepciones: Object.keys(excepciones).filter(f => typeof excepciones[f] === 'boolean'),
+  };
+}
 
 // Genera un código de licencia único (sin O/0/I/1/L, fácil de dictar).
 // El prefijo dice de qué producto es: GNC- (Estelita, el taller) o REP-
@@ -352,6 +403,7 @@ export async function licenciaDetalle(codigo, { email, producto } = {}) {
     codigo: l.codigo, producto: productoDe(l), plan: l.plan || '', estado: l.estado,
     pagoHasta: l.pagoHasta || null, prueba: !!l.prueba, topeDia: Number(l.topeDia) || 0,
     taller: l.taller || '', emailVinculado: !!l.email,
+    derechos: derechosDe(l),
   });
   if (l.estado !== 'activo') return { ok: false, motivo: 'suspendida', licencia: publica() };
   if (l.pagoHasta) {
@@ -446,7 +498,9 @@ export async function chequearTope(codigo) {
     const cod = (codigo || '').trim();
     const lics = await leerLicencias();
     const l = lics.find(x => x.codigo === cod);
-    const tope = l && Number(l.topeDia) > 0 ? Number(l.topeDia) : 0;
+    // Repuestos: el tope sale del plan (o del tope pisado a mano); taller: topeDia.
+    const derechos = derechosDe(l);
+    const tope = derechos ? Number(derechos.lecturasDia) : (l && Number(l.topeDia) > 0 ? Number(l.topeDia) : 0);
     if (!tope) return { ok: true };
     const dia = new Date().toISOString().slice(0, 10);
     const path = `${USO_PREFIX}${dia}.json`;

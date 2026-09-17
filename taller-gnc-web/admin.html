@@ -47,6 +47,10 @@
   .prod.repuestos { background:#EEE9FB; color:#5B3FA3; }
   .filtro { display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:0 0 10px; }
   .filtro .btn.activo { background:var(--azul); color:#fff; border-color:var(--azul); }
+  .modal-fondo { position:fixed; inset:0; background:rgba(22,35,59,.45); display:flex; align-items:center; justify-content:center; z-index:50; padding:16px; }
+  .modal { background:var(--surface); border-radius:14px; padding:20px; width:100%; max-width:520px; max-height:90vh; overflow:auto; box-shadow:0 20px 50px rgba(0,0,0,.25); }
+  .plan-fila { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:6px 0; font-size:14px; border-bottom:1px solid var(--linea); }
+  .plan-fila select, .plan-fila input { width:auto; min-width:170px; padding:6px 8px; font-size:13px; }
   .acciones { display:flex; gap:6px; flex-wrap:wrap; }
   .muted { color:var(--suave); font-size:12px; }
   #tabla-msg { color:var(--rojo); font-size:13px; margin:10px 0; }
@@ -241,6 +245,16 @@
 
   const GRACIA = 5;
   const PLAN_LABELS = { basico: 'Básico', profesional: 'Profesional', full: 'Full' };
+  // Repuestos: el plan trae funciones y topes (los manda /api/admin en listar).
+  const FUNC_CORTA = { facturacion: 'ARCA', ia: 'IA', whatsapp: 'WA', mercadopago: 'MP', vidriera: 'Vid', mercadolibre: 'ML', tiendanube: 'TN', multilocal: 'Multi' };
+  function celdaPlan(l) {
+    if ((l.producto || 'taller') !== 'repuestos') return PLAN_LABELS[l.plan] || '<span class="muted">—</span>';
+    const d = l.derechos;
+    if (!d) return '<span class="estado warn">Sin plan</span><div class="muted" style="font-size:11px;">todo habilitado (legado)</div>';
+    const on = Object.entries(d.funciones).filter(([, v]) => v).map(([f]) => FUNC_CORTA[f] || f).join(' ');
+    const exc = d.excepciones && d.excepciones.length ? ' <span class="estado prueba" title="Tiene excepciones cargadas a mano">exc.</span>' : '';
+    return `<b>${esc(d.nombre)}</b>${exc}<div class="muted" style="font-size:11px;">${d.usuarios} usuarios · ${d.lecturasDia} IA/día · ${esc(on) || 'sin extras'}</div>`;
+  }
   function diasHasta(iso) { return Math.round((new Date(iso + 'T00:00:00') - new Date(HOY + 'T00:00:00')) / 86400000); }
   function estadoSub(l) {
     if (l.estado !== 'activo') return { txt: 'Suspendida', cls: 'suspendido' };
@@ -305,11 +319,11 @@
       const reciente = l.ultimoUso && diasDesde(l.ultimoUso) <= 7;
       const e = estadoSub(l);
       return `
-      <tr data-cod="${esc(l.codigo)}" data-taller="${esc(l.taller || '')}" data-tope="${esc(l.topeDia || 0)}" data-notas="${esc(l.notas || '')}" data-plan="${esc(l.plan || '')}" data-medio="${esc(l.medioPago || '')}" data-pago="${esc(l.pagoHasta || '')}" data-email="${esc(l.email || '')}"${reciente ? ' style="background:#F3F9F5;"' : ''}>
+      <tr data-cod="${esc(l.codigo)}" data-prod="${esc(l.producto || 'taller')}" data-taller="${esc(l.taller || '')}" data-tope="${esc(l.topeDia || 0)}" data-notas="${esc(l.notas || '')}" data-plan="${esc(l.plan || '')}" data-medio="${esc(l.medioPago || '')}" data-pago="${esc(l.pagoHasta || '')}" data-email="${esc(l.email || '')}"${reciente ? ' style="background:#F3F9F5;"' : ''}>
         <td><span class="cod">${esc(l.codigo)}</span></td>
         <td><span class="prod ${esc(l.producto || 'taller')}">${esc(PROD_LABELS[l.producto] || 'Estelita')}</span></td>
         <td>${esc(l.taller) || '<span class="muted">— sin nombre —</span>'}${l.email ? '<div class="muted" style="font-size:11px;">' + esc(l.email) + '</div>' : ''}</td>
-        <td>${PLAN_LABELS[l.plan] || '<span class="muted">—</span>'}${l.medioPago ? ' <span class="muted">(' + (l.medioPago === 'mp' ? 'MP' : 'transf.') + ')</span>' : ''}</td>
+        <td>${celdaPlan(l)}${l.medioPago ? ' <span class="muted">(' + (l.medioPago === 'mp' ? 'MP' : 'transf.') + ')</span>' : ''}</td>
         <td><span class="estado ${e.cls}">${e.txt}</span></td>
         <td>${l.pagoHasta ? esc(l.pagoHasta) : '<span class="muted">—</span>'}</td>
         <td>${fmtAct(l.ultimoUso)}</td>
@@ -319,6 +333,7 @@
           <button class="btn btn-ghost btn-sm" data-a="pago" title="Registrar pago: +1 mes">+1 mes</button>
           <button class="btn btn-ghost btn-sm" data-a="copiar">Copiar</button>
           <button class="btn btn-ghost btn-sm" data-a="editar">Editar</button>
+          ${(l.producto || 'taller') === 'repuestos' ? '<button class="btn btn-ghost btn-sm" data-a="plan">Plan</button>' : ''}
           ${l.estado === 'activo'
             ? '<button class="btn btn-ghost btn-sm" data-a="suspender">Suspender</button>'
             : '<button class="btn btn-ghost btn-sm" data-a="reactivar">Reactivar</button>'}
@@ -422,11 +437,81 @@
     }
   });
 
-  function pedirPlan(actual) {
-    const p = prompt('Plan — escribí: basico / profesional / full (o vacío):', actual || '');
+  function pedirPlan(actual, producto) {
+    const ayuda = producto === 'repuestos'
+      ? 'Plan de Repuestos — escribí: basico ($80.000, 3 usuarios) / profesional ($150.000, 5 usuarios, WhatsApp, Mercado Pago, vidriera) / full ($220.000, 10 usuarios, + Mercado Libre, Tienda Nube, multilocal):'
+      : 'Plan — escribí: basico / profesional / full (o vacío):';
+    const p = prompt(ayuda, actual || (producto === 'repuestos' ? 'basico' : ''));
     if (p === null) return null;
     const v = p.trim().toLowerCase();
     return ['', 'basico', 'profesional', 'full'].includes(v) ? v : (alert('Plan inválido, se deja sin plan.'), '');
+  }
+
+  // Ventana "Plan y funciones" de una licencia de Repuestos: el plan, y por
+  // cada función si va según el plan, sí o no (excepción), más los topes.
+  function abrirPlan(l) {
+    const planes = (DATA && DATA.planesRepuestos) || {};
+    const funciones = (DATA && DATA.funcionesRepuestos) || {};
+    const exc = l.funciones || {};
+    const topes = l.topes || {};
+    const planActual = planes[l.plan] ? l.plan : 'basico';
+    const opcionesPlan = Object.entries(planes).map(([k, p]) => `<option value="${k}"${k === planActual ? ' selected' : ''}>${esc(p.nombre)} · $${Number(p.precio).toLocaleString('es-AR')} · ${p.usuarios} usuarios · ${p.lecturasDia} IA/día</option>`).join('');
+    const filas = Object.entries(funciones).map(([f, nombre]) => {
+      const v = typeof exc[f] === 'boolean' ? String(exc[f]) : '';
+      return `<label class="plan-fila"><span>${esc(nombre)}</span>
+        <select data-f="${f}">
+          <option value=""${v === '' ? ' selected' : ''}>Según plan</option>
+          <option value="true"${v === 'true' ? ' selected' : ''}>Sí (excepción)</option>
+          <option value="false"${v === 'false' ? ' selected' : ''}>No (excepción)</option>
+        </select></label>`;
+    }).join('');
+    const fondo = document.createElement('div');
+    fondo.className = 'modal-fondo';
+    fondo.innerHTML = `
+      <div class="modal">
+        <div style="font-weight:800; font-size:16px; margin-bottom:4px;">Plan y funciones · <span class="cod">${esc(l.codigo)}</span></div>
+        <div class="muted" style="margin-bottom:12px;">${esc(l.taller || 'sin nombre')}. Lo que se guarda acá llega a la app en la próxima verificación (al abrir Ajustes o cada 6 horas).</div>
+        <label class="plan-fila"><span><b>Plan</b></span><select id="plan-sel">${opcionesPlan}</select></label>
+        <div class="muted" style="margin:10px 0 4px;">Funciones (dejá "Según plan" salvo que quieras pisar algo para este cliente):</div>
+        ${filas}
+        <div class="muted" style="margin:10px 0 4px;">Topes (vacío = el del plan):</div>
+        <label class="plan-fila"><span>Usuarios de la app</span><input id="plan-usuarios" type="number" min="1" placeholder="${planes[planActual] ? planes[planActual].usuarios : ''}" value="${topes.usuarios != null ? esc(topes.usuarios) : ''}"></label>
+        <label class="plan-fila"><span>Lecturas con IA por día</span><input id="plan-lecturas" type="number" min="0" placeholder="${planes[planActual] ? planes[planActual].lecturasDia : ''}" value="${topes.lecturasDia != null ? esc(topes.lecturasDia) : ''}"></label>
+        <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
+          <button class="btn btn-ghost" data-m="cancelar">Cancelar</button>
+          <button class="btn btn-primary" data-m="guardar">Guardar</button>
+        </div>
+        <div id="plan-msg" class="muted" style="font-size:12px; margin-top:8px;"></div>
+      </div>`;
+    document.body.appendChild(fondo);
+    const cerrar = () => fondo.remove();
+    fondo.addEventListener('click', (ev) => { if (ev.target === fondo) cerrar(); });
+    fondo.querySelector('[data-m="cancelar"]').addEventListener('click', cerrar);
+    fondo.querySelector('#plan-sel').addEventListener('change', (ev) => {
+      const p = planes[ev.target.value];
+      if (!p) return;
+      fondo.querySelector('#plan-usuarios').placeholder = p.usuarios;
+      fondo.querySelector('#plan-lecturas').placeholder = p.lecturasDia;
+    });
+    fondo.querySelector('[data-m="guardar"]').addEventListener('click', async () => {
+      const btn = fondo.querySelector('[data-m="guardar"]');
+      btn.disabled = true;
+      const funcionesNuevas = {};
+      fondo.querySelectorAll('select[data-f]').forEach(s => { funcionesNuevas[s.getAttribute('data-f')] = s.value === '' ? null : s.value === 'true'; });
+      try {
+        await api('editar', {
+          codigo: l.codigo,
+          plan: fondo.querySelector('#plan-sel').value,
+          funciones: funcionesNuevas,
+          topes: { usuarios: fondo.querySelector('#plan-usuarios').value, lecturasDia: fondo.querySelector('#plan-lecturas').value },
+        });
+        cerrar();
+        await cargar();
+      } catch (e) {
+        btn.disabled = false;
+        fondo.querySelector('#plan-msg').textContent = 'No se pudo guardar: ' + (e.message || e);
+      }
+    });
   }
 
   $('#btn-nueva').addEventListener('click', async () => {
@@ -437,11 +522,15 @@
     if (taller === null) return;
     const email = prompt('Email del taller (opcional):', '');
     if (email === null) return;
-    const plan = pedirPlan(''); if (plan === null) return;
+    const plan = pedirPlan('', producto); if (plan === null) return;
     const pago = prompt('Pago al día hasta (AAAA-MM-DD, vacío = sin control):', '');
     if (pago === null) return;
-    const topeStr = prompt('Tope de lecturas por día para este código:', '50');
-    if (topeStr === null) return;
+    let topeStr = '50';
+    if (producto !== 'repuestos') {
+      // En Repuestos el tope de IA lo trae el plan (se ajusta desde el botón "Plan").
+      topeStr = prompt('Tope de lecturas por día para este código:', '50');
+      if (topeStr === null) return;
+    }
     try {
       const data = await api('agregar', { taller: taller.trim(), email: email.trim(), plan, pagoHasta: pago.trim(), medioPago: 'transferencia', topeDia: Number(topeStr) || 50, producto });
       await cargar();
@@ -472,13 +561,18 @@
       } else if (a === 'eliminar') {
         if (!confirm('Eliminar ' + cod + ' definitivamente? Para solo cortarle el acceso, mejor usá Suspender.')) return;
         await api('eliminar', { codigo: cod });
+      } else if (a === 'plan') {
+        const l = (DATA && DATA.licencias || []).find(x => x.codigo === cod);
+        if (l) abrirPlan(l);
+        return;
       } else if (a === 'editar') {
         const fila = btn.closest('tr');
+        const esRep = (fila.getAttribute('data-prod') || 'taller') === 'repuestos';
         const taller = prompt('Nombre del taller:', fila.getAttribute('data-taller') || '');
         if (taller === null) return;
         const email = prompt('Email del taller:', fila.getAttribute('data-email') || '');
         if (email === null) return;
-        const plan = pedirPlan(fila.getAttribute('data-plan') || ''); if (plan === null) return;
+        const plan = pedirPlan(fila.getAttribute('data-plan') || '', esRep ? 'repuestos' : 'taller'); if (plan === null) return;
         const pago = prompt('Pago al día hasta (AAAA-MM-DD, vacío = sin control):', fila.getAttribute('data-pago') || '');
         if (pago === null) return;
         const tope = prompt('Tope de lecturas por día (0 = sin tope):', fila.getAttribute('data-tope') || '0');
