@@ -4,7 +4,7 @@
 // eliminar. La primera vez importa (seed) los códigos de LICENSE_CODES para
 // que el panel muestre también los que ya estaban en uso.
 import crypto from 'crypto';
-import { leerLicenciasEstricto, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, PRODUCTOS, productoDe, sumarMesISO, leerSugerencias, guardarSugerencias, leerCredito, guardarCredito, calcularRitmo } from './_licencias.js';
+import { leerLicenciasEstricto, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, PRODUCTOS, productoDe, sumarMesISO, leerSugerencias, guardarSugerencias, leerCredito, guardarCredito, calcularRitmo, derechosDe, FUNCIONES_REPUESTOS, PLANES_REPUESTOS } from './_licencias.js';
 
 
 function tokenOk(req) {
@@ -81,6 +81,7 @@ export default async function handler(req, res) {
         return {
           ...l,
           producto: productoDe(l),
+          derechos: derechosDe(l),
           usoTotal: a.total || 0, usoHoy: a.hoy || 0, ultimoUso: a.ultimo || null,
           costoMesUSD: Number(c.costoUSD) || 0, readsMes: Number(c.reads) || 0,
           porOrigen: c.porOrigen || {},
@@ -111,6 +112,7 @@ export default async function handler(req, res) {
       const ritmo = calcularRitmo(costoTotalMes, readsTotalMes, costoMesAnteriorUSD, credito);
       return res.status(200).json({
         ok: true, licencias: conAct, costoTotalMes, readsTotalMes, consumoSinLicencia,
+        planesRepuestos: PLANES_REPUESTOS, funcionesRepuestos: FUNCIONES_REPUESTOS,
         mes: mesActual,
         infra: { vercel, opsIaMes, limiteOpsGratis: 2000 },
         ritmo,
@@ -125,7 +127,8 @@ export default async function handler(req, res) {
       lics.push({
         codigo, taller, producto, estado: 'activo', alta: new Date().toISOString().slice(0, 10),
         topeDia, notas: '',
-        plan: PLANES.includes(req.body.plan) ? req.body.plan : '',
+        // Repuestos siempre arranca con un plan (Básica si no se eligió): los derechos salen de ahí.
+        plan: PLANES.includes(req.body.plan) ? req.body.plan : (producto === 'repuestos' ? 'basico' : ''),
         medioPago: MEDIOS.includes(req.body.medioPago) ? req.body.medioPago : '',
         pagoHasta: fechaValida(req.body.pagoHasta) ? req.body.pagoHasta : null,
         email: String(req.body.email || '').trim(),
@@ -145,8 +148,26 @@ export default async function handler(req, res) {
       if (req.body.medioPago !== undefined) l.medioPago = MEDIOS.includes(req.body.medioPago) ? req.body.medioPago : '';
       if (req.body.pagoHasta !== undefined) l.pagoHasta = fechaValida(req.body.pagoHasta) ? req.body.pagoHasta : null;
       if (typeof req.body.email === 'string') l.email = req.body.email.trim();
+      // Repuestos: excepciones por función (true/false pisa el plan; null vuelve al plan) y topes.
+      if (req.body.funciones && typeof req.body.funciones === 'object') {
+        const f = { ...(l.funciones || {}) };
+        for (const [k, v] of Object.entries(req.body.funciones)) {
+          if (!(k in FUNCIONES_REPUESTOS)) continue;
+          if (v === true || v === false) f[k] = v; else delete f[k];
+        }
+        l.funciones = f;
+      }
+      if (req.body.topes && typeof req.body.topes === 'object') {
+        const t = { ...(l.topes || {}) };
+        for (const k of ['usuarios', 'lecturasDia']) {
+          if (!(k in req.body.topes)) continue;
+          const v = req.body.topes[k];
+          if (v === null || v === '' || v === undefined) delete t[k]; else if (Number(v) >= 0) t[k] = Number(v);
+        }
+        l.topes = t;
+      }
       await guardarLicencias(lics);
-      return res.status(200).json({ ok: true });
+      return res.status(200).json({ ok: true, derechos: derechosDe(l) });
     }
 
     // Registrar un pago: extiende "pago al día hasta" un mes (desde hoy o desde
