@@ -22,13 +22,15 @@ const CONSUMO_PREFIX = 'sistema/consumo-';
 export const PLAN_PRECIOS = { basico: 48000, profesional: 85000, full: 120000 };
 export const PLAN_NOMBRES = { basico: 'Básico', profesional: 'Profesional', full: 'Full' };
 
-// Planes de Estelita Repuestos. Cada plan dice qué funciones incluye y sus
-// topes (usuarios de la app por local, lecturas de listas con IA por día).
+// Planes de Estelita Repuestos. Cada plan dice qué funciones incluye y el
+// tope de usuarios de la app por local. `lecturasDia` (lecturas de listas con
+// IA por día) va en 0 = sin tope: por ahora no se limita (decisión del
+// 17/09/2026); se puede poner un tope a un cliente puntual desde el panel.
 // Lo base (stock, mostrador, clientes, encargos, compras, caja, estadísticas)
 // va en todos y no se lista. La app lee esto por /api/servidor (derechos) y
 // corta del lado del servidor lo que el plan no incluye. La misma tabla vive
-// en repuestos/src/lib/constantes.ts para la pantalla de Ajustes: si cambia
-// acá, cambiarla allá.
+// en repuestos/src/lib/constantes.ts para la pantalla de Ajustes y la landing:
+// si cambia acá, cambiarla allá. El checkout de MP (api/mp.js) también la usa.
 export const FUNCIONES_REPUESTOS = {
   facturacion: 'Facturación ARCA',
   ia: 'Lectura de listas con IA',
@@ -40,9 +42,9 @@ export const FUNCIONES_REPUESTOS = {
   multilocal: 'Multilocal',
 };
 export const PLANES_REPUESTOS = {
-  basico: { nombre: 'Básica', precio: 80000, usuarios: 3, lecturasDia: 5, funciones: ['facturacion', 'ia'] },
-  profesional: { nombre: 'Profesional', precio: 150000, usuarios: 5, lecturasDia: 20, funciones: ['facturacion', 'ia', 'whatsapp', 'mercadopago', 'vidriera'] },
-  full: { nombre: 'Full', precio: 220000, usuarios: 10, lecturasDia: 50, funciones: ['facturacion', 'ia', 'whatsapp', 'mercadopago', 'vidriera', 'mercadolibre', 'tiendanube', 'multilocal'] },
+  basico: { nombre: 'Básica', precio: 80000, usuarios: 3, lecturasDia: 0, funciones: ['facturacion', 'ia'] },
+  profesional: { nombre: 'Profesional', precio: 150000, usuarios: 5, lecturasDia: 0, funciones: ['facturacion', 'ia', 'whatsapp', 'mercadopago', 'vidriera'] },
+  full: { nombre: 'Full', precio: 220000, usuarios: 10, lecturasDia: 0, funciones: ['facturacion', 'ia', 'whatsapp', 'mercadopago', 'vidriera', 'mercadolibre', 'tiendanube', 'multilocal'] },
 };
 
 /**
@@ -191,18 +193,22 @@ export async function crearSignup(token, datos) {
 
 // Cuando MP autoriza la suscripción: crea la licencia (una sola vez por
 // preapproval) y la vincula al signup. Devuelve el código.
-export async function activarLicenciaMP({ token, preapprovalId, email, plan, pagoHasta, prueba }) {
+// `producto` ('taller' o 'repuestos') decide el prefijo del código y el plan
+// que se guarda; `nombre` es el del taller o negocio que se cargó en el
+// formulario, para que en el panel se sepa quién es sin abrir MP.
+export async function activarLicenciaMP({ token, preapprovalId, email, plan, pagoHasta, prueba, producto, nombre }) {
   // Estricto: este camino escribe la lista completa. Si la lectura falla,
   // preferimos que el webhook devuelva error y Mercado Pago reintente, antes
   // que sobrescribir el archivo con una sola licencia.
   const lics = await leerLicenciasEstricto();
   let l = lics.find(x => x.mpPreapprovalId === preapprovalId);
   if (!l) {
-    const codigo = nuevoCodigo(lics.map(x => x.codigo).concat(codigosEnv()));
+    const prod = PRODUCTOS[producto] ? producto : 'taller';
+    const codigo = nuevoCodigo(lics.map(x => x.codigo).concat(codigosEnv()), prod);
     l = {
-      codigo, taller: '', estado: 'activo', alta: new Date().toISOString().slice(0, 10),
-      topeDia: 50, notas: '', plan: plan || '', medioPago: 'mp', email: email || '',
-      origen: 'web', mpPreapprovalId: preapprovalId, prueba: !!prueba, pagoHasta: pagoHasta || null,
+      codigo, taller: String(nombre || '').slice(0, 80), estado: 'activo', alta: new Date().toISOString().slice(0, 10),
+      topeDia: prod === 'repuestos' ? 0 : 50, notas: '', plan: plan || '', medioPago: 'mp', email: email || '',
+      origen: 'web', producto: prod, mpPreapprovalId: preapprovalId, prueba: !!prueba, pagoHasta: pagoHasta || null,
     };
     lics.push(l);
     await guardarLicencias(lics);
