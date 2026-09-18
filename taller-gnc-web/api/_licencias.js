@@ -182,13 +182,52 @@ export async function guardarLicencias(licencias) {
 // --- Suscripciones de Mercado Pago ---
 // Registro de "signups" web: mapea el token de un registro al código de
 // licencia que se le creó, para que la página de "gracias" lo muestre.
+//
+// Cada signup vive en SU archivo (sistema/signups/<token>.json). Antes iban todos
+// en un solo JSON que se leía, se modificaba y se reescribía: una lectura fallida
+// (pasa de forma intermitente con Blob) devolvía {} y el guardado siguiente
+// BORRABA los demás, o el webhook no encontraba el plan y el producto y creaba
+// una licencia de taller sin plan para una compra de Repuestos. Con un archivo
+// por signup no hay nada que pisar. El JSON viejo se sigue leyendo como respaldo.
+const SIGNUP_PREFIX = 'sistema/signups/';
+const tokenSignupOk = (t) => /^S[0-9a-f]{6,40}$/.test(String(t || ''));
+const pausa = (ms) => new Promise(r => setTimeout(r, ms));
+
+// Lee un JSON de Blob insistiendo: reintenta ante error Y ante "no existe"
+// (un archivo recién escrito puede tardar en verse). null = no existe de verdad.
+async function leerJsonBlobFirme(path, intentos = 4) {
+  let ultimoError = null;
+  for (let i = 0; i < intentos; i++) {
+    try {
+      const d = await leerJsonBlob(path);
+      if (d) return d;
+      ultimoError = null;
+    } catch (e) { ultimoError = e; }
+    if (i < intentos - 1) await pausa(350 * (i + 1));
+  }
+  if (ultimoError) throw ultimoError;
+  return null;
+}
+
 export async function leerSignups() { try { return (await leerJsonBlob(SIGNUPS_PATH)) || {}; } catch (e) { return {}; } }
-export async function guardarSignups(s) { await escribirJsonBlob(SIGNUPS_PATH, s); }
+
+// Un signup por token. Tira si Blob no contesta (para que el que llama decida
+// reintentar); devuelve null si de verdad no existe.
+export async function leerSignup(token) {
+  if (!tokenSignupOk(token)) return null;
+  const propio = await leerJsonBlobFirme(`${SIGNUP_PREFIX}${token}.json`);
+  if (propio) return propio;
+  const viejos = await leerJsonBlobFirme(SIGNUPS_PATH, 2);
+  return (viejos && viejos[token]) || null;
+}
+
+export async function guardarSignup(token, datos) {
+  if (!tokenSignupOk(token)) throw new Error('Token de signup inválido.');
+  await escribirJsonBlob(`${SIGNUP_PREFIX}${token}.json`, datos);
+}
 
 export async function crearSignup(token, datos) {
-  const s = await leerSignups();
-  s[token] = { ...datos, estado: 'pendiente', codigo: null, creado: new Date().toISOString() };
-  await guardarSignups(s);
+  await guardarSignup(token, { ...datos, estado: 'pendiente', codigo: null, creado: new Date().toISOString() });
 }
 
 // Cuando MP autoriza la suscripción: crea la licencia (una sola vez por
@@ -214,10 +253,10 @@ export async function activarLicenciaMP({ token, preapprovalId, email, plan, pag
     lics.push(l);
     await guardarLicencias(lics);
   }
-  if (token) {
-    const s = await leerSignups();
-    if (s[token]) { s[token].codigo = l.codigo; s[token].estado = 'activa'; await guardarSignups(s); }
-    else { s[token] = { estado: 'activa', codigo: l.codigo, creado: new Date().toISOString() }; await guardarSignups(s); }
+  if (token && tokenSignupOk(token)) {
+    let previo = null;
+    try { previo = await leerSignup(token); } catch (e) { previo = null; }
+    await guardarSignup(token, { ...(previo || { creado: new Date().toISOString() }), estado: 'activa', codigo: l.codigo });
   }
   // `nueva` dice si se creó en ESTA llamada: Mercado Pago repite los avisos, y el
   // correo con la licencia se manda una sola vez.

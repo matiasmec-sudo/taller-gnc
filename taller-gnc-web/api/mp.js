@@ -8,7 +8,7 @@
 // sitio; Repuestos vuelve a su propia página /gracias (en repuestos.estelita.
 // net.ar), que consulta el estado por su servidor. El webhook es el mismo.
 import crypto from 'crypto';
-import { PLAN_PRECIOS, PLAN_NOMBRES, PLANES_REPUESTOS, crearSignup, leerSignups } from './_licencias.js';
+import { PLAN_PRECIOS, PLAN_NOMBRES, PLANES_REPUESTOS, crearSignup, leerSignup } from './_licencias.js';
 
 const BASE = 'https://estelita.net.ar';
 const REPUESTOS_BASE = (process.env.REPUESTOS_BASE_URL || 'https://repuestos.estelita.net.ar').replace(/\/+$/, '');
@@ -69,8 +69,9 @@ export default async function handler(req, res) {
     }
 
     if (accion === 'estado-signup') {
-      const s = await leerSignups();
-      const rec = s[String(req.body.token || '')];
+      let rec = null;
+      try { rec = await leerSignup(String(req.body.token || '')); }
+      catch (e) { return res.status(503).json({ error: 'No se pudo consultar en este momento. Probá de nuevo.' }); }
       if (!rec) return res.status(404).json({ error: 'No encontrado' });
       return res.status(200).json({ ok: true, estado: rec.estado, codigo: rec.codigo || null, producto: rec.producto || 'taller', plan: rec.plan || '' });
     }

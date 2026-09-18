@@ -1,7 +1,7 @@
 // Webhook de Mercado Pago: recibe los avisos de las suscripciones y actualiza
 // la licencia. Siempre RE-CONSULTA el recurso a MP con nuestro token, así un
 // aviso falso no puede activar nada (no existe la suscripción autorizada real).
-import { leerSignups, activarLicenciaMP, renovarPorPreapproval, suspenderPorPreapproval, sumarDiasISO, anotarEnLicencia, productoDe, PLANES_REPUESTOS, PLAN_NOMBRES, PLAN_PRECIOS } from './_licencias.js';
+import { leerSignup, activarLicenciaMP, renovarPorPreapproval, suspenderPorPreapproval, sumarDiasISO, anotarEnLicencia, productoDe, PLANES_REPUESTOS, PLAN_NOMBRES, PLAN_PRECIOS } from './_licencias.js';
 import { enviarCorreo, armarCorreoLicencia, armarAvisoVenta, casillaAvisos } from './_correo.js';
 
 // Al crearse la licencia: el correo al cliente con su código y el aviso al dueño.
@@ -47,8 +47,13 @@ export default async function handler(req, res) {
       if (!pre) return res.status(200).json({ ok: true });
       const extRef = pre.external_reference || '';
       if (pre.status === 'authorized') {
-        const signups = await leerSignups();
-        const s = signups[extRef] || {};
+        // Sin el signup no se sabe el plan ni el producto: si Blob no contesta, se
+        // devuelve error para que Mercado Pago repita el aviso, en vez de crear
+        // una licencia equivocada.
+        let s = null;
+        try { s = await leerSignup(extRef); }
+        catch (e) { return res.status(500).json({ ok: false, error: 'signup no disponible, reintentar' }); }
+        s = s || {};
         const pagoHasta = sumarDiasISO(new Date().toISOString().slice(0, 10), 14); // fin de la prueba
         // El correo del formulario manda sobre el de la cuenta de MP: es el que el cliente eligió como titular.
         const r = await activarLicenciaMP({
