@@ -202,6 +202,7 @@ export async function activarLicenciaMP({ token, preapprovalId, email, plan, pag
   // que sobrescribir el archivo con una sola licencia.
   const lics = await leerLicenciasEstricto();
   let l = lics.find(x => x.mpPreapprovalId === preapprovalId);
+  const nueva = !l;
   if (!l) {
     const prod = PRODUCTOS[producto] ? producto : 'taller';
     const codigo = nuevoCodigo(lics.map(x => x.codigo).concat(codigosEnv()), prod);
@@ -218,7 +219,20 @@ export async function activarLicenciaMP({ token, preapprovalId, email, plan, pag
     if (s[token]) { s[token].codigo = l.codigo; s[token].estado = 'activa'; await guardarSignups(s); }
     else { s[token] = { estado: 'activa', codigo: l.codigo, creado: new Date().toISOString() }; await guardarSignups(s); }
   }
-  return l.codigo;
+  // `nueva` dice si se creó en ESTA llamada: Mercado Pago repite los avisos, y el
+  // correo con la licencia se manda una sola vez.
+  return { codigo: l.codigo, nueva, licencia: l };
+}
+
+// Deja constancia en las notas de una licencia (ej. "correo enviado"). Best-effort.
+export async function anotarEnLicencia(codigo, texto) {
+  try {
+    const lics = await leerLicenciasEstricto();
+    const l = lics.find(x => x.codigo === codigo);
+    if (!l) return;
+    l.notas = [l.notas, texto].filter(Boolean).join(' · ').slice(0, 400);
+    await guardarLicencias(lics);
+  } catch (e) { /* best-effort */ }
 }
 
 // Cobro mensual aprobado: renueva un mes y saca de prueba.

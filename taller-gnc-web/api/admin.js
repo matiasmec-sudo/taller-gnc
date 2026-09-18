@@ -4,6 +4,7 @@
 // eliminar. La primera vez importa (seed) los códigos de LICENSE_CODES para
 // que el panel muestre también los que ya estaban en uso.
 import crypto from 'crypto';
+import { enviarCorreo, armarCorreoLicencia, correoConfigurado, casillaAvisos } from './_correo.js';
 import { leerLicenciasEstricto, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, PRODUCTOS, productoDe, sumarMesISO, leerSugerencias, guardarSugerencias, leerCredito, guardarCredito, calcularRitmo, derechosDe, FUNCIONES_REPUESTOS, PLANES_REPUESTOS } from './_licencias.js';
 
 
@@ -113,6 +114,7 @@ export default async function handler(req, res) {
       return res.status(200).json({
         ok: true, licencias: conAct, costoTotalMes, readsTotalMes, consumoSinLicencia,
         planesRepuestos: PLANES_REPUESTOS, funcionesRepuestos: FUNCIONES_REPUESTOS,
+        correo: { configurado: correoConfigurado(), casilla: process.env.GMAIL_USER || '' },
         mes: mesActual,
         infra: { vercel, opsIaMes, limiteOpsGratis: 2000 },
         ritmo,
@@ -176,6 +178,33 @@ export default async function handler(req, res) {
     // Registrar un pago: extiende "pago al día hasta" un mes (desde hoy o desde
     // la fecha actual si es futura) y deja la licencia activa. Es lo que usás
     // cuando te pagan por transferencia (y lo que el webhook de MP hará solo).
+    // Manda (o vuelve a mandar) el correo con la licencia al titular. Sirve también
+    // para las licencias creadas a mano: se carga el email y se toca "Correo".
+    if (accion === 'enviar-licencia') {
+      const l = lics.find(x => x.codigo === req.body.codigo);
+      if (!l) return res.status(404).json({ error: 'No existe esa licencia.' });
+      if (!l.email) return res.status(400).json({ error: 'Esa licencia no tiene email cargado. Usá Editar para ponerle uno.' });
+      if (!correoConfigurado()) return res.status(400).json({ error: 'El correo no está configurado: faltan GMAIL_USER y GMAIL_APP_PASSWORD en Vercel.' });
+      const producto = productoDe(l);
+      const planRep = producto === 'repuestos' ? PLANES_REPUESTOS[l.plan] : null;
+      const planNombre = planRep ? planRep.nombre : ({ basico: 'Básico', profesional: 'Profesional', full: 'Full' }[l.plan] || '');
+      const c = armarCorreoLicencia(l, { producto, planNombre });
+      const r = await enviarCorreo({ para: l.email, asunto: c.asunto, html: c.html, texto: c.texto });
+      if (!r.ok) return res.status(502).json({ error: 'Gmail no aceptó el envío: ' + (r.detalle || r.motivo) });
+      const hoy = new Date().toISOString().slice(0, 10).split('-').reverse().join('/');
+      l.notas = [l.notas, `Correo con la licencia enviado el ${hoy}`].filter(Boolean).join(' · ').slice(0, 400);
+      await guardarLicencias(lics);
+      return res.status(200).json({ ok: true, para: l.email });
+    }
+
+    // Prueba de la configuración: un correo a la casilla de avisos.
+    if (accion === 'probar-correo') {
+      if (!correoConfigurado()) return res.status(400).json({ error: 'Faltan GMAIL_USER y GMAIL_APP_PASSWORD en Vercel.' });
+      const r = await enviarCorreo({ para: casillaAvisos(), asunto: 'Prueba de correo del panel de Estelita', texto: 'Si estás leyendo esto, el envío de correos del panel funciona.', html: '<p>Si estás leyendo esto, el envío de correos del panel funciona.</p>' });
+      if (!r.ok) return res.status(502).json({ error: 'Gmail no aceptó el envío: ' + (r.detalle || r.motivo) });
+      return res.status(200).json({ ok: true, para: casillaAvisos() });
+    }
+
     if (accion === 'registrar-pago') {
       const l = lics.find(x => x.codigo === req.body.codigo);
       if (!l) return res.status(404).json({ error: 'No existe esa licencia.' });

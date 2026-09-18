@@ -83,6 +83,7 @@
       <h1>Licencias de Estelita</h1>
       <div>
         <button class="btn btn-primary btn-sm" id="btn-nueva">+ Nueva licencia</button>
+        <button class="btn btn-ghost btn-sm" id="btn-correo" title="Manda un correo de prueba a la casilla de Estelita">Probar correo</button>
         <button class="btn btn-ghost btn-sm" id="btn-refrescar">Refrescar</button>
         <button class="btn btn-ghost btn-sm" id="btn-salir">Salir</button>
       </div>
@@ -332,6 +333,7 @@
         <td><div class="acciones">
           <button class="btn btn-ghost btn-sm" data-a="pago" title="Registrar pago: +1 mes">+1 mes</button>
           <button class="btn btn-ghost btn-sm" data-a="copiar">Copiar</button>
+          <button class="btn btn-ghost btn-sm" data-a="correo" title="Mandarle al titular el correo con su código y los pasos">Correo</button>
           <button class="btn btn-ghost btn-sm" data-a="editar">Editar</button>
           <button class="btn btn-ghost btn-sm" data-a="producto" title="Pasar esta licencia a ${(l.producto || 'taller') === 'repuestos' ? 'Estelita (talleres)' : 'Estelita Repuestos'} sin cambiar el código">Producto</button>
           ${(l.producto || 'taller') === 'repuestos' ? '<button class="btn btn-ghost btn-sm" data-a="plan">Plan</button>' : ''}
@@ -416,6 +418,12 @@
   $('#pass').addEventListener('keydown', e => { if (e.key === 'Enter') $('#btn-login').click(); });
   $('#btn-salir').addEventListener('click', () => mostrarLogin(''));
   $('#btn-refrescar').addEventListener('click', cargar);
+  $('#btn-correo').addEventListener('click', async () => {
+    const c = (DATA && DATA.correo) || {};
+    if (!c.configurado) { alert('El correo todavía no está configurado. Faltan las variables GMAIL_USER y GMAIL_APP_PASSWORD en Vercel.'); return; }
+    try { const r = await api('probar-correo', {}); alert('Correo de prueba enviado a ' + r.para + '. Fijate que haya llegado (mirá también Spam).'); }
+    catch (e) { alert('No se pudo: ' + e.message); }
+  });
   $('#btn-refrescar-sug').addEventListener('click', cargarSugerencias);
 
   $('#sug-lista').addEventListener('click', async (ev) => {
@@ -562,6 +570,13 @@
       } else if (a === 'eliminar') {
         if (!confirm('Eliminar ' + cod + ' definitivamente? Para solo cortarle el acceso, mejor usá Suspender.')) return;
         await api('eliminar', { codigo: cod });
+      } else if (a === 'correo') {
+        const l = (DATA && DATA.licencias || []).find(x => x.codigo === cod);
+        const destino = (l && l.email) || '';
+        if (!destino) { alert('Esa licencia no tiene email. Tocá Editar, cargale el email del titular y volvé a tocar Correo.'); return; }
+        if (!confirm('¿Mandar a ' + destino + ' el correo con el código ' + cod + ' y los pasos para empezar?')) return;
+        const r = await api('enviar-licencia', { codigo: cod });
+        alert('Correo enviado a ' + (r.para || destino) + '.');
       } else if (a === 'producto') {
         const l = (DATA && DATA.licencias || []).find(x => x.codigo === cod);
         const actual = (l && l.producto) || 'taller';
