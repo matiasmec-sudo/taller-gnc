@@ -563,12 +563,12 @@
         if (!confirm('Eliminar ' + cod + ' definitivamente? Para solo cortarle el acceso, mejor usá Suspender.')) return;
         await api('eliminar', { codigo: cod });
       } else if (a === 'producto') {
-        const l = (DATA.licencias || []).find(x => x.codigo === codigo);
+        const l = (DATA && DATA.licencias || []).find(x => x.codigo === cod);
         const actual = (l && l.producto) || 'taller';
         const nuevo = actual === 'repuestos' ? 'taller' : 'repuestos';
         const aviso = nuevo === 'repuestos' ? ' OJO: desde ahora valen los planes de Repuestos. En el paso siguiente elegí el plan que tiene contratado: lo que ese plan no incluya se le apaga.' : '';
-        if (!confirm('¿Pasar ' + codigo + ' (' + ((l && l.taller) || 'sin nombre') + ') a ' + PROD_LABELS[nuevo] + '? El código no cambia, así que no hay que tocar nada en la app del cliente.' + aviso)) return;
-        const cuerpo = { codigo, producto: nuevo };
+        if (!confirm('¿Pasar ' + cod + ' (' + ((l && l.taller) || 'sin nombre') + ') a ' + PROD_LABELS[nuevo] + '? El código no cambia, así que no hay que tocar nada en la app del cliente.' + aviso)) return;
+        const cuerpo = { codigo: cod, producto: nuevo };
         if (nuevo === 'repuestos') { const plan = pedirPlan((l && l.plan) || 'full', 'repuestos'); if (plan === null) return; cuerpo.plan = plan; }
         await api('editar', cuerpo);
         await cargar();
