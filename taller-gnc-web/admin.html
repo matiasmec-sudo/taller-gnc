@@ -566,11 +566,8 @@
         const l = (DATA.licencias || []).find(x => x.codigo === codigo);
         const actual = (l && l.producto) || 'taller';
         const nuevo = actual === 'repuestos' ? 'taller' : 'repuestos';
-        if (!confirm('¿Pasar ' + codigo + ' (' + ((l && l.taller) || 'sin nombre') + ') a ' + PROD_LABELS[nuevo] + '?
-
-El código no cambia, así que no hay que tocar nada en la app del cliente.' + (nuevo === 'repuestos' ? '
-
-OJO: desde ahora valen los planes de Repuestos. Elegí en el paso siguiente el plan que tiene contratado: lo que ese plan no incluya se le apaga.' : ''))) return;
+        const aviso = nuevo === 'repuestos' ? ' OJO: desde ahora valen los planes de Repuestos. En el paso siguiente elegí el plan que tiene contratado: lo que ese plan no incluya se le apaga.' : '';
+        if (!confirm('¿Pasar ' + codigo + ' (' + ((l && l.taller) || 'sin nombre') + ') a ' + PROD_LABELS[nuevo] + '? El código no cambia, así que no hay que tocar nada en la app del cliente.' + aviso)) return;
         const cuerpo = { codigo, producto: nuevo };
         if (nuevo === 'repuestos') { const plan = pedirPlan((l && l.plan) || 'full', 'repuestos'); if (plan === null) return; cuerpo.plan = plan; }
         await api('editar', cuerpo);
