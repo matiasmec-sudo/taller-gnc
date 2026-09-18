@@ -333,6 +333,7 @@
           <button class="btn btn-ghost btn-sm" data-a="pago" title="Registrar pago: +1 mes">+1 mes</button>
           <button class="btn btn-ghost btn-sm" data-a="copiar">Copiar</button>
           <button class="btn btn-ghost btn-sm" data-a="editar">Editar</button>
+          <button class="btn btn-ghost btn-sm" data-a="producto" title="Pasar esta licencia a ${(l.producto || 'taller') === 'repuestos' ? 'Estelita (talleres)' : 'Estelita Repuestos'} sin cambiar el código">Producto</button>
           ${(l.producto || 'taller') === 'repuestos' ? '<button class="btn btn-ghost btn-sm" data-a="plan">Plan</button>' : ''}
           ${l.estado === 'activo'
             ? '<button class="btn btn-ghost btn-sm" data-a="suspender">Suspender</button>'
@@ -561,6 +562,19 @@
       } else if (a === 'eliminar') {
         if (!confirm('Eliminar ' + cod + ' definitivamente? Para solo cortarle el acceso, mejor usá Suspender.')) return;
         await api('eliminar', { codigo: cod });
+      } else if (a === 'producto') {
+        const l = (DATA.licencias || []).find(x => x.codigo === codigo);
+        const actual = (l && l.producto) || 'taller';
+        const nuevo = actual === 'repuestos' ? 'taller' : 'repuestos';
+        if (!confirm('¿Pasar ' + codigo + ' (' + ((l && l.taller) || 'sin nombre') + ') a ' + PROD_LABELS[nuevo] + '?
+
+El código no cambia, así que no hay que tocar nada en la app del cliente.' + (nuevo === 'repuestos' ? '
+
+OJO: desde ahora valen los planes de Repuestos. Elegí en el paso siguiente el plan que tiene contratado: lo que ese plan no incluya se le apaga.' : ''))) return;
+        const cuerpo = { codigo, producto: nuevo };
+        if (nuevo === 'repuestos') { const plan = pedirPlan((l && l.plan) || 'full', 'repuestos'); if (plan === null) return; cuerpo.plan = plan; }
+        await api('editar', cuerpo);
+        await cargar();
       } else if (a === 'plan') {
         const l = (DATA && DATA.licencias || []).find(x => x.codigo === cod);
         if (l) abrirPlan(l);

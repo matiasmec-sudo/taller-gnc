@@ -144,6 +144,9 @@ export default async function handler(req, res) {
       if (typeof req.body.taller === 'string') l.taller = req.body.taller.trim();
       if (typeof req.body.notas === 'string') l.notas = req.body.notas.trim();
       if (req.body.topeDia !== undefined && Number(req.body.topeDia) >= 0) l.topeDia = Number(req.body.topeDia);
+      // Cambiar de producto sin cambiar el código (una repuestera que arrancó con un GNC-):
+      // el código es la llave en Repuestos, el CRM y el facturador, así que no se toca.
+      if (req.body.producto !== undefined && Object.keys(PRODUCTOS).includes(req.body.producto)) l.producto = req.body.producto;
       if (req.body.plan !== undefined) l.plan = PLANES.includes(req.body.plan) ? req.body.plan : '';
       if (req.body.medioPago !== undefined) l.medioPago = MEDIOS.includes(req.body.medioPago) ? req.body.medioPago : '';
       if (req.body.pagoHasta !== undefined) l.pagoHasta = fechaValida(req.body.pagoHasta) ? req.body.pagoHasta : null;
