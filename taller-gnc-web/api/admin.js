@@ -86,6 +86,8 @@ export default async function handler(req, res) {
           usoTotal: a.total || 0, usoHoy: a.hoy || 0, ultimoUso: a.ultimo || null,
           costoMesUSD: Number(c.costoUSD) || 0, readsMes: Number(c.reads) || 0,
           porOrigen: c.porOrigen || {},
+          suspendidaDesde: l.suspendidaDesde || null,
+          suspendidaMotivo: l.suspendidaMotivo || null,
         };
       });
       // Lo que llegó con un código que no es una licencia (el CRM manda sus
@@ -221,6 +223,14 @@ export default async function handler(req, res) {
       const l = lics.find(x => x.codigo === req.body.codigo);
       if (!l) return res.status(404).json({ error: 'No existe esa licencia.' });
       l.estado = req.body.estado === 'activo' ? 'activo' : 'suspendido';
+      // Se anota desde cuándo quedó suspendida (a mano cuenta igual que por Mercado Pago).
+      if (l.estado === 'suspendido') {
+        if (!l.suspendidaDesde) l.suspendidaDesde = new Date().toISOString().slice(0, 10);
+        l.suspendidaMotivo = l.suspendidaMotivo || 'a_mano';
+      } else {
+        delete l.suspendidaDesde;
+        delete l.suspendidaMotivo;
+      }
       await guardarLicencias(lics);
       return res.status(200).json({ ok: true });
     }
