@@ -284,6 +284,9 @@ export async function renovarPorPreapproval(preapprovalId) {
   l.pagoHasta = sumarMesISO(base);
   l.prueba = false;
   l.estado = 'activo';
+  // Volvió a pagar: deja de figurar suspendida.
+  delete l.suspendidaDesde;
+  delete l.suspendidaMotivo;
   await guardarLicencias(lics);
   return true;
 }
@@ -294,6 +297,10 @@ export async function suspenderPorPreapproval(preapprovalId) {
   const l = lics.find(x => x.mpPreapprovalId === preapprovalId);
   if (!l) return false;
   l.estado = 'suspendido';
+  // Desde cuándo: el panel muestra "suspendida hace N días". Si ya estaba
+  // suspendida, se respeta la fecha original.
+  if (!l.suspendidaDesde) l.suspendidaDesde = new Date().toISOString().slice(0, 10);
+  l.suspendidaMotivo = 'mercadopago';
   await guardarLicencias(lics);
   return true;
 }

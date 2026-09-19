@@ -104,7 +104,7 @@
       </tr></thead>
       <tbody id="filas"></tbody>
     </table>
-    <p class="muted" style="margin-top:14px;"><b>Producto:</b> <b>Estelita</b> es el taller (código GNC-), <b>Repuestos</b> es la casa de repuestos (código REP-). Las dos apps verifican la licencia acá; Repuestos además avisa su consumo de IA y respeta el tope diario. El correo de la fila es el titular: si está vacío, queda vinculado al primero que la cargue en su app; otro correo con el mismo código es rechazado. <b>Pago al día:</b> cuando te transfieren, tocá <b>“+1 mes”</b> — se renueva un mes y queda al día; si la fecha vence (+5 días de gracia), la app <b>se corta sola</b>. La columna <b>Estado</b> avisa: Al día / Vence en Xd / Vencida / En prueba / Suspendida. <b>Suspender</b> revoca al instante. (Cuando conectemos Mercado Pago, el “+1 mes” lo hace solo el cobro.) <b>Últ. actividad</b> = lecturas de IA recientes (identifica un código aunque no tenga nombre). <b>Costo IA (mes)</b> = lo que te factura Anthropic por ese código; el total está arriba.</p>
+    <p class="muted" style="margin-top:14px;"><b>Producto:</b> <b>Estelita</b> es el taller (código GNC-), <b>Repuestos</b> es la casa de repuestos (código REP-). Las dos apps verifican la licencia acá; Repuestos además avisa su consumo de IA y respeta el tope diario. El correo de la fila es el titular: si está vacío, queda vinculado al primero que la cargue en su app; otro correo con el mismo código es rechazado. <b>Pago al día:</b> cuando te transfieren, tocá <b>“+1 mes”</b> — se renueva un mes y queda al día; si la fecha vence (+5 días de gracia), la app <b>se corta sola</b>. La columna <b>Estado</b> avisa: Al día / Vence en Xd / Vencida / En prueba / Suspendida. <b>Suspender</b> revoca al instante. <b>Si el cobro de Mercado Pago falla</b> (tarjeta vencida, sin fondos), Mercado Pago reintenta unos días y después pausa la suscripción: acá la licencia queda <b>Suspendida</b> y se ve hace cuántos días. El cliente la reactiva desde su cuenta de Mercado Pago (Tu negocio → Suscripciones → la de Estelita → actualizar el medio de pago); cuando el cobro entra, la licencia vuelve sola a Al día. Si prefiere pagar por transferencia, cobrale y tocá “+1 mes”. (Cuando conectemos Mercado Pago, el “+1 mes” lo hace solo el cobro.) <b>Últ. actividad</b> = lecturas de IA recientes (identifica un código aunque no tenga nombre). <b>Costo IA (mes)</b> = lo que te factura Anthropic por ese código; el total está arriba.</p>
 
     <div id="sug-seccion">
       <div class="top">
@@ -258,14 +258,19 @@
   }
   function diasHasta(iso) { return Math.round((new Date(iso + 'T00:00:00') - new Date(HOY + 'T00:00:00')) / 86400000); }
   function estadoSub(l) {
-    if (l.estado !== 'activo') return { txt: 'Suspendida', cls: 'suspendido' };
+    if (l.estado !== 'activo') {
+      // Cuántos días lleva cortada: es lo que hay que saber para llamarlo.
+      const dias = l.suspendidaDesde ? -diasHasta(l.suspendidaDesde) : null;
+      const como = l.suspendidaMotivo === 'mercadopago' ? ' (pago)' : '';
+      return { txt: dias === null ? 'Suspendida' : (dias === 0 ? 'Suspendida hoy' + como : 'Suspendida hace ' + dias + 'd' + como), cls: 'suspendido' };
+    }
     if (l.prueba) {
       if (l.pagoHasta) { const d = diasHasta(l.pagoHasta); return d >= 0 ? { txt: 'Prueba (' + d + 'd)', cls: 'prueba' } : { txt: 'Prueba vencida', cls: 'warn' }; }
       return { txt: 'En prueba', cls: 'prueba' };
     }
     if (!l.pagoHasta) return { txt: 'Activa', cls: 'activo' };
     const d = diasHasta(l.pagoHasta);
-    if (d < -GRACIA) return { txt: 'Vencida', cls: 'suspendido' };
+    if (d < -GRACIA) return { txt: 'Vencida hace ' + (-d) + 'd', cls: 'suspendido' };
     if (d < 0) return { txt: 'Vencida (gracia)', cls: 'warn' };
     if (d <= 7) return { txt: d === 0 ? 'Vence hoy' : 'Vence en ' + d + 'd', cls: 'warn' };
     return { txt: 'Al día', cls: 'activo' };
