@@ -190,11 +190,12 @@
     </div>
   </section>
 
-  <section class="contacto" id="contacto">
+  <section class="contacto" id="contacto" style="gap:12px;">
     <div>
       <h2>¿Querés verlo funcionando?</h2>
       <p>Escribinos y te lo mostramos con los datos de tu negocio.</p>
     </div>
+    <a class="btn btn-s" href="/whatsapp?p=general" target="_blank" rel="noopener" style="background:#1FAF5A;color:#fff;border-color:transparent;display:inline-flex;align-items:center;gap:8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.1 14.1c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.5-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1.1-1.4-1.1-2.7s.7-1.9.9-2.2c.2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.4.2.5.7 1.8.8 1.9.1.1.1.3 0 .4-.1.2-.1.3-.3.5l-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.6-.1.2-.2.7-.8.9-1.1.2-.3.4-.2.6-.1.2.1 1.5.7 1.7.8.3.1.4.2.5.3 0 .2 0 .7-.2 1.3z"/></svg> WhatsApp</a>
     <a class="btn btn-s" href="mailto:estelitagnc@gmail.com?subject=Quiero%20conocer%20Estelita&amp;body=Hola!%20Quiero%20saber%20m%C3%A1s%20de%20Estelita.%0A%0ANombre%20del%20negocio%3A%0ARubro%20(GNC%20o%20repuestos)%3A%0ACiudad%3A%0ATel%C3%A9fono%3A">estelitagnc@gmail.com</a>
   </section>
 </main>
@@ -205,5 +206,14 @@
     <span><a href="/terminos.html">Términos</a> · <a href="/privacidad.html">Privacidad</a></span>
   </div>
 </footer>
+<style>
+  .wsp-flota { position: fixed; right: 18px; bottom: 18px; z-index: 60; display: inline-flex; align-items: center; gap: 8px;
+    background: #1FAF5A; color: #fff; text-decoration: none; font-weight: 700; font-size: 15px; padding: 12px 18px;
+    border-radius: 999px; box-shadow: 0 10px 26px rgba(31,175,90,.45); font-family: inherit; }
+  .wsp-flota:hover { background: #178F49; }
+  .wsp-flota:focus-visible { outline: 3px solid #0C2A66; outline-offset: 3px; }
+  @media (max-width: 520px) { .wsp-flota span { display: none; } .wsp-flota { padding: 14px; } }
+</style>
+<a class="wsp-flota" href="/whatsapp?p=general" target="_blank" rel="noopener" aria-label="Consultar por WhatsApp"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.1 14.1c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.5-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1.1-1.4-1.1-2.7s.7-1.9.9-2.2c.2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.4.2.5.7 1.8.8 1.9.1.1.1.3 0 .4-.1.2-.1.3-.3.5l-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.6-.1.2-.2.7-.8.9-1.1.2-.3.4-.2.6-.1.2.1 1.5.7 1.7.8.3.1.4.2.5.3 0 .2 0 .7-.2 1.3z"/></svg><span>Consultanos por WhatsApp</span></a>
 </body>
 </html>

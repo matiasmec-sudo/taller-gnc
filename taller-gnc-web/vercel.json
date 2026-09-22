@@ -2,7 +2,8 @@
   "rewrites": [
     { "source": "/planes", "destination": "/estelita.html" },
     { "source": "/links", "destination": "/links.html" },
-    { "source": "/productos", "destination": "/productos.html" }
+    { "source": "/productos", "destination": "/productos.html" },
+    { "source": "/whatsapp", "destination": "/api/whatsapp" }
   ],
   "headers": [
     {
