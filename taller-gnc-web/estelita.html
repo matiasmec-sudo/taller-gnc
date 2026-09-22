@@ -279,6 +279,7 @@
       <p class="baja">Estelita te saca la carga administrativa de encima: resolvés los trámites en minutos, atendés mejor y tenés todo el taller ordenado en un solo lugar.</p>
       <div class="hero-acciones">
         <a class="btn btn-blanco" href="suscribite.html">Empezá gratis 14 días</a>
+        <a class="btn btn-wsp btn-wsp-hero" href="/whatsapp?p=gnc" target="_blank" rel="noopener"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.1 14.1c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.5-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1.1-1.4-1.1-2.7s.7-1.9.9-2.2c.2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.4.2.5.7 1.8.8 1.9.1.1.1.3 0 .4-.1.2-.1.3-.3.5l-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.6-.1.2-.2.7-.8.9-1.1.2-.3.4-.2.6-.1.2.1 1.5.7 1.7.8.3.1.4.2.5.3 0 .2 0 .7-.2 1.3z"/></svg> Consultar por WhatsApp</a>
         <a class="btn btn-primario" style="border-color: rgba(255,255,255,.4);" href="demo.html" target="_blank" rel="noopener">▶ Ver cómo funciona</a>
       </div>
       <p class="hero-nota">14 días gratis. No se te cobra hasta el día 15. Cancelás cuando quieras.</p>
@@ -544,13 +545,23 @@
   // Número de WhatsApp para consultas comerciales (formato internacional, solo
   // dígitos, ej: 5492235550000). Si está vacío, el botón queda oculto y solo
   // se muestra el contacto por correo.
-  const WHATSAPP_CONTACTO = '5492234003384';
-  if (WHATSAPP_CONTACTO) {
-    const b = document.getElementById('btn-contacto-wsp');
-    b.href = 'https://wa.me/' + WHATSAPP_CONTACTO + '?text=' + encodeURIComponent('Hola! Quiero saber más de Estelita para mi taller de GNC.');
-    b.style.display = 'inline-flex';
-  }
+  // Las consultas se reparten entre los vendedores: el número lo elige /whatsapp
+  // (variable VENTAS_WHATSAPP en Vercel), así se cambia sin tocar esta página.
+  const b = document.getElementById('btn-contacto-wsp');
+  b.href = '/whatsapp?p=gnc';
+  b.target = '_blank';
+  b.rel = 'noopener';
+  b.style.display = 'inline-flex';
 </script>
 
+<style>
+  .wsp-flota { position: fixed; right: 18px; bottom: 18px; z-index: 60; display: inline-flex; align-items: center; gap: 8px;
+    background: #1FAF5A; color: #fff; text-decoration: none; font-weight: 700; font-size: 15px; padding: 12px 18px;
+    border-radius: 999px; box-shadow: 0 10px 26px rgba(31,175,90,.45); font-family: inherit; }
+  .wsp-flota:hover { background: #178F49; }
+  .wsp-flota:focus-visible { outline: 3px solid #0C2A66; outline-offset: 3px; }
+  @media (max-width: 520px) { .wsp-flota span { display: none; } .wsp-flota { padding: 14px; } }
+</style>
+<a class="wsp-flota" href="/whatsapp?p=gnc" target="_blank" rel="noopener" aria-label="Consultar por WhatsApp"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.1 14.1c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.5-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1.1-1.4-1.1-2.7s.7-1.9.9-2.2c.2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.4.2.5.7 1.8.8 1.9.1.1.1.3 0 .4-.1.2-.1.3-.3.5l-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.6-.1.2-.2.7-.8.9-1.1.2-.3.4-.2.6-.1.2.1 1.5.7 1.7.8.3.1.4.2.5.3 0 .2 0 .7-.2 1.3z"/></svg><span>Consultanos por WhatsApp</span></a>
 </body>
 </html>
