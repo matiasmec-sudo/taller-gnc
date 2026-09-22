@@ -559,6 +559,19 @@
 .caja-sugs button { display: flex; gap: 10px; align-items: baseline; text-align: left; font: inherit; font-size: 13.5px; border: 0; background: transparent; padding: 8px 9px; border-radius: 9px; cursor: pointer; color: #1A2333; }
 .caja-sugs button:hover, .caja-sugs button:focus-visible { background: #EEF2F9; outline: none; }
 .caja-sugs button span { color: #6B7688; overflow-wrap: anywhere; }
+#atencion-cartel { position: sticky; top: 0; z-index: 9000; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; background: #C0281A; color: #fff; box-shadow: 0 4px 18px rgba(120, 20, 10, 0.35); font-size: 14px; line-height: 1.35; animation: atencion-latido 1.6s ease-in-out infinite; }
+#atencion-cartel .atencion-ico { font-size: 24px; animation: atencion-campana 1.6s ease-in-out infinite; }
+#atencion-cartel .atencion-txt { flex: 1 1 220px; min-width: 0; display: grid; gap: 2px; }
+#atencion-cartel .atencion-txt b { font-size: 15.5px; letter-spacing: 0.2px; }
+#atencion-cartel .atencion-txt span { overflow-wrap: anywhere; opacity: 0.95; }
+#atencion-cartel .atencion-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+#atencion-cartel .atencion-abrir, #atencion-cartel .atencion-listo { font: inherit; font-weight: 700; font-size: 14px; border-radius: 10px; padding: 9px 14px; cursor: pointer; text-decoration: none; white-space: nowrap; }
+#atencion-cartel .atencion-abrir { background: #fff; color: #C0281A; border: 0; }
+#atencion-cartel .atencion-listo { background: transparent; color: #fff; border: 1.5px solid rgba(255, 255, 255, 0.75); }
+#atencion-cartel a:focus-visible, #atencion-cartel button:focus-visible { outline: 3px solid #FFD54A; outline-offset: 2px; }
+@keyframes atencion-latido { 0%, 100% { background: #C0281A; } 50% { background: #E03A26; } }
+@keyframes atencion-campana { 0%, 60%, 100% { transform: rotate(0); } 10%, 30% { transform: rotate(-16deg); } 20%, 40% { transform: rotate(16deg); } }
+@media (prefers-reduced-motion: reduce) { #atencion-cartel, #atencion-cartel .atencion-ico { animation: none; } }
 /* Los modales viven fuera de #gnc-app, así que sus botones necesitan
    estilos propios (si no, quedan con el look gris nativo del navegador). */
 .gnc-modal-box .btn {
@@ -1343,8 +1356,212 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
     aplicarTema();
   }
 
+
+  // ---- "Te necesitan": charlas que el asistente de WhatsApp pasó a una persona ----
+  // El CRM las avisa por /api/atencion. Acá se consultan cada 30 segundos y se
+  // muestran en un cartel rojo arriba de todo, con sonido y vibración, hasta
+  // que alguien las atiende. Si el taller activó los avisos, además le llega
+  // al celular aunque la app esté cerrada (push del service worker).
+  const ATENCION_VISTAS_KEY = 'gnc_atencion_vistas_v1';
+  const ATENCION_CADA_MS = 30 * 1000;
+  let atencionPendientes = [];
+  let atencionClave = null;
+  let atencionTimer = null;
+  let atencionTitulo = null;
+  let atencionAudio = null;
+
+  function atencionVistas() {
+    try { return JSON.parse(localStorage.getItem(ATENCION_VISTAS_KEY) || '[]'); } catch (e) { return []; }
+  }
+  function atencionMarcarVistas(ids) {
+    try { localStorage.setItem(ATENCION_VISTAS_KEY, JSON.stringify(ids.slice(-100))); } catch (e) { /* sin espacio */ }
+  }
+  async function atencionPedir(cuerpo) {
+    const license = localStorage.getItem(LICENSE_KEY);
+    if (!license) return null;
+    const r = await fetch('/api/atencion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ license, ...cuerpo }),
+    });
+    if (!r.ok) throw new Error('atencion ' + r.status);
+    return r.json();
+  }
+
+  // Tres pitidos: los navegadores sólo dejan sonar después de que tocaron la
+  // pantalla alguna vez, así que el audio se "despierta" con el primer toque.
+  function atencionSonar() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      atencionAudio = atencionAudio || new Ctx();
+      const ctx = atencionAudio;
+      if (ctx.state === 'suspended') ctx.resume();
+      [0, 0.35, 0.7].forEach((t, i) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'sine';
+        o.frequency.value = i === 2 ? 1175 : 880;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.28);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.3);
+      });
+    } catch (e) { /* sin audio */ }
+    try { if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 800]); } catch (e) { /* sin vibración */ }
+  }
+  document.addEventListener('pointerdown', () => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx && !atencionAudio) atencionAudio = new Ctx();
+      if (atencionAudio && atencionAudio.state === 'suspended') atencionAudio.resume();
+    } catch (e) { /* nada */ }
+  }, { passive: true });
+
+  // El título de la pestaña titila mientras haya algo sin atender: en la
+  // computadora se ve aunque estés en otra pestaña.
+  function atencionTitilar(activo) {
+    if (activo && !atencionTitulo) {
+      const original = document.title;
+      let on = false;
+      atencionTitulo = { original, timer: setInterval(() => { on = !on; document.title = on ? '🔔 Te necesitan' : original; }, 1200) };
+    } else if (!activo && atencionTitulo) {
+      clearInterval(atencionTitulo.timer);
+      document.title = atencionTitulo.original;
+      atencionTitulo = null;
+    }
+  }
+
+  function atencionQuien(p) {
+    return p.contacto || (p.telefono ? '+' + p.telefono : 'Un cliente');
+  }
+  const ATENCION_MOTIVOS = {
+    cliente: 'pidió hablar con una persona.',
+    modelo: 'preguntó algo que el asistente no supo contestar.',
+    error: 'está esperando que alguien lo atienda.',
+    ventana: 'escribió fuera de la ventana de WhatsApp: sólo puede contestarle una persona.',
+  };
+
+  function atencionPintar() {
+    let el = document.getElementById('atencion-cartel');
+    if (!atencionPendientes.length) {
+      if (el) el.remove();
+      document.body.classList.remove('con-atencion');
+      atencionTitilar(false);
+      return;
+    }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'atencion-cartel';
+      el.setAttribute('role', 'alert');
+      document.body.prepend(el);
+      el.addEventListener('click', atencionClick);
+    }
+    document.body.classList.add('con-atencion');
+    const p = atencionPendientes[0];
+    const mas = atencionPendientes.length - 1;
+    const hace = Math.max(0, Math.round((Date.now() - new Date(p.creadoEn).getTime()) / 60000));
+    el.innerHTML = `
+      <div class="atencion-ico" aria-hidden="true">🔔</div>
+      <div class="atencion-txt">
+        <b>Te necesitan en WhatsApp${mas > 0 ? ` · ${atencionPendientes.length} charlas` : ''}</b>
+        <span>${escapeHtml(atencionQuien(p))} ${ATENCION_MOTIVOS[p.motivo] || ATENCION_MOTIVOS.cliente} ${hace < 1 ? 'Recién.' : `Hace ${hace} min.`}</span>
+      </div>
+      <div class="atencion-btns">
+        <a class="atencion-abrir" href="https://crm.estelita.net.ar/inbox?c=${encodeURIComponent(p.conversationId)}" target="_blank" rel="noopener" data-atencion-abrir="${escapeHtml(p.conversationId)}">Abrir la charla</a>
+        <button type="button" class="atencion-listo" data-atencion-listo="${escapeHtml(p.conversationId)}">Ya lo atendí</button>
+      </div>`;
+    atencionTitilar(true);
+  }
+
+  async function atencionClick(e) {
+    const listo = e.target.closest('[data-atencion-listo]');
+    if (!listo) return;
+    const id = listo.getAttribute('data-atencion-listo');
+    atencionPendientes = atencionPendientes.filter(p => p.conversationId !== id);
+    atencionPintar();
+    try { await atencionPedir({ accion: 'atendida', conversationId: id }); } catch (err) { /* se reintenta sola en la próxima consulta */ }
+  }
+
+  async function atencionConsultar() {
+    if (!localStorage.getItem(LICENSE_KEY) || !navigator.onLine) return;
+    let r;
+    try { r = await atencionPedir({ accion: 'listar' }); } catch (e) { return; }
+    if (!r || !Array.isArray(r.pendientes)) return;
+    atencionClave = r.clave || null;
+    atencionPendientes = r.pendientes;
+    const vistas = atencionVistas();
+    const nuevas = atencionPendientes.filter(p => !vistas.includes(p.conversationId + '|' + p.creadoEn));
+    atencionPintar();
+    if (nuevas.length) {
+      atencionMarcarVistas(vistas.concat(nuevas.map(p => p.conversationId + '|' + p.creadoEn)));
+      atencionSonar();
+      // Con la app abierta pero en otra pestaña o minimizada, también el aviso
+      // del sistema (si ya dieron permiso).
+      if (document.hidden && 'Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker) {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          const p = nuevas[0];
+          reg.showNotification('Te necesitan en WhatsApp', {
+            body: `${atencionQuien(p)} ${ATENCION_MOTIVOS[p.motivo] || ATENCION_MOTIVOS.cliente}`,
+            icon: './icon-192.png', tag: 'atencion-' + p.conversationId, renotify: true, requireInteraction: true,
+            data: { url: `https://crm.estelita.net.ar/inbox?c=${encodeURIComponent(p.conversationId)}` },
+          });
+        } catch (e) { /* nada */ }
+      }
+    }
+  }
+
+  function atencionIniciar() {
+    if (atencionTimer) return;
+    atencionConsultar();
+    atencionTimer = setInterval(() => { if (!document.hidden) atencionConsultar(); }, ATENCION_CADA_MS);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) atencionConsultar(); });
+    window.addEventListener('focus', atencionConsultar);
+    window.addEventListener('online', atencionConsultar);
+  }
+
+  // ---- Activar los avisos en este aparato ----
+  function atencionB64(base64) {
+    const pad = '='.repeat((4 - (base64.length % 4)) % 4);
+    const raw = atob((base64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+    return Uint8Array.from([...raw].map(ch => ch.charCodeAt(0)));
+  }
+  async function atencionActivarAvisos() {
+    const esIphone = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const instalada = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      await customAlert(esIphone && !instalada
+        ? 'En iPhone los avisos sólo andan con Estelita instalada: tocá Compartir → "Agregar a inicio", abrila desde el ícono y volvé a tocar este botón.'
+        : 'Este navegador no permite avisos. Probá con Chrome.', 'Avisos de WhatsApp');
+      return;
+    }
+    try {
+      if (!atencionClave) { const r = await atencionPedir({ accion: 'listar' }); atencionClave = r && r.clave; }
+      if (!atencionClave) { await customAlert('Los avisos todavía no están configurados en el servidor. Avisale a soporte.', 'Avisos de WhatsApp'); return; }
+      const permiso = await Notification.requestPermission();
+      if (permiso !== 'granted') {
+        await customAlert('No se dio permiso para los avisos. Para activarlos: tocá el candado al lado de la dirección → Permisos → Notificaciones → Permitir, y volvé a tocar este botón.', 'Avisos de WhatsApp');
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: atencionB64(atencionClave) });
+      await atencionPedir({ accion: 'suscribir', sub: sub.toJSON() });
+      const r = await atencionPedir({ accion: 'probar' });
+      await customAlert(`Listo: este aparato va a recibir un aviso cada vez que el asistente de WhatsApp le pase una charla a una persona, aunque Estelita esté cerrada.${r && r.enviados ? ' Te acabamos de mandar uno de prueba.' : ''} Activalo en cada celular y computadora donde quieras enterarte.`, 'Avisos activados');
+    } catch (e) {
+      await customAlert('No se pudieron activar los avisos en este aparato. Revisá la conexión y probá de nuevo.', 'Avisos de WhatsApp');
+    }
+  }
+  document.addEventListener('click', e => {
+    if (e.target.closest('#btn-avisos-atencion')) atencionActivarAvisos();
+  });
+
   function boot() {
     aplicarTema();
+    atencionIniciar();
     cargarCodigosPostales(); // en segundo plano; completa el CPA por localidad
     if (!localStorage.getItem(LICENSE_KEY)) {
       showActivationScreen();
@@ -10475,6 +10692,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-estadisticas">${menuIco('chart')}Estadísticas</button>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-registro">${menuIco('clipboard')}Registro de trámites por PEC</button>
                 <a class="btn btn-ghost btn-sm" id="btn-crm" href="https://crm.estelita.net.ar/inbox" target="_blank" rel="noopener">${menuIco('chat')}Asistente de WhatsApp ↗</a>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-avisos-atencion">${menuIco('chat')}Avisos de WhatsApp en este aparato</button>
                 <div class="menu-sep"></div>
                 <div class="menu-group-label">Datos</div>
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-import">${menuIco('download')}Importar clientes (Excel / cuaderno)</button>

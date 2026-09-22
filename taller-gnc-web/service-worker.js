@@ -81,3 +81,27 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+// "Te necesitan": el CRM avisa (vía /api/atencion) que una charla de WhatsApp
+// necesita a una persona. Tiene que notarse: queda en pantalla hasta que la
+// tocan (requireInteraction) y vibra fuerte.
+self.addEventListener('push', (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) { d = { body: event.data && event.data.text() }; }
+  event.waitUntil(self.registration.showNotification(d.title || 'Te necesitan en WhatsApp', {
+    body: d.body || 'Una charla necesita que la atienda una persona.',
+    icon: './icon-192.png',
+    badge: './icon-192.png',
+    tag: d.tag || 'atencion',
+    renotify: true,
+    requireInteraction: true,
+    vibrate: [400, 150, 400, 150, 800],
+    data: { url: d.url || 'https://crm.estelita.net.ar/inbox' },
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || 'https://crm.estelita.net.ar/inbox';
+  event.waitUntil(self.clients.openWindow(url));
+});
