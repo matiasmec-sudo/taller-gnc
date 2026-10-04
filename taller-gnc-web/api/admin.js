@@ -5,28 +5,55 @@
 // que el panel muestre también los que ya estaban en uso.
 import crypto from 'crypto';
 import { enviarCorreo, armarCorreoLicencia, correoConfigurado, casillaAvisos } from './_correo.js';
-import { leerLicenciasEstricto, guardarLicencias, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, PRODUCTOS, productoDe, sumarMesISO, leerSugerencias, guardarSugerencias, leerCredito, guardarCredito, calcularRitmo, derechosDe, FUNCIONES_REPUESTOS, PLANES_REPUESTOS } from './_licencias.js';
+import { leerLicenciasEstricto, guardarLicencia, guardarVariasLicencias, borrarLicencia, normCodigo, codigosEnv, leerActividad, leerConsumoMes, nuevoCodigo, PRODUCTOS, productoDe, sumarMesISO, sumarDiasISO, leerSugerencias, guardarSugerencias, leerCredito, guardarCredito, calcularRitmo, derechosDe, FUNCIONES_REPUESTOS, PLANES_REPUESTOS, leerSignup, activarLicenciaMP, yaSeSembro, marcarSembrado } from './_licencias.js';
+import { chequearIntentos, registrarFallo, registrarAcierto, esperar } from './_ratelimit.js';
 
-
+// La clave del panel.
+//
+// Dos cuidados que antes no estaban:
+// - Longitud mínima de 16 (igual que SERVIDOR_SECRET y MONITOR_SECRET). Una
+//   clave de cuatro letras con un retardo de 400 ms se adivina en una tarde.
+// - Se comparan los HASH, no las claves. timingSafeEqual exige que los dos
+//   buffers midan lo mismo, así que el `a.length !== b.length` de antes
+//   contestaba distinto según el largo: probando largos se averiguaba cuántos
+//   caracteres tiene la clave antes de empezar a adivinarla. Con sha256 los
+//   dos lados miden siempre 32 bytes y no se filtra nada.
 function tokenOk(req) {
   const provided = String((req.headers['x-admin-token'] || (req.body && req.body.token) || ''));
   const expected = String(process.env.ADMIN_TOKEN || '');
-  if (!expected || !provided) return false;
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
+  if (!expected || expected.length < 16 || !provided) return false;
+  const a = crypto.createHash('sha256').update(provided).digest();
+  const b = crypto.createHash('sha256').update(expected).digest();
   return crypto.timingSafeEqual(a, b);
 }
 
 const PLANES = ['basico', 'profesional', 'full'];
 const MEDIOS = ['mp', 'transferencia'];
 function fechaValida(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
+// Busca una licencia en la lista normalizando los dos lados: el panel manda el
+// código tal como lo tiene en pantalla y los códigos son siempre en mayúscula.
+function buscar(lics, codigo) {
+  const cod = normCodigo(codigo);
+  return cod ? lics.find(x => normCodigo(x.codigo) === cod) : undefined;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido' });
-  // Retardo fijo en cada intento: frena el probado por fuerza bruta de la clave.
-  await new Promise(r => setTimeout(r, 400));
-  if (!tokenOk(req)) return res.status(401).json({ error: 'Contraseña incorrecta.' });
+
+  // Límite de intentos de verdad. El retardo fijo de 400 ms que había acá no
+  // frenaba nada: en serverless las invocaciones corren EN PARALELO, así que
+  // mil intentos a la vez se comen 400 ms una sola vez. El conteo es por IP y
+  // vive en el storage (ver _ratelimit.js), compartido entre instancias.
+  const limite = await chequearIntentos(req, { max: 5, ventanaMs: 10 * 60 * 1000, bloqueoMs: 15 * 60 * 1000 });
+  if (!limite.ok) {
+    res.setHeader('Retry-After', String(limite.segundos));
+    return res.status(429).json({ error: `Demasiados intentos con la contraseña equivocada. Esperá ${Math.ceil(limite.segundos / 60)} minuto(s) y probá de nuevo.` });
+  }
+  if (!tokenOk(req)) {
+    await esperar(await registrarFallo(req, { reiniciar: limite.reiniciar, datos: limite.datos }));
+    return res.status(401).json({ error: 'Contraseña incorrecta (o falta ADMIN_TOKEN en Vercel, con 16 caracteres o más).' });
+  }
+  await registrarAcierto(req);
   if (!process.env.BLOB_READ_WRITE_TOKEN) return res.status(500).json({ error: 'Falta BLOB_READ_WRITE_TOKEN en Vercel.' });
 
   try {
@@ -44,14 +71,18 @@ export default async function handler(req, res) {
     }
 
     // Seed: si el store está REALMENTE vacío, traer los códigos que ya estaban
-    // en el env. Llegar acá ahora garantiza que la lectura funcionó.
-    if (!lics.length) {
+    // en el env. Llegar acá ahora garantiza que la lectura funcionó. Se hace
+    // UNA sola vez en la vida del store (ver yaSeSembro): la lista sale de un
+    // list(), que puede verse vacía por un segundo justo después de sembrar, y
+    // sembrar de nuevo pisaría los cambios hechos en el medio.
+    if (!lics.length && !(await yaSeSembro())) {
       const hoy = new Date().toISOString().slice(0, 10);
-      const env = codigosEnv();
+      const env = codigosEnv().map(normCodigo).filter(Boolean);
       if (env.length) {
         lics = env.map(c => ({ codigo: c, taller: '', estado: 'activo', alta: hoy, topeDia: 50, notas: '' }));
-        await guardarLicencias(lics);
+        await guardarVariasLicencias(lics);
       }
+      await marcarSembrado(lics.length);
     }
 
     const { accion } = req.body || {};
@@ -75,8 +106,10 @@ export default async function handler(req, res) {
       let costoTotalMes = 0;
       let readsTotalMes = 0;
       const conAct = lics.map(l => {
-        const a = act[l.codigo] || {};
-        const c = consumo[l.codigo] || {};
+        // Los contadores se guardan con el código normalizado (mayúsculas).
+        const cod = normCodigo(l.codigo);
+        const a = act[cod] || {};
+        const c = consumo[cod] || {};
         costoTotalMes += Number(c.costoUSD) || 0;
         readsTotalMes += Number(c.reads) || 0;
         return {
@@ -93,7 +126,7 @@ export default async function handler(req, res) {
       // Lo que llegó con un código que no es una licencia (el CRM manda sus
       // pruebas y el Laboratorio como CRM-SIN-LICENCIA): se suma al total y se
       // muestra aparte, para que el gasto real no quede escondido.
-      const codigosLic = new Set(lics.map(l => l.codigo));
+      const codigosLic = new Set(lics.map(l => normCodigo(l.codigo)));
       const consumoSinLicencia = { costoUSD: 0, reads: 0, porOrigen: {} };
       for (const [cod, c] of Object.entries(consumo || {})) {
         if (codigosLic.has(cod)) continue;
@@ -128,7 +161,9 @@ export default async function handler(req, res) {
       const topeDia = Number(req.body.topeDia) > 0 ? Number(req.body.topeDia) : 50;
       const producto = Object.keys(PRODUCTOS).includes(req.body.producto) ? req.body.producto : 'taller';
       const codigo = nuevoCodigo(lics.map(l => l.codigo).concat(codigosEnv()), producto);
-      lics.push({
+      // Se escribe SÓLO el archivo de la licencia nueva: nada de reescribir la
+      // lista completa (eso era lo que hacía desaparecer altas de Mercado Pago).
+      await guardarLicencia({
         codigo, taller, producto, estado: 'activo', alta: new Date().toISOString().slice(0, 10),
         topeDia, notas: '',
         // Repuestos siempre arranca con un plan (Básica si no se eligió): los derechos salen de ahí.
@@ -138,12 +173,11 @@ export default async function handler(req, res) {
         email: String(req.body.email || '').trim(),
         origen: 'manual',
       });
-      await guardarLicencias(lics);
       return res.status(200).json({ ok: true, codigo });
     }
 
     if (accion === 'editar') {
-      const l = lics.find(x => x.codigo === req.body.codigo);
+      const l = buscar(lics, req.body.codigo);
       if (!l) return res.status(404).json({ error: 'No existe esa licencia.' });
       if (typeof req.body.taller === 'string') l.taller = req.body.taller.trim();
       if (typeof req.body.notas === 'string') l.notas = req.body.notas.trim();
@@ -173,7 +207,7 @@ export default async function handler(req, res) {
         }
         l.topes = t;
       }
-      await guardarLicencias(lics);
+      await guardarLicencia(l);
       return res.status(200).json({ ok: true, derechos: derechosDe(l) });
     }
 
@@ -183,7 +217,7 @@ export default async function handler(req, res) {
     // Manda (o vuelve a mandar) el correo con la licencia al titular. Sirve también
     // para las licencias creadas a mano: se carga el email y se toca "Correo".
     if (accion === 'enviar-licencia') {
-      const l = lics.find(x => x.codigo === req.body.codigo);
+      const l = buscar(lics, req.body.codigo);
       if (!l) return res.status(404).json({ error: 'No existe esa licencia.' });
       if (!l.email) return res.status(400).json({ error: 'Esa licencia no tiene email cargado. Usá Editar para ponerle uno.' });
       if (!correoConfigurado()) return res.status(400).json({ error: 'El correo no está configurado: faltan GMAIL_USER y GMAIL_APP_PASSWORD en Vercel.' });
@@ -195,7 +229,7 @@ export default async function handler(req, res) {
       if (!r.ok) return res.status(502).json({ error: 'Gmail no aceptó el envío: ' + (r.detalle || r.motivo) });
       const hoy = new Date().toISOString().slice(0, 10).split('-').reverse().join('/');
       l.notas = [l.notas, `Correo con la licencia enviado el ${hoy}`].filter(Boolean).join(' · ').slice(0, 400);
-      await guardarLicencias(lics);
+      await guardarLicencia(l);
       return res.status(200).json({ ok: true, para: l.email });
     }
 
@@ -208,19 +242,19 @@ export default async function handler(req, res) {
     }
 
     if (accion === 'registrar-pago') {
-      const l = lics.find(x => x.codigo === req.body.codigo);
+      const l = buscar(lics, req.body.codigo);
       if (!l) return res.status(404).json({ error: 'No existe esa licencia.' });
       const hoy = new Date().toISOString().slice(0, 10);
       const base = (l.pagoHasta && l.pagoHasta > hoy) ? l.pagoHasta : hoy;
       l.pagoHasta = sumarMesISO(base);
       l.estado = 'activo';
       l.prueba = false;
-      await guardarLicencias(lics);
+      await guardarLicencia(l);
       return res.status(200).json({ ok: true, pagoHasta: l.pagoHasta });
     }
 
     if (accion === 'estado') {
-      const l = lics.find(x => x.codigo === req.body.codigo);
+      const l = buscar(lics, req.body.codigo);
       if (!l) return res.status(404).json({ error: 'No existe esa licencia.' });
       l.estado = req.body.estado === 'activo' ? 'activo' : 'suspendido';
       // Se anota desde cuándo quedó suspendida (a mano cuenta igual que por Mercado Pago).
@@ -231,16 +265,84 @@ export default async function handler(req, res) {
         delete l.suspendidaDesde;
         delete l.suspendidaMotivo;
       }
-      await guardarLicencias(lics);
+      await guardarLicencia(l);
       return res.status(200).json({ ok: true });
     }
 
     if (accion === 'eliminar') {
-      const antes = lics.length;
-      lics = lics.filter(x => x.codigo !== req.body.codigo);
-      if (lics.length === antes) return res.status(404).json({ error: 'No existe esa licencia.' });
-      await guardarLicencias(lics);
+      const l = buscar(lics, req.body.codigo);
+      if (!l) return res.status(404).json({ error: 'No existe esa licencia.' });
+      // Se borra SU archivo. Antes se reescribía la lista entera sin él, así
+      // que un alta hecha en el medio se iba junto con la licencia borrada.
+      await borrarLicencia(l.codigo);
       return res.status(200).json({ ok: true });
+    }
+
+    // --- Reconciliación con Mercado Pago ---
+    // Para cuando el aviso del alta se pierde: el cliente pagó, la suscripción
+    // quedó autorizada en Mercado Pago y acá nunca se creó la licencia (la
+    // página de gracias poleaba para siempre). Esto busca las suscripciones
+    // authorized de Mercado Pago que no tienen licencia nuestra y las crea.
+    //
+    // Es un BOTÓN del panel y no un cron de Vercel a propósito: los crons
+    // dependen del plan, y esto se corre cuando hace falta (un cliente que
+    // escribe diciendo que pagó y no le llegó el código).
+    if (accion === 'reconciliar') {
+      const mpToken = process.env.MP_ACCESS_TOKEN;
+      if (!mpToken) return res.status(400).json({ error: 'Falta MP_ACCESS_TOKEN en Vercel.' });
+      const conocidos = new Set(lics.map(l => String(l.mpPreapprovalId || '')).filter(Boolean));
+      let encontradas = [];
+      try {
+        const r = await fetch('https://api.mercadopago.com/preapproval/search?status=authorized&limit=100&offset=0', {
+          headers: { Authorization: `Bearer ${mpToken}` },
+          signal: AbortSignal.timeout(20000),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) return res.status(502).json({ error: (data && data.message) || 'Mercado Pago no contestó la búsqueda de suscripciones.' });
+        encontradas = Array.isArray(data.results) ? data.results : [];
+      } catch (e) {
+        return res.status(502).json({ error: 'No se pudo consultar Mercado Pago: ' + (e.message || 'error de red') });
+      }
+      const creadas = [], yaEstaban = [], fallaron = [];
+      for (const pre of encontradas) {
+        if (!pre || !pre.id) continue;
+        if (conocidos.has(String(pre.id))) { yaEstaban.push(String(pre.id)); continue; }
+        const extRef = pre.external_reference || '';
+        let s = null;
+        try { s = await leerSignup(extRef); } catch (e) { s = null; }
+        s = s || {};
+        try {
+          // 14 días de prueba desde HOY, igual que el webhook. Si la suscripción
+          // es vieja la prueba queda corrida, pero es mejor que quedar sin código:
+          // el cobro real de Mercado Pago lo arregla al renovar.
+          const r = await activarLicenciaMP({
+            token: extRef, preapprovalId: pre.id, email: s.email || pre.payer_email, plan: s.plan || '',
+            pagoHasta: sumarDiasISO(new Date().toISOString().slice(0, 10), 14), prueba: true,
+            producto: s.producto || 'taller', nombre: s.taller || '',
+          });
+          if (r && r.nueva) {
+            creadas.push({ codigo: r.codigo, preapproval: String(pre.id), email: r.licencia.email || '', plan: r.licencia.plan || '' });
+            // Y el correo con el código, que es lo que el cliente está esperando.
+            // Best-effort: si el correo falla, la licencia igual quedó creada y
+            // se la podés mandar a mano con el botón "Correo".
+            if (r.licencia.email && correoConfigurado()) {
+              try {
+                const prod = productoDe(r.licencia);
+                const planRep = prod === 'repuestos' ? PLANES_REPUESTOS[r.licencia.plan] : null;
+                const planNombre = planRep ? planRep.nombre : ({ basico: 'Básico', profesional: 'Profesional', full: 'Full' }[r.licencia.plan] || '');
+                const c = armarCorreoLicencia(r.licencia, { producto: prod, planNombre });
+                await enviarCorreo({ para: r.licencia.email, asunto: c.asunto, html: c.html, texto: c.texto });
+              } catch (e) { /* best-effort */ }
+            }
+          } else yaEstaban.push(String(pre.id));
+        } catch (e) {
+          fallaron.push({ preapproval: String(pre.id), error: e.message || 'error' });
+        }
+      }
+      return res.status(200).json({
+        ok: true, revisadas: encontradas.length,
+        creadas, yaEstaban: yaEstaban.length, fallaron,
+      });
     }
 
     // --- Sugerencias enviadas por los talleres ---

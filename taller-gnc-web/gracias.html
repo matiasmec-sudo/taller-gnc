@@ -53,12 +53,26 @@
       </ol>
       <a class="btn" href="https://estelita.net.ar" target="_blank" rel="noopener">Abrir Estelita</a>`;
   }
+  // Se llega acá cuando el poleo se dio por vencido (o no hay token): el pago
+  // está hecho pero el aviso de Mercado Pago todavía no llegó. Por qué hay
+  // tope: antes esta página consultaba cada 3 segundos PARA SIEMPRE, así que
+  // una pestaña olvidada se quedaba golpeando el servidor días enteros sin que
+  // el cliente supiera que tenía que escribirnos.
   function mostrarEspera() {
+    // El token sale de la URL, así que se muestra SÓLO si tiene la forma exacta
+    // que genera /api/mp (S + hexa). Cualquier otra cosa no se imprime: pegarle
+    // HTML a innerHTML desde la query string es un XSS servido en bandeja.
+    const ref = /^S[0-9a-f]{6,40}$/.test(token) ? `<p style="font-size:13px">Si nos escribís, pasanos este número de referencia:<br><b style="font-family:Consolas,monospace">${token}</b></p>` : '';
     card.innerHTML = `
       <h1>Tu suscripción se está confirmando</h1>
-      <p>Mercado Pago está terminando de confirmar el pago. Puede tardar un ratito.</p>
-      <p>Tu código va a aparecer acá y te lo mandamos por email. Si no aparece en unos minutos, escribinos por WhatsApp y te lo pasamos al toque.</p>
-      <a class="btn" href="/suscribite.html">Volver</a>`;
+      <p><b>Tu pago está hecho</b> — tranquilo, no hace falta pagar de nuevo. Lo que falta es que Mercado Pago nos confirme la suscripción, y a veces tarda.</p>
+      <ol class="pasos">
+        <li>Revisá tu email (mirá también la carpeta de Spam): el código te llega ahí.</li>
+        <li>Si en un rato no llegó, escribinos por WhatsApp y te lo pasamos al toque.</li>
+      </ol>
+      ${ref}
+      <a class="btn" href="/whatsapp?p=general" target="_blank" rel="noopener">Escribinos por WhatsApp</a>
+      <p><a href="/suscribite.html">Volver</a></p>`;
   }
 
   async function chequear() {

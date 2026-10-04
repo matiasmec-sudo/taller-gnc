@@ -17,8 +17,10 @@
 <body>
 <script>
 // window.storage: misma interfaz (get/set/delete/list) que usa toda la app.
-// Todo va a localStorage, MENOS lo que puede crecer: las fotos ("fotos:<id>")
-// y la lista de clientes ("gnc_clientes_v2"). Eso se guarda en IndexedDB: una
+// Todo va a localStorage, MENOS lo que puede crecer: las fotos ("fotos:<id>"),
+// la lista de clientes ("gnc_clientes_v2"), el borrador del asistente (que se
+// lleva las fotos adentro) y la configuracion del taller (que se lleva el
+// logo). Eso se guarda en IndexedDB: una
 // base de datos del navegador con muchísima más capacidad que localStorage
 // (que tiene ~5 MB y se llena) y que el navegador no borra solo (con
 // almacenamiento persistente). Todo sigue dentro del dispositivo del taller.
@@ -48,7 +50,16 @@
   // cae a localStorage si el dato todavía no pasó, y al guardar se escribe en
   // IndexedDB y se borra la copia vieja.
   const CLIENTES_KEY = 'gnc_clientes_v2';
-  const vaEnIdb = (key) => typeof key === 'string' && (key.indexOf('fotos:') === 0 || key === CLIENTES_KEY);
+  // El borrador del asistente lleva las DOS fotos del tramite en base64: entre
+  // las dos pasan solas los ~5 MB de localStorage (que cuenta 2 bytes por
+  // caracter), el setItem tiraba QuotaExceededError y el borrador NO se
+  // guardaba — justo en el caso que venia a cubrir: salir a ENARGAS, que el
+  // share target relance la app, y volver con todo cargado.
+  const WIZARD_KEY = 'gnc_wizard_snapshot_v1';
+  // La configuracion del taller lleva el LOGO en base64: mismo problema, y
+  // encima arrastraba con ella los precios, los PECs y la numeracion.
+  const CONFIG_KEY = 'gnc_taller_config_v1';
+  const vaEnIdb = (key) => typeof key === 'string' && (key.indexOf('fotos:') === 0 || key === CLIENTES_KEY || key === WIZARD_KEY || key === CONFIG_KEY);
 
   window.storage = {
     async get(key) {
@@ -1028,8 +1039,28 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
   const root = document.getElementById('gnc-app');
   const WARN_DAYS = 5;
   const STORAGE_KEY = 'gnc_clientes_v2';
-  // Ya se avisó que el guardado falló: no repetir el cartel en cada autoguardado.
-  let avisoGuardadoFallido = false;
+  // Un guardado que falla es lo peor que le puede pasar al taller: sigue
+  // cargando trámites convencido de que quedan guardados. Antes había solo un
+  // flag de "ya avisé" + un customAlert, que se cerraba y no dejaba NINGÚN
+  // rastro en pantalla. Ahora además alimenta un banner fijo
+  // (bannerGuardadoFallido), que no se va hasta que el guardado salga bien.
+  let guardadoFallido = null;         // { que: 'la lista de clientes', ts: 1234567 }
+  let avisoGuardadoFallido = false;   // el cuadro fuerte: una sola vez por sesión
+  function avisarGuardadoFallido(que) {
+    guardadoFallido = { que, ts: Date.now() };
+    if (!avisoGuardadoFallido) {
+      avisoGuardadoFallido = true;
+      customAlert('No se pudo guardar ' + que + ' en este dispositivo — puede estar sin espacio. Guardá una copia en la nube ahora mismo (menú → Copia de seguridad en la nube) y liberá espacio antes de seguir cargando.', 'Atención: no se pudo guardar');
+    }
+    // Redibujar para que aparezca el banner, pero NO en medio del asistente:
+    // ahí el panel ocupa toda la pantalla (el banner no se muestra igual) y un
+    // render de más en plena carga no aporta nada.
+    if (ready && !showForm && !editingId) render();
+  }
+  // El guardado volvió a salir bien: se baja el banner de ESO que había fallado.
+  function guardadoOk(que) {
+    if (guardadoFallido && guardadoFallido.que === que) guardadoFallido = null;
+  }
   const TALLER_KEY = 'gnc_taller_nombre_v1';
   const LICENSE_KEY = 'gnc_license_code';
   const TALLER_CONFIG_KEY = 'gnc_taller_config_v1';
@@ -1257,7 +1288,7 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
           <h3 class="activation-sub">Activar</h3>
           <p class="activation-hint">Ingresá el código de licencia de tu taller.</p>
           <form id="activation-form">
-            <input type="text" id="activation-input" placeholder="Ej: GNC-0001" autocomplete="off">
+            <input type="text" id="activation-input" placeholder="Ej: GNC-K7PQ" autocomplete="off" autocapitalize="characters" spellcheck="false">
             <label class="activation-terminos">
               <input type="checkbox" id="activation-terminos-check">
               <span>Leí y acepto los <a href="terminos.html" target="_blank" rel="noopener">Términos y Condiciones</a> y la <a href="privacidad.html" target="_blank" rel="noopener">Política de Privacidad</a>.</span>
@@ -1290,7 +1321,12 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
       const input = root.querySelector('#activation-input');
       const errorEl = root.querySelector('#activation-error');
       const botonActivar = form.querySelector('button[type=submit]');
-      const code = input.value.trim();
+      // Los códigos son siempre en MAYÚSCULAS y su alfabeto no tiene 0 ni 1
+      // (se confunden con la O y la I). El teclado del celular arranca en
+      // minúscula, así que se normaliza acá en vez de rechazar un código bueno
+      // mal tipeado; se escribe de vuelta en el campo para que se vea.
+      const code = input.value.trim().toUpperCase();
+      if (code !== input.value) input.value = code;
       if (!code) return;
       if (!root.querySelector('#activation-terminos-check').checked) {
         errorEl.textContent = 'Para activar, marcá la casilla de aceptación de los Términos y la Política de Privacidad.';
@@ -2001,7 +2037,10 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     const ahora = new Date();
     if (ahora.getDay() === 0) return; // domingo no
     if (ahora.getHours() < 15) return;
-    const hoyISO = ahora.toISOString().slice(0, 10);
+    // Hora LOCAL: con toISOString (UTC) un aviso de las 22:00 guardaba la
+    // fecha de MAÑANA como "ya avisé hoy", y el aviso del día siguiente
+    // no salía nunca.
+    const hoyISO = fechaLocalISO(ahora);
     if (localStorage.getItem(AVISO_PENDIENTES_KEY) === hoyISO) return;
     const cantidad = pendientesItems().length;
     const turnosAviso = turnosParaAvisar().length;
@@ -2493,17 +2532,17 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     } else {
       tomarSnapshotClientes();
     }
-    try { await window.storage.set(STORAGE_KEY, JSON.stringify(clientes), false); }
+    try { await window.storage.set(STORAGE_KEY, JSON.stringify(clientes), false); guardadoOk('la lista de clientes'); }
     catch (e) {
       // Si el guardado falla (dispositivo sin espacio, permisos), NO se puede
       // dejar pasar en silencio: el taller seguiría cargando trámites creyendo
-      // que se guardan. Se avisa una sola vez por sesión para no molestar en
-      // cada autoguardado.
+      // que se guardan. El cuadro fuerte sale una sola vez por sesión (para no
+      // molestar en cada autoguardado), pero el banner queda fijo.
+      // Ojo: acá antes se ofrecía "Exportar CSV" como copia. No lo es: ese CSV
+      // lleva sólo el último trámite de cada cliente, no lleva fotos ni firmas,
+      // y no hay ningún importador que lo vuelva a leer.
       console.error('Error guardando clientes', e);
-      if (!avisoGuardadoFallido) {
-        avisoGuardadoFallido = true;
-        customAlert('No se pudieron guardar los últimos cambios en este dispositivo — puede estar sin espacio. Sacá una copia ahora con "Exportar CSV" o con la copia de seguridad en la nube, y liberá espacio antes de seguir cargando.', 'Atención: no se pudo guardar');
-      }
+      avisarGuardadoFallido('la lista de clientes');
     }
   }
 
@@ -2579,8 +2618,13 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   }
 
   async function saveTaller() {
-    try { await window.storage.set(TALLER_KEY, JSON.stringify(tallerNombre), false); }
-    catch (e) { console.error('Error guardando nombre del taller', e); }
+    try { await window.storage.set(TALLER_KEY, JSON.stringify(tallerNombre), false); guardadoOk('el nombre del taller'); }
+    catch (e) {
+      // Antes esto iba sólo a la consola: el taller cambiaba el nombre, no se
+      // guardaba y nadie se enteraba. Se avisa igual que con los clientes.
+      console.error('Error guardando nombre del taller', e);
+      avisarGuardadoFallido('el nombre del taller');
+    }
   }
 
   async function saveTallerConfig(bumpTs) {
@@ -2588,8 +2632,14 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       tallerConfig.actualizadoEn = new Date().toISOString();
       programarSync('config guardada');
     }
-    try { await window.storage.set(TALLER_CONFIG_KEY, JSON.stringify(tallerConfig), false); }
-    catch (e) { console.error('Error guardando configuración del taller', e); }
+    try { await window.storage.set(TALLER_CONFIG_KEY, JSON.stringify(tallerConfig), false); guardadoOk('la configuración del taller'); }
+    catch (e) {
+      // Igual que los clientes: si esto falla en silencio, el taller trabaja
+      // con precios, PECs, numeración de presupuestos o logo que en realidad
+      // nunca quedaron guardados.
+      console.error('Error guardando configuración del taller', e);
+      avisarGuardadoFallido('la configuración del taller');
+    }
   }
 
   // Lápidas de clientes eliminados: sin esto, la sincronización volvería a
@@ -3368,6 +3418,12 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     const t = presuTotales(p);
     const L = 20, R = 190;
     let y = 20;
+    // Corte de página. Antes `y` crecía y nada más: con ~40 renglones el TOTAL
+    // FINAL y el pie se dibujaban abajo del borde de la A4 (297 mm) y no
+    // salían impresos. Mismo patrón que generarRegistroPdf.
+    const PIE = 272;
+    const nuevaHoja = () => { doc.addPage(); y = 20; };
+    const salto = (alto) => { if (y + alto > PIE) nuevaHoja(); };
 
     if (tc.logo) {
       try {
@@ -3407,17 +3463,22 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       // Solo qué se hace, sin precios por renglón.
       grupos.forEach(g => {
         const ls = doc.splitTextToSize('•  ' + rotulo(g), R - L);
+        salto(ls.length * 5);
         doc.text(ls, L, y); y += ls.length * 5;
       });
-      if (t.mo > 0) { doc.text('•  Mano de obra, instalación y puesta a punto', L, y); y += 5; }
+      if (t.mo > 0) { salto(5); doc.text('•  Mano de obra, instalación y puesta a punto', L, y); y += 5; }
     } else {
       grupos.forEach(g => {
         const ls = doc.splitTextToSize(rotulo(g), R - L - 32);
+        salto(Math.max(5, ls.length * 5));
         doc.text(ls, L, y);
         doc.text(presuMoney(g.neto * g.cant * iva), R, y, { align: 'right' });
         y += Math.max(5, ls.length * 5);
       });
     }
+    // El cierre (subtotal + descuento + TOTAL FINAL + pie) va entero en la
+    // misma hoja: un total huérfano al pie de la página anterior no se entiende.
+    salto(45);
     y += 4; doc.setDrawColor(220); doc.line(L, y, R, y); y += 7;
 
     if (t.d > 0 && t.mo > 0) {
@@ -3436,9 +3497,11 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     const pie = 'Precio final' + (p.iva ? ' con IVA incluido' : ' (sin IVA)') + '.'
       + (p.modo === 'gnc' ? ' Incluye lo detallado arriba.' : '') + ' Presupuesto válido por 15 días.';
     const pl = doc.splitTextToSize(pie, R - L);
+    salto(pl.length * 4 + 2);
     doc.text(pl, L, y); y += pl.length * 4 + 2;
     if (p.nota) {
       const nl = doc.splitTextToSize(p.nota, R - L);
+      salto(nl.length * 4);
       doc.text(nl, L, y);
     }
     doc.setTextColor(0);
@@ -3539,6 +3602,11 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     const tc = tallerConfig;
     const L = 20, R = 190;
     let y = 22;
+    // Corte de página, igual que en el presupuesto: con muchos renglones de
+    // detalle el TOTAL y el agradecimiento quedaban fuera de la hoja.
+    const PIE = 272;
+    const nuevaHoja = () => { doc.addPage(); y = 20; };
+    const salto = (alto) => { if (y + alto > PIE) nuevaHoja(); };
     doc.setFont('helvetica', 'bold'); doc.setFontSize(18);
     doc.text(tallerNombre || 'Taller GNC', L, y); y += 7;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90);
@@ -3564,10 +3632,13 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
     items.forEach(it => {
       const lineas = doc.splitTextToSize(it.descripcion || '—', R - L - 40);
+      salto(Math.max(lineas.length * 5, 7));
       doc.text(lineas, L, y);
       doc.text(presuMoney(it.precioUnitario), R, y, { align: 'right' });
       y += Math.max(lineas.length * 5, 7);
     });
+    // El TOTAL y el agradecimiento, juntos y en la misma hoja.
+    salto(32);
     y += 2; doc.setDrawColor(150); doc.line(L, y, R, y); y += 8;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(13);
     doc.text('TOTAL', L, y);
@@ -5935,7 +6006,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="respaldo-panel">
       ${panelVolver()}
       <h2 style="margin-top:0;">Copia de seguridad en la nube ${infoAyuda('ayuda-respaldo')}</h2>
-      ${ayudaBloque('ayuda-respaldo', 'La copia incluye los clientes, trámites, firmas, fotos de documentación y la configuración del taller. Antes de subirse se cifra EN TU EQUIPO con la clave que elijas: sin esa clave nadie puede leer la copia — ni siquiera nosotros. Anotá la clave en un lugar seguro: si la perdés, la copia no se puede recuperar. Para pasar los datos a un celular nuevo: instalá Estelita, activala con tu código de licencia y usá "Recuperar copia" con la misma clave.')}
+      ${ayudaBloque('ayuda-respaldo', 'La copia incluye los clientes, trámites, firmas, fotos de documentación, los presupuestos emitidos, la caja del mostrador y la configuración del taller (precios, PECs, numeración y logo). Antes de subirse se cifra EN TU EQUIPO con la clave que elijas: sin esa clave nadie puede leer la copia — ni siquiera nosotros. Anotá la clave en un lugar seguro: si la perdés, la copia no se puede recuperar. Para pasar los datos a un celular nuevo: instalá Estelita, activala con tu código de licencia y usá "Recuperar copia" con la misma clave.')}
       <div class="agent-hint" id="respaldo-ultima">${respaldoUltima === null ? 'Consultando si hay copias guardadas...' : (respaldoUltima ? 'Última copia guardada: ' + respaldoUltima : 'Todavía no hay ninguna copia en la nube.')}</div>
       <label style="display:block; margin-top:10px;">Clave de la copia (elegila vos y anotala)
         <input type="password" id="respaldo-clave" placeholder="Una frase que puedas recordar" autocomplete="off">
@@ -5980,6 +6051,15 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     return rows.filter(r => r.some(c => c.trim() !== ''));
   }
 
+  // ¿Ese día existe de verdad en ese mes? Sin esto, "31/02/2026" pasaba el
+  // control (el día estaba entre 1 y 31) y se guardaba como 2026-02-31: una
+  // fecha que no existe, que se imprime tal cual en la planilla y que cualquier
+  // cuenta de vencimientos lee mal.
+  function fechaCalendarioValida(y, mo, d) {
+    const dt = new Date(Date.UTC(+y, +mo - 1, +d));
+    return dt.getUTCFullYear() === +y && dt.getUTCMonth() === (+mo - 1) && dt.getUTCDate() === +d;
+  }
+
   function parseDateLenient(str) {
     if (!str) return null;
     str = str.trim();
@@ -5988,6 +6068,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       let [, d, mo, y] = m;
       if (y.length === 2) y = '20' + y;
       if (+mo < 1 || +mo > 12 || +d < 1 || +d > 31) return null;
+      if (!fechaCalendarioValida(y, mo, d)) return null;
       return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
     }
     m = str.match(/^(\d{1,2})\/(\d{2,4})$/);
@@ -6722,7 +6803,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `clientes_${(tallerNombre || 'taller').replace(/[^a-z0-9]+/gi, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `clientes_${(tallerNombre || 'taller').replace(/[^a-z0-9]+/gi, '_')}_${fechaLocalISO()}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -8191,7 +8272,10 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     const d = new Date(iso + 'T00:00:00');
     if (isNaN(d.getTime())) return '';
     d.setFullYear(d.getFullYear() + 1);
-    return d.toISOString().slice(0, 10);
+    // La fecha se armó en hora LOCAL, así que se lee en hora local. (En
+    // Argentina, UTC-3, toISOString daba el mismo día — pero sólo por el signo
+    // del huso: con un huso al este devolvía el día anterior.)
+    return fechaLocalISO(d);
   }
 
   function pecPartesFecha(iso) {
@@ -9355,34 +9439,90 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   // quedó persistido para retomarlo al volver.
   window.addEventListener('beforeunload', (e) => {
     if (showForm || editingId) {
-      guardarSnapshotWizard();
+      // Se dispara la escritura y NO se espera: con el cuadro de "¿salir del
+      // sitio?" en pantalla la página sigue viva y la escritura en IndexedDB
+      // alcanza a terminar. El seguro de verdad es el visibilitychange de acá
+      // abajo, que es lo que llega cuando el celular manda la app al fondo.
+      guardarSnapshotWizardYa();
       e.preventDefault();
       e.returnValue = '';
     }
   });
 
-  // Borrador del asistente en localStorage: se guarda al salir hacia
-  // ENARGAS, para que el trámite sobreviva si Android mata la app mientras
-  // el usuario está en la otra pestaña, o si vuelve vía "Compartir" (el
-  // share target relanza la app y el estado en memoria se pierde).
+  // Android y iOS no avisan antes de matar una app que quedó en segundo plano:
+  // lo último que llega es este evento. Es el momento de escribir el borrador
+  // sí o sí (salir a ENARGAS pasa exactamente por acá).
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && (showForm || editingId)) guardarSnapshotWizardYa();
+  });
+
+  // Borrador del asistente: se guarda al salir hacia ENARGAS, para que el
+  // trámite sobreviva si Android mata la app mientras el usuario está en la
+  // otra pestaña, o si vuelve vía "Compartir" (el share target relanza la app
+  // y el estado en memoria se pierde).
+  //
+  // Va por window.storage (o sea, a IndexedDB: la clave está en `vaEnIdb`) y
+  // NO a localStorage directo como antes. El borrador se lleva adentro las DOS
+  // fotos del trámite en base64; localStorage tiene ~5 MB contando 2 bytes por
+  // carácter, así que una foto ya podía llenar la cuota y dos casi siempre la
+  // pasaban. El setItem tiraba QuotaExceededError, el catch se lo comía en
+  // silencio y el borrador NUNCA quedaba guardado: el tallerista sacaba las
+  // fotos, tocaba "Buscar en ENARGAS", el share target relanzaba la app y al
+  // volver no había snapshot — se perdían la carga y las dos fotos.
   const WIZARD_SNAPSHOT_KEY = 'gnc_wizard_snapshot_v1';
-  function guardarSnapshotWizard() {
-    try {
-      localStorage.setItem(WIZARD_SNAPSHOT_KEY, JSON.stringify({
-        ts: Date.now(),
-        editingId, showForm, wizardStep, editingTramiteId, modoSoloDatos,
-        clienteDraft, tramiteDraftEquipo, tramiteDraftCampos, currentSignature,
-        // Ids del autoguardado: si la app se reabre tras un corte, el trámite
-        // restaurado sigue apuntando al mismo pendiente (no se duplica).
-        autosaveClienteId, autosaveTramiteId, autosaveClienteCreado,
-        // Las fotos también viajan en el borrador — eran lo primero que se
-        // perdía si Android mataba la app o se cerraba la pestaña.
-        scanFiles: { ...scanFiles }, fotosEditadas,
-      }));
-    } catch (e) { /* localStorage lleno: seguimos sin snapshot */ }
+  let wizardSnapTimer = null;
+  let wizardSnapUltimo = null;   // JSON del último borrador escrito: si no cambió, no se reescribe
+  let wizardSnapGen = 0;         // sube al limpiar: una escritura en vuelo no debe revivir el borrador
+  function armarSnapshotWizard() {
+    return {
+      editingId, showForm, wizardStep, editingTramiteId, modoSoloDatos,
+      clienteDraft, tramiteDraftEquipo, tramiteDraftCampos, currentSignature,
+      // Ids del autoguardado: si la app se reabre tras un corte, el trámite
+      // restaurado sigue apuntando al mismo pendiente (no se duplica).
+      autosaveClienteId, autosaveTramiteId, autosaveClienteCreado,
+      // Las fotos también viajan en el borrador — eran lo primero que se
+      // perdía si Android mataba la app o se cerraba la pestaña.
+      scanFiles: { ...scanFiles }, fotosEditadas,
+    };
   }
-  function limpiarSnapshotWizard() {
-    try { localStorage.removeItem(WIZARD_SNAPSHOT_KEY); } catch (e) { /* ok */ }
+  // Escribe el borrador AHORA. El estado se copia en forma sincrónica (antes
+  // del primer await), así que quien la llama puede seguir limpiando variables
+  // sin esperarla; los lugares que necesitan que ya esté en disco antes de
+  // seguir (salir a ENARGAS) la esperan.
+  async function guardarSnapshotWizardYa() {
+    if (wizardSnapTimer) { clearTimeout(wizardSnapTimer); wizardSnapTimer = null; }
+    const cuerpo = armarSnapshotWizard();
+    let json;
+    try { json = JSON.stringify(cuerpo); } catch (e) { return; }
+    if (json === wizardSnapUltimo) return;   // nada cambió desde la última escritura
+    const gen = wizardSnapGen;
+    // Se anota ANTES de escribir: así dos llamadas seguidas (el botón de
+    // ENARGAS y el visibilitychange, por ejemplo) no escriben dos veces lo
+    // mismo. Si la escritura falla, se vuelve atrás en el catch.
+    wizardSnapUltimo = json;
+    try {
+      await window.storage.set(WIZARD_SNAPSHOT_KEY, JSON.stringify({ ts: Date.now(), ...cuerpo }), false);
+      if (gen !== wizardSnapGen) { await window.storage.delete(WIZARD_SNAPSHOT_KEY, false); return; }
+    } catch (e) {
+      // Que no se pueda guardar el borrador no corta el trámite (lo cargado
+      // sigue en pantalla y el autoguardado lo pasa a Pendientes), pero queda
+      // anotado: antes esto se perdía del todo.
+      wizardSnapUltimo = null;
+      console.error('No se pudo guardar el borrador del asistente', e);
+    }
+  }
+  // Agrupador: render() corre en CADA toque del asistente, y serializar varios
+  // MB de fotos más escribirlos en cada redibujado trababa la pantalla. Se
+  // junta todo en una escritura cada 1,2 s — y si no cambió nada, ni eso.
+  function guardarSnapshotWizard() {
+    if (wizardSnapTimer) return;
+    wizardSnapTimer = setTimeout(() => { wizardSnapTimer = null; guardarSnapshotWizardYa(); }, 1200);
+  }
+  async function limpiarSnapshotWizard() {
+    if (wizardSnapTimer) { clearTimeout(wizardSnapTimer); wizardSnapTimer = null; }
+    wizardSnapGen++;
+    wizardSnapUltimo = null;
+    try { await window.storage.delete(WIZARD_SNAPSHOT_KEY, false); } catch (e) { /* ok */ }
   }
 
   // Autoguardado del trámite en curso como Pendiente. Corre cada pocos
@@ -9546,7 +9686,12 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     }
 
     let snap = null;
-    try { snap = JSON.parse(localStorage.getItem(WIZARD_SNAPSHOT_KEY) || 'null'); } catch (e) { /* ok */ }
+    // Por window.storage: el borrador vive en IndexedDB (con caída a
+    // localStorage para los que quedaron guardados con la versión anterior).
+    try {
+      const resSnap = await window.storage.get(WIZARD_SNAPSHOT_KEY, false);
+      snap = resSnap ? JSON.parse(resSnap.value) : null;
+    } catch (e) { /* ok */ }
     // 12 horas de vida: un trámite empezado a la mañana se retoma a la
     // tarde con todo lo cargado (el usuario pidió que no se pierda nada
     // al salir de la app).
@@ -9600,7 +9745,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   function blankTramiteCampos(t) {
     return {
       tipo: (t && t.tipo) || TRAMITE_TIPOS[0].value,
-      fecha: (t && t.fecha) || new Date().toISOString().slice(0, 10),
+      fecha: (t && t.fecha) || fechaLocalISO(),   // local: a las 21:00 UTC ya es mañana
       detalle: (t && t.detalle) || '',
       estado: (t && t.estadoPec) || 'pendiente',
       motivo: (t && t.motivoIncompleto) || '',
@@ -10020,17 +10165,131 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     const d = Math.floor((Date.now() - new Date(u).getTime()) / 86400000);
     return isNaN(d) ? null : d;
   }
+
+  // ---- Restauración que quedó por la mitad ----
+  // Una restauración cortada deja los clientes guardados pero sin parte de su
+  // documentación, y eso solo NO se arregla: la sincronización compara el
+  // fotosTs local contra el remoto y le dan iguales, así que nunca vuelve a
+  // bajar esas fotos. Y encima el próximo "Guardar copia ahora" arma la lista
+  // de archivos vigentes con las fotos que SÍ están en el equipo y manda
+  // 'depurar': el freno del servidor sólo corta si se borraría más del 60 %,
+  // así que con 100 clientes y un restore muerto en el 45 se borraban 55 de 101
+  // (54 %, pasa el freno) — justo las fotos que nunca llegaron al dispositivo.
+  // Mientras esta marca exista: no se depura la nube, y cada sincronización
+  // reintenta bajar lo que falta.
+  const RESTORE_PENDIENTE_KEY = 'gnc_restore_pendiente_v1';
+  function leerRestoreIncompleto() {
+    try {
+      const r = JSON.parse(localStorage.getItem(RESTORE_PENDIENTE_KEY) || 'null');
+      return (r && typeof r === 'object') ? { en: r.en || '', ids: Array.isArray(r.ids) ? r.ids : [] } : null;
+    } catch (e) { return null; }
+  }
+  // ids = las fichas cuyas fotos no se pudieron bajar. Una lista vacía significa
+  // "se cortó antes de saber qué faltaba" — igual queda marcado.
+  function marcarRestoreIncompleto(ids) {
+    try { localStorage.setItem(RESTORE_PENDIENTE_KEY, JSON.stringify({ en: new Date().toISOString(), ids: ids || [] })); } catch (e) { /* ok */ }
+  }
+  function limpiarRestoreIncompleto() {
+    try { localStorage.removeItem(RESTORE_PENDIENTE_KEY); } catch (e) { /* ok */ }
+  }
+  // Qué le decimos al taller: qué falta y qué tiene que hacer.
+  function textoRestoreIncompleto(r) {
+    const n = (r && r.ids) ? r.ids.length : 0;
+    return (n
+      ? `Quedaron ${n} ficha${n === 1 ? '' : 's'} sin su documentación: no se pudieron bajar de la nube.`
+      : 'La última recuperación de copia se cortó antes de terminar de bajar la documentación.')
+      + ' Las fotos siguen guardadas en la nube: conectate a una red estable y volvé a tocar "Recuperar copia" (o sincronizá) para completarlas.'
+      + ' Hasta que estén todas, Estelita no borra nada de la nube.';
+  }
+
+  // ---- Invitación a activar la copia ----
+  // diasSinRespaldo() arranca con `if (!syncActiva()) return null`, así que la
+  // red de seguridad de arriba sólo avisaba a quien YA tenía la copia andando.
+  // El taller que nunca la activó —el único que de verdad no tiene respaldo—
+  // no veía nada. Esto lo invita, tranquilo, y se puede posponer.
+  const AVISO_SINCOPIA_KEY = 'gnc_aviso_sincopia_v1';
+  const DIAS_POSPONER_SINCOPIA = 10;
+  const CLIENTES_PARA_INVITAR = 5;
+  const DIAS_PARA_INVITAR = 7;
+  function invitacionCopiaPospuesta() {
+    const t = Number(localStorage.getItem(AVISO_SINCOPIA_KEY) || 0);
+    return !!t && (Date.now() - t) < DIAS_POSPONER_SINCOPIA * 24 * 60 * 60 * 1000;
+  }
+  // Días desde el trámite más viejo cargado: un taller con pocos clientes pero
+  // meses de uso también tiene algo que perder.
+  function diasDesdePrimerTramite() {
+    let masViejo = '';
+    clientes.forEach(c => (c.tramites || []).forEach(t => {
+      const cuando = t.creadoEn || (t.fecha ? t.fecha + 'T00:00:00' : '');
+      if (cuando && (!masViejo || cuando < masViejo)) masViejo = cuando;
+    }));
+    if (!masViejo) return 0;
+    const d = Math.floor((Date.now() - new Date(masViejo).getTime()) / 86400000);
+    return isNaN(d) ? 0 : d;
+  }
+  function hayAlgoQuePerder() {
+    return clientes.length > CLIENTES_PARA_INVITAR || diasDesdePrimerTramite() > DIAS_PARA_INVITAR;
+  }
+
   function bannerRespaldo() {
+    // Primero lo más urgente: hay documentación que está en la nube y no acá.
+    const pend = leerRestoreIncompleto();
+    if (pend) {
+      return `<div class="panel install-banner">
+        <h2 style="margin:0 0 4px; font-size:16px;">📷 Falta documentación de la última copia</h2>
+        <p class="scan-sub" style="margin:0 0 8px;">${textoRestoreIncompleto(pend)}</p>
+        <div class="form-actions"><button type="button" class="btn btn-primary btn-sm" data-ir-respaldo>Ir a la copia de seguridad</button></div>
+      </div>`;
+    }
     const d = diasSinRespaldo();
-    if (d === null || d < DIAS_ALERTA_RESPALDO) return '';
+    if (d !== null && d >= DIAS_ALERTA_RESPALDO) {
+      return `<div class="panel" style="border:2px solid var(--danger); background:color-mix(in srgb, var(--danger) 8%, transparent);">
+        <h2 style="margin:0 0 4px; font-size:16px; color:var(--danger);">⚠️ Hace ${d} días que la copia no se guarda</h2>
+        <p class="scan-sub" style="margin:0 0 8px;">
+          La última copia en la nube es del <b>${fmtFechaHora(syncUltima || localStorage.getItem(SYNC_ULTIMA_KEY))}</b>.
+          Todo lo que cargaste después <b>está solo en este dispositivo</b>: si lo perdés, se pierde.
+          Entrá a la copia de seguridad y fijate qué dice el estado.
+        </p>
+        <div class="form-actions"><button type="button" class="btn btn-primary btn-sm" id="btn-ir-respaldo" data-ir-respaldo>Ver la copia de seguridad</button></div>
+      </div>`;
+    }
+    // Nunca activó la copia y ya tiene trabajo cargado: invitación, sin susto.
+    if (!syncActiva() && !invitacionCopiaPospuesta() && hayAlgoQuePerder()) {
+      // Si hay una clave guardada, este taller YA usó la copia alguna vez a
+      // mano: no corresponde decirle que no tiene ninguna.
+      const yaUsoLaCopia = !!localStorage.getItem(SYNC_CLAVE_KEY);
+      return `<div class="panel reminder-banner">
+        <div class="reminder-header">
+          <div style="min-width:0;">
+            <h2 style="margin:0; font-size:16px;">☁️ ${yaUsoLaCopia ? 'La copia no se está guardando sola' : 'Todavía no tenés copia de seguridad'}</h2>
+            <p class="scan-sub" style="margin:6px 0 0;">
+              ${yaUsoLaCopia
+                ? `Ya tenés tu clave en este equipo, pero la copia automática está apagada: sólo se guarda cuando te acordás de entrar y tocar "Guardar copia ahora". Activala y se guarda sola después de cada cambio.`
+                : `Tus ${clientes.length} ficha${clientes.length === 1 ? '' : 's'}, las fotos y las firmas están <b>solo en este equipo</b>. Activar la copia lleva un minuto: elegís una clave y se guarda cifrada en la nube, así podés recuperar todo en un celular nuevo.`}
+            </p>
+          </div>
+          <div style="display:flex; gap:6px; flex-shrink:0;">
+            <button type="button" class="btn btn-primary btn-sm" data-ir-respaldo>${yaUsoLaCopia ? 'Activarla' : 'Activar la copia'}</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-sincopia-luego">Más tarde</button>
+          </div>
+        </div>
+      </div>`;
+    }
+    return '';
+  }
+
+  // Banner fijo de "no se pudo guardar": el cuadro de aviso se cierra y se
+  // olvida, esto no se va hasta que el guardado vuelva a salir bien.
+  function bannerGuardadoFallido() {
+    if (!guardadoFallido) return '';
     return `<div class="panel" style="border:2px solid var(--danger); background:color-mix(in srgb, var(--danger) 8%, transparent);">
-      <h2 style="margin:0 0 4px; font-size:16px; color:var(--danger);">⚠️ Hace ${d} días que la copia no se guarda</h2>
+      <h2 style="margin:0 0 4px; font-size:16px; color:var(--danger);">⚠️ No se está guardando en este equipo</h2>
       <p class="scan-sub" style="margin:0 0 8px;">
-        La última copia en la nube es del <b>${fmtFechaHora(syncUltima || localStorage.getItem(SYNC_ULTIMA_KEY))}</b>.
-        Todo lo que cargaste después <b>está solo en este dispositivo</b>: si lo perdés, se pierde.
-        Entrá a la copia de seguridad y fijate qué dice el estado.
+        El último intento de guardar ${escapeHtml(guardadoFallido.que)} (${fmtFechaHora(new Date(guardadoFallido.ts).toISOString())}) <b>falló</b>:
+        el dispositivo puede estar sin espacio. <b>Lo que cargues ahora se puede perder.</b>
+        Guardá una copia en la nube y liberá espacio antes de seguir.
       </p>
-      <div class="form-actions"><button type="button" class="btn btn-primary btn-sm" id="btn-ir-respaldo">Ver la copia de seguridad</button></div>
+      <div class="form-actions"><button type="button" class="btn btn-primary btn-sm" data-ir-respaldo>Ver la copia de seguridad</button></div>
     </div>`;
   }
 
@@ -10116,6 +10375,23 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       if (fusionCaja.cambioLocal) { caja = fusionCaja.caja; await saveCaja(false); cambioLocal = true; }
       if (fusionCaja.cambioRemoto) cambioRemoto = true;
 
+      // 4c) Presupuestos emitidos: unión por id. No hay fecha de modificación
+      // por presupuesto para comparar, así que se elige lo conservador —no
+      // perder ninguno— y en un choque de id gana el local. Una copia vieja
+      // (v2) no los trae: en ese caso no se pisa nada y se suben los de acá.
+      const presuRemotos = (remoto && Array.isArray(remoto.presupuestos)) ? remoto.presupuestos : null;
+      if (presuRemotos) {
+        const porIdPresu = {};
+        presuRemotos.forEach(p => { if (p && p.id) porIdPresu[p.id] = p; });
+        let soloLocales = 0;
+        presupuestos.forEach(p => { if (p && p.id) { if (!porIdPresu[p.id]) soloLocales++; porIdPresu[p.id] = p; } });
+        const unidos = Object.keys(porIdPresu).map(k => porIdPresu[k]);
+        if (unidos.length !== presupuestos.length) { presupuestos = unidos; await savePresupuestos(); cambioLocal = true; }
+        if (soloLocales) cambioRemoto = true;
+      } else if (presupuestos.length) {
+        cambioRemoto = true;
+      }
+
       // 5) Aplicar el resultado local.
       if (cambioLocal) {
         clientes = fusionados;
@@ -10150,11 +10426,54 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         }
       }
 
+      // 6b) Documentación que quedó debiendo una restauración cortada. La
+      // sincronización normal NO la trae: el fotosTs local y el remoto son
+      // iguales, así que el merge no la pide nunca. Se piden esas fichas a
+      // mano, y recién cuando están todas se levanta el bloqueo del 'depurar'.
+      // En su propio try: esto no puede voltear la sincronización.
+      try {
+        const pendRestore = leerRestoreIncompleto();
+        if (pendRestore) {
+          let faltan = pendRestore.ids;
+          if (!faltan.length) {
+            // Se cortó antes de saber qué faltaba: se mira qué hay en la nube
+            // y se baja lo que no esté en el equipo.
+            const listaPend = await apiRespaldo({ accion: 'listar' });
+            faltan = (listaPend.archivos || [])
+              .filter(a => /^fotos-[a-z0-9]+\.json$/i.test(a.nombre))
+              .map(a => a.nombre.slice('fotos-'.length, -'.json'.length))
+              .filter(id => !clientesConFotos.has(id));
+          }
+          const siguenFaltando = [];
+          for (const id of faltan) {
+            try {
+              const b = await apiRespaldo({ accion: 'bajar', nombre: `fotos-${id}.json` });
+              const fotos = await descifrarRespaldo(b.contenido, clave);
+              await window.storage.set(`fotos:${id}`, JSON.stringify(fotos), false);
+              clientesConFotos.add(id);
+            } catch (ePend) {
+              // Si en la nube ya no está ese archivo (el cliente se borró
+              // desde otro equipo), no hay nada que recuperar: se saca de la
+              // lista, si no la marca quedaría puesta para siempre y nunca más
+              // se podría depurar.
+              const msg = (ePend && ePend.message) || '';
+              if (!/ninguna copia|no existe/i.test(msg) && !(ePend && ePend.status === 404)) siguenFaltando.push(id);
+            }
+          }
+          if (siguenFaltando.length) marcarRestoreIncompleto(siguenFaltando);
+          else limpiarRestoreIncompleto();
+        }
+      } catch (ePend2) { console.warn('[respaldo] no se pudo completar la restauración pendiente', ePend2); }
+
       // 7) Subir el estado combinado si el remoto quedó desactualizado.
       const tumbasLista = Object.entries(tumbas).map(([id, en]) => ({ id, en }))
         .filter(t => (Date.now() - new Date(t.en).getTime()) < 90 * 24 * 3600 * 1000);
       if (cambioRemoto) {
-        const datos = { v: 2, guardadoEn: new Date().toISOString(), tallerNombre, tallerConfig, clientes, eliminados: tumbasLista, caja };
+        // v3 suma los presupuestos emitidos (los precios y la numeración ya
+        // viajaban dentro de tallerConfig, pero los presupuestos en sí no: en
+        // un celular nuevo arrancaban en cero). Al restaurar se tolera que una
+        // copia vieja no los traiga.
+        const datos = { v: 3, guardadoEn: new Date().toISOString(), tallerNombre, tallerConfig, clientes, eliminados: tumbasLista, caja, presupuestos };
         await apiRespaldo({ accion: 'subir', nombre: 'datos.json', contenido: await cifrarParaRespaldo(datos, clave) });
       }
       try { localStorage.setItem(TOMBSTONES_KEY, JSON.stringify(tumbasLista)); } catch (e) { /* ok */ }
@@ -10611,9 +10930,10 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
 
   function render() {
     if (!ready) { root.innerHTML = '<div class="loading"><span class="gnc-spinner"></span> Cargando datos del taller...</div>'; return; }
-    // Mientras el asistente esté abierto, cada redibujado persiste el
-    // borrador completo (drafts + fotos + firma): así salir de la app en
-    // cualquier momento nunca pierde lo cargado.
+    // Mientras el asistente esté abierto, el redibujado programa el guardado
+    // del borrador completo (drafts + fotos + firma): así salir de la app en
+    // cualquier momento nunca pierde lo cargado. Va agrupado a propósito —
+    // escribir varios MB de fotos en CADA toque trababa la pantalla.
     if (showForm || editingId) guardarSnapshotWizard();
     const rectsAntes = medirRectsClientes();
     // Como el render reconstruye todo el DOM, si no restauramos el foco acá
@@ -10722,6 +11042,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
           <div class="chip chip-ok"><div class="chip-num">${counts.ok}</div><div class="chip-lbl">Al día</div></div>
         </div>`}
 
+        ${algunPanelAbierto ? '' : bannerGuardadoFallido()}
         ${algunPanelAbierto ? '' : bannerRespaldo()}
         ${algunPanelAbierto ? '' : bannerInstalar()}
 
@@ -11095,7 +11416,9 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         const ta = root.querySelector('#sug-texto');
         const est = root.querySelector('#sug-estado');
         const texto = (ta ? ta.value : '').trim();
-        if (texto.length < 4) { if (est) { est.style.color = 'var(--rojo)'; est.textContent = 'Escribí un poco más para que podamos entenderla.'; } return; }
+        // --danger/--ok son los nombres reales de las variables del CSS;
+        // --rojo y --verde no existen, así que el texto salía sin color.
+        if (texto.length < 4) { if (est) { est.style.color = 'var(--danger)'; est.textContent = 'Escribí un poco más para que podamos entenderla.'; } return; }
         btnEnviarSug.disabled = true;
         if (est) { est.style.color = ''; est.textContent = 'Enviando...'; }
         try {
@@ -11107,9 +11430,9 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
           const data = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(data.error || 'No se pudo enviar.');
           if (ta) ta.value = '';
-          if (est) { est.style.color = 'var(--verde)'; est.textContent = '¡Gracias! Recibimos tu sugerencia.'; }
+          if (est) { est.style.color = 'var(--ok)'; est.textContent = '¡Gracias! Recibimos tu sugerencia.'; }
         } catch (e) {
-          if (est) { est.style.color = 'var(--rojo)'; est.textContent = 'No se pudo enviar: ' + e.message + ' Probá de nuevo con internet.'; }
+          if (est) { est.style.color = 'var(--danger)'; est.textContent = 'No se pudo enviar: ' + e.message + ' Probá de nuevo con internet.'; }
         } finally {
           btnEnviarSug.disabled = false;
         }
@@ -11157,7 +11480,10 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     });
     async function iniciarNuevoTramite() {
       cargarJsPdf().catch(() => {}); // precarga: el PDF ya va a estar listo al enviar al PEC
-      const elegido = await mostrarModalTipoFecha({ tipo: TRAMITE_TIPOS[0].value, fecha: new Date().toISOString().slice(0, 10) });
+      // fechaLocalISO y no toISOString: un trámite abierto después de las
+      // 21:00 se fechaba MAÑANA (UTC-3), y esa fecha va a la planilla del PEC
+      // y a la fecha de vencimiento de la oblea.
+      const elegido = await mostrarModalTipoFecha({ tipo: TRAMITE_TIPOS[0].value, fecha: fechaLocalISO() });
       if (!elegido) return;
       editingId = null; showForm = true;
       showBulkImport = false;
@@ -11554,8 +11880,9 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
 
     // --- Copia de seguridad en la nube ---
     // El cartel de "hace N días que no se guarda" lleva directo a la copia.
-    const btnIrRespaldo = root.querySelector('#btn-ir-respaldo');
-    if (btnIrRespaldo) btnIrRespaldo.addEventListener('click', async () => {
+    // Varios banners llevan al panel de la copia (hace N días que no se
+    // guarda, falta documentación, todavía no la activó): un solo handler.
+    root.querySelectorAll('[data-ir-respaldo]').forEach(btnIrRespaldo => btnIrRespaldo.addEventListener('click', async () => {
       cerrarPanelesConsulta();
       menuOpen = false;
       showRespaldo = true;
@@ -11564,9 +11891,19 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       try {
         const l = await apiRespaldo({ accion: 'listar' });
         const d = (l.archivos || []).find(a => a.nombre === 'datos.json');
-        if (d) respaldoUltima = d.subido;
+        // fmtFechaHora igual que en el otro camino: d.subido es un ISO en UTC
+        // y se mostraba en crudo ("2026-10-03T23:14:02.123Z").
+        if (d) respaldoUltima = fmtFechaHora(d.subido);
       } catch (e) { /* si no se puede listar, el panel lo muestra igual */ }
       if (showRespaldo) render();
+    }));
+
+    // "Más tarde" de la invitación a activar la copia: la posterga unos días
+    // (no la mata: el respaldo es lo que protege el trabajo del taller).
+    const btnSinCopiaLuego = root.querySelector('#btn-sincopia-luego');
+    if (btnSinCopiaLuego) btnSinCopiaLuego.addEventListener('click', () => {
+      try { localStorage.setItem(AVISO_SINCOPIA_KEY, String(Date.now())); } catch (e) { /* ok */ }
+      render();
     });
 
     const btnRespaldoMenu = root.querySelector('#btn-respaldo');
@@ -11667,7 +12004,8 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
       respaldoBotones(true);
       try {
         respaldoStatus('', 'Cifrando y subiendo los datos del taller...');
-        const datos = { v: 2, guardadoEn: new Date().toISOString(), tallerNombre, tallerConfig, clientes, eliminados: leerTombstones(), caja };
+        // v3: ver el comentario en sincronizar(). Incluye los presupuestos.
+        const datos = { v: 3, guardadoEn: new Date().toISOString(), tallerNombre, tallerConfig, clientes, eliminados: leerTombstones(), caja, presupuestos };
         await apiRespaldo({ accion: 'subir', nombre: 'datos.json', contenido: await cifrarParaRespaldo(datos, clave) });
         const vigentes = ['datos.json'];
         const ids = Array.from(clientesConFotos);
@@ -11685,11 +12023,21 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         // queden fotos viejas ocupando lugar — no vale la pena decirle al
         // taller que falló la copia cuando en realidad se guardó.
         let avisoDepurar = '';
-        try {
-          await apiRespaldo({ accion: 'depurar', vigentes });
-        } catch (eDep) {
-          console.error('No se pudo depurar la nube', eDep);
-          avisoDepurar = ' (quedaron copias viejas sin borrar en la nube)';
+        let avisoRestore = '';
+        const pendRestore = leerRestoreIncompleto();
+        if (pendRestore) {
+          // NO se depura: hay fotos que están en la nube y no en este equipo,
+          // así que `vigentes` no las incluye y el 'depurar' las borraría
+          // justo a ellas (el freno del servidor no alcanza: sólo corta si se
+          // iría más del 60 %). Mejor que sobren archivos viejos en la nube.
+          avisoRestore = ' No se limpiaron las copias viejas de la nube, a propósito: ' + textoRestoreIncompleto(pendRestore);
+        } else {
+          try {
+            await apiRespaldo({ accion: 'depurar', vigentes });
+          } catch (eDep) {
+            console.error('No se pudo depurar la nube', eDep);
+            avisoDepurar = ' (quedaron copias viejas sin borrar en la nube)';
+          }
         }
         // Recordar la clave en este equipo: sirve para activar la
         // sincronización automática sin volver a escribirla.
@@ -11697,7 +12045,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         respaldoUltima = fmtFechaHora(new Date().toISOString());
         const hint = root.querySelector('#respaldo-ultima');
         if (hint) hint.textContent = 'Última copia guardada: ' + respaldoUltima;
-        respaldoStatus('ok', `Copia guardada: ${clientes.length} cliente(s), ${vigentes.length - 1} con fotos${avisoDepurar}. Guardá bien tu clave — sin ella la copia no se puede leer.`);
+        respaldoStatus('ok', `Copia guardada: ${clientes.length} cliente(s), ${vigentes.length - 1} con fotos${avisoDepurar}. Guardá bien tu clave — sin ella la copia no se puede leer.${avisoRestore}`);
       } catch (e) {
         console.error(e);
         respaldoStatus('err', 'No se pudo guardar la copia: ' + (e.message || e));
@@ -11727,11 +12075,20 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         if (!ok) return;
         respaldoBotones(true);
         respaldoStatus('', 'Restaurando datos...');
+        // Desde acá los datos de este equipo quedan reemplazados. Si algo se
+        // corta de acá en adelante (se cae la señal al listar o al bajar las
+        // fotos), el equipo queda con las fichas y sin la documentación — y eso
+        // no se arregla solo (ver RESTORE_PENDIENTE_KEY). Así que la marca se
+        // pone ANTES de tocar nada y recién se saca si bajó TODO.
+        marcarRestoreIncompleto([]);
         clientes = datos.clientes || [];
         if (migrateClientes()) { /* defaults al día */ }
         tallerConfig = migrarPecsConfig({ ...TALLER_CONFIG_DEFAULT, ...(datos.tallerConfig || {}) });
         if (datos.tallerNombre) tallerNombre = datos.tallerNombre;
         if (datos.caja) { caja = cajaNormalizar(datos.caja); await saveCaja(false); }
+        // Las copias v2 (y anteriores) no traen presupuestos: si no vienen, se
+        // deja lo que ya hay en el equipo en vez de borrarlo.
+        if (Array.isArray(datos.presupuestos)) { presupuestos = datos.presupuestos; await savePresupuestos(); }
         await saveClientes();
         await saveTallerConfig();
         try { await window.storage.set(TALLER_KEY, JSON.stringify(tallerNombre), false); } catch (e3) { /* ok */ }
@@ -11739,18 +12096,35 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         const lista = await apiRespaldo({ accion: 'listar' });
         const archivosFotos = (lista.archivos || []).filter(a => /^fotos-[a-z0-9]+\.json$/i.test(a.nombre));
         clientesConFotos = new Set();
+        const fotosQueFallaron = [];
         for (let i = 0; i < archivosFotos.length; i++) {
           respaldoStatus('', `Recuperando fotos (${i + 1} de ${archivosFotos.length})...`);
-          const b = await apiRespaldo({ accion: 'bajar', nombre: archivosFotos[i].nombre });
-          const fotos = await descifrarRespaldo(b.contenido, clave);
           const id = archivosFotos[i].nombre.slice('fotos-'.length, -'.json'.length);
-          await window.storage.set(`fotos:${id}`, JSON.stringify(fotos), false);
-          clientesConFotos.add(id);
+          // Cada foto en su propio intento, igual que en sincronizar(): lo que
+          // NO puede pasar es que una sola foto que rebota (muy pesada, se
+          // cortó la señal) aborte el bucle entero y deje la restauración a
+          // medias. Se anota la que falló y se sigue con las demás.
+          try {
+            const b = await apiRespaldo({ accion: 'bajar', nombre: archivosFotos[i].nombre });
+            const fotos = await descifrarRespaldo(b.contenido, clave);
+            await window.storage.set(`fotos:${id}`, JSON.stringify(fotos), false);
+            clientesConFotos.add(id);
+          } catch (eFoto) {
+            fotosQueFallaron.push(id);
+            console.warn('[respaldo] no se pudo bajar ' + archivosFotos[i].nombre, eFoto);
+          }
         }
+        if (fotosQueFallaron.length) marcarRestoreIncompleto(fotosQueFallaron);
+        else limpiarRestoreIncompleto();
         try { localStorage.setItem(SYNC_CLAVE_KEY, clave); } catch (e4) { /* ok */ }
         tomarSnapshotClientes();
         render();
-        await customAlert(`Listo: se recuperaron ${clientes.length} cliente(s) y ${archivosFotos.length} con fotos desde la copia de la nube.`, 'Copia recuperada');
+        const conFotosOk = archivosFotos.length - fotosQueFallaron.length;
+        if (fotosQueFallaron.length) {
+          await customAlert(`Se recuperaron ${clientes.length} cliente(s) y ${conFotosOk} con su documentación.\n\n${textoRestoreIncompleto({ ids: fotosQueFallaron })}`, 'Copia recuperada a medias');
+        } else {
+          await customAlert(`Listo: se recuperaron ${clientes.length} cliente(s) y ${conFotosOk} con fotos desde la copia de la nube.`, 'Copia recuperada');
+        }
       } catch (e) {
         console.error(e);
         respaldoStatus('err', 'No se pudo recuperar la copia: ' + (e.message || e));
@@ -12279,7 +12653,10 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
     // persistido (drafts + fotos + firma), así el trámite se retoma con
     // todo lo cargado la próxima vez que se abra la app.
     function cerrarWizard(conservarBorrador) {
-      if (conservarBorrador) guardarSnapshotWizard();
+      // Sin esperar, pero seguro: guardarSnapshotWizardYa() copia el estado
+      // antes del primer await, así que las variables que se limpian acá abajo
+      // ya no lo tocan.
+      if (conservarBorrador) guardarSnapshotWizardYa();
       showForm = false;
       editingId = null;
       wizardStep = 1;
@@ -12494,7 +12871,9 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         const id = btn.getAttribute('data-tramite');
         const cliente = clientes.find(x => x.id === id);
         if (!cliente) return;
-        const elegido = await mostrarModalTipoFecha({ tipo: TRAMITE_TIPOS[0].value, fecha: new Date().toISOString().slice(0, 10) });
+        // Fecha local (ver iniciarNuevoTramite): con UTC, después de las 21:00
+        // el trámite quedaba fechado al día siguiente.
+        const elegido = await mostrarModalTipoFecha({ tipo: TRAMITE_TIPOS[0].value, fecha: fechaLocalISO() });
         if (!elegido) return;
         await avisarSiCorrespondePh(cliente, elegido.tipo);
         cerrarWizard();
@@ -12527,7 +12906,12 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       const f = logoFile.files[0];
       if (!f) return;
       try {
-        tallerConfig.logo = await compressImageFile(f);
+        // 560 px y calidad 0.85: el logo se imprime a 18 mm de alto en el PDF,
+        // no necesita más. Con los valores por defecto (2000 px, 0.9 — los de
+        // una foto de documento, que se imprime en la planilla del PEC) un logo
+        // sacado con la cámara quedaba en 500 KB-1 MB de dataURL metidos dentro
+        // de la configuración del taller.
+        tallerConfig.logo = await compressImageFile(f, 560, 0.85);
         await saveTallerConfig();
         render();
       } catch (e) {
@@ -12903,7 +13287,10 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
           const textoDef = renderMensaje('turnoConfirmado', { ...varsTaller(), cuando });
           const texto = await mostrarModalConfirmacionWa(textoDef);
           if (texto) {
-            fetch('https://crm.estelita.net.ar/api/turno-confirmado', {
+            // Por el intermediario propio (mismo origen), NO directo al CRM:
+            // ese endpoint manda WhatsApp desde el número del taller y acá la
+            // única llave era el código de licencia, que viaja en el navegador.
+            fetch('/api/turno-wa', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -13184,7 +13571,15 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
       syncClienteDraftFromDOM();
       syncEquipoFromDOM();
       syncTramiteCamposFromDOM();
-      guardarSnapshotWizard();
+      // Se dispara la escritura del borrador y NO se espera. guardarSnapshotWizardYa()
+      // copia el estado en forma sincrónica, así que lo que se va a escribir es
+      // exactamente lo que está cargado AHORA; esperarla metería otro await
+      // entre el toque del usuario y el window.open, y el navegador puede
+      // tomar la ventana nueva por un popup y bloquearla. La página sigue viva
+      // después del window.open, así que la escritura termina igual — y el
+      // visibilitychange vuelve a guardar cuando el celular manda la app al
+      // fondo, que es el momento en el que Android la puede matar.
+      guardarSnapshotWizardYa();
       // window.open (en vez de un <a target="_blank">) para que abra en una
       // pestaña/ventana nueva de verdad incluso instalado como app en el
       // celular, donde un link común a veces navega en la misma ventana.
@@ -13360,7 +13755,7 @@ Un objeto por renglón. Las patentes argentinas tienen formato AAA111 (viejas) o
         // se actualiza con los datos recién aplicados, así una recarga o un
         // cierre de la app no los pierde antes de guardar.
         enargasPasteOpen = false;
-        guardarSnapshotWizard();
+        guardarSnapshotWizardYa();
         render();
       } else {
         render();

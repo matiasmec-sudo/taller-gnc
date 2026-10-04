@@ -31,6 +31,44 @@ const PREFIJO = 'sistema/rl-';
 const cache = new Map();
 const CACHE_MS = 5000;
 
+// SEGUNDA CAPA: contador de fallos en memoria del proceso.
+//
+// El conteo en Blob falla ABIERTO a propósito (ver chequearIntentos): dejar
+// afuera a un taller legítimo por un hipo de red es peor que el abuso que
+// evita. Pero fallar abierto sin más significaba intentos ILIMITADOS mientras
+// el storage no conteste: basta con tirarle abajo el camino al storage (o
+// esperar a que Blob tenga un mal día) para volver a tener un oráculo de
+// códigos sin límite.
+//
+// Esta capa no reemplaza a la de Blob —ya sabemos que sola no sirve, porque
+// Vercel reparte los pedidos entre instancias y cada una arranca en cero— pero
+// SÍ acota lo que puede hacer una instancia caliente: un atacante tiene que
+// repartirse entre instancias frescas en vez de machacar sin techo. Se aplica
+// sólo cuando el storage no contestó.
+const memoria = new Map();
+const MEM_MAX_IPS = 5000;
+
+function memLeer(ip, ventanaMs) {
+  const m = memoria.get(ip);
+  if (!m) return { n: 0, desde: Date.now() };
+  if (Date.now() - m.desde > ventanaMs) return { n: 0, desde: Date.now() };
+  return m;
+}
+
+function memSumar(ip, ventanaMs) {
+  const m = memLeer(ip, ventanaMs);
+  const nuevo = { n: m.n + 1, desde: m.desde };
+  // Tope de tamaño: el Map vive lo que vive la instancia, pero una ráfaga de
+  // IPs distintas no tiene por qué comerse la memoria. Al llenarse se tira la
+  // entrada más vieja (la primera que insertó el Map).
+  if (!memoria.has(ip) && memoria.size >= MEM_MAX_IPS) {
+    const primera = memoria.keys().next();
+    if (!primera.done) memoria.delete(primera.value);
+  }
+  memoria.set(ip, nuevo);
+  return nuevo.n;
+}
+
 function rutaDe(ip) {
   const h = crypto.createHash('sha256').update('rl:' + ip).digest('hex').slice(0, 32);
   return `${PREFIJO}${h}.json`;
@@ -41,13 +79,19 @@ function blobBaseUrl() {
   return `https://${(partes[3] || '').toLowerCase()}.private.blob.vercel-storage.com`;
 }
 
+// null = no hay intentos previos (404, que es el caso normal). Cualquier otra
+// respuesta que no sea 200 TIRA: antes se devolvía null igual que un 404, así
+// que un storage con problemas se veía como "esta IP nunca intentó nada" y el
+// límite desaparecía sin que nadie se enterara. Ahora el que llama sabe que no
+// pudo leer y aplica la capa en memoria.
 async function leer(ruta) {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
+  if (!process.env.BLOB_READ_WRITE_TOKEN) throw new Error('rl: falta BLOB_READ_WRITE_TOKEN');
   const r = await fetch(`${blobBaseUrl()}/${ruta}?nc=${Date.now()}`, {
     headers: { authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` },
     cache: 'no-store',
   });
-  if (!r.ok) return null; // 404 incluido: no hay intentos previos
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error('rl: el storage respondió ' + r.status);
   return r.json().catch(() => null);
 }
 
@@ -91,8 +135,15 @@ export async function chequearIntentos(req, { max = 10, ventanaMs = 10 * 60 * 10
   try {
     d = await leer(rutaDe(ip));
   } catch (e) {
-    return { ok: true, ip };
+    // Storage caído: seguimos fallando ABIERTO (es deliberado), pero con el
+    // contador en memoria del proceso como techo (ver "SEGUNDA CAPA" arriba).
+    const m = memLeer(ip, ventanaMs);
+    if (m.n >= max) return { ok: false, ip, segundos: Math.ceil(bloqueoMs / 1000), soloMemoria: true };
+    // datos: null para que registrarFallo no vuelva a pedirle nada al storage
+    // (ya sabemos que no contesta).
+    return { ok: true, ip, soloMemoria: true, datos: null };
   }
+
   cache.set(ip, { datos: d, hasta: ahora + CACHE_MS });
 
   if (!d) return { ok: true, ip, datos: null };
@@ -126,6 +177,9 @@ export async function chequearIntentos(req, { max = 10, ventanaMs = 10 * 60 * 10
 export async function registrarFallo(req, { retardoBaseMs = 400, retardoMaxMs = 4000, ventanaMs = 10 * 60 * 1000, reiniciar = false, datos = undefined } = {}) {
   const ip = ipDe(req);
   const ahora = Date.now();
+  // El contador en memoria se suma SIEMPRE, no sólo cuando el storage falla:
+  // es la segunda capa y tiene que estar al día para cuando haga falta.
+  const nMemoria = memSumar(ip, ventanaMs);
   let d = datos;
   if (d === undefined) {
     try { d = await leer(rutaDe(ip)); } catch (e) { d = null; }
@@ -139,13 +193,24 @@ export async function registrarFallo(req, { retardoBaseMs = 400, retardoMaxMs = 
 
   try { await escribir(rutaDe(ip), nuevo); } catch (e) { /* best-effort */ }
   cache.set(ip, { datos: nuevo, hasta: ahora + CACHE_MS });
-  return Math.min(retardoBaseMs * nuevo.n, retardoMaxMs);
+  // El retardo sale del contador más alto de los dos: si el storage no pudo
+  // guardar nada, el de memoria es el único que sube.
+  return Math.min(retardoBaseMs * Math.max(nuevo.n, nMemoria), retardoMaxMs);
+}
+
+// Un acierto sólo necesita limpiar si esta IP tenía algo anotado. Lo usan los
+// endpoints que la app del taller llama todo el tiempo (respaldo, estado,
+// lecturas): ahí, llamar a registrarAcierto a secas agregaba una operación de
+// storage a CADA pedido bueno, y las operaciones de Blob se pagan.
+export async function registrarAciertoSiHaceFalta(req, limite) {
+  if (limite && (limite.datos || limite.soloMemoria)) await registrarAcierto(req);
 }
 
 // Un acierto limpia el historial de esa IP.
 export async function registrarAcierto(req) {
   const ip = ipDe(req);
   cache.delete(ip);
+  memoria.delete(ip);
   try {
     const d = await leer(rutaDe(ip));
     if (d) await escribir(rutaDe(ip), { n: 0, desde: Date.now(), bloqueadoHasta: 0 });
