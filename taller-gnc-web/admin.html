@@ -296,6 +296,17 @@
   function render(data) {
     DATA = data;
     pintarFiltro();
+    // La clave del panel es corta: no bloquea, pero conviene alargarla.
+    if (data.avisoClave) {
+      let av = document.getElementById('aviso-clave');
+      if (!av) {
+        av = document.createElement('p');
+        av.id = 'aviso-clave';
+        av.style.cssText = 'margin:0 0 14px;padding:10px 12px;border-radius:8px;background:#fde68a;color:#78350f;font-weight:600';
+        av.textContent = 'La contraseña de este panel tiene menos de 16 caracteres. Hay límite de intentos, así que no corre peligro inmediato, pero conviene alargarla: Vercel → Project Settings → Environment Variables → ADMIN_TOKEN.';
+        document.body.insertBefore(av, document.body.firstChild);
+      }
+    }
     const licencias = (data.licencias || []).filter(l => !FILTRO || (l.producto || 'taller') === FILTRO);
     const costoTotal = Number(data.costoTotalMes) || 0;
     const activos = licencias.filter(l => l.estado === 'activo').length;

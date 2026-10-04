@@ -21,10 +21,23 @@ import { chequearIntentos, registrarFallo, registrarAcierto, esperar } from './_
 function tokenOk(req) {
   const provided = String((req.headers['x-admin-token'] || (req.body && req.body.token) || ''));
   const expected = String(process.env.ADMIN_TOKEN || '');
-  if (!expected || expected.length < 16 || !provided) return false;
+  if (!expected || !provided) return false;
   const a = crypto.createHash('sha256').update(provided).digest();
   const b = crypto.createHash('sha256').update(expected).digest();
   return crypto.timingSafeEqual(a, b);
+}
+
+/**
+ * La clave corta AVISA, no bloquea.
+ *
+ * Lo prolijo seria exigir 16 caracteres como SERVIDOR_SECRET y MONITOR_SECRET,
+ * pero si la de hoy es mas corta eso deja al dueño afuera de su propio panel
+ * sin manera de entrar a arreglarlo. Con el limite de intentos de arriba (5
+ * cada 10 minutos y 15 de bloqueo) una clave corta ya no se puede adivinar a
+ * fuerza bruta, asi que alcanza con mostrar el aviso en la pantalla.
+ */
+function claveCorta() {
+  return String(process.env.ADMIN_TOKEN || '').length < 16;
 }
 
 const PLANES = ['basico', 'profesional', 'full'];
@@ -51,7 +64,7 @@ export default async function handler(req, res) {
   }
   if (!tokenOk(req)) {
     await esperar(await registrarFallo(req, { reiniciar: limite.reiniciar, datos: limite.datos }));
-    return res.status(401).json({ error: 'Contraseña incorrecta (o falta ADMIN_TOKEN en Vercel, con 16 caracteres o más).' });
+    return res.status(401).json({ error: 'Contraseña incorrecta (o falta ADMIN_TOKEN en Vercel).' });
   }
   await registrarAcierto(req);
   if (!process.env.BLOB_READ_WRITE_TOKEN) return res.status(500).json({ error: 'Falta BLOB_READ_WRITE_TOKEN en Vercel.' });
@@ -153,6 +166,9 @@ export default async function handler(req, res) {
         mes: mesActual,
         infra: { vercel, opsIaMes, limiteOpsGratis: 2000 },
         ritmo,
+        // Si la clave del panel es corta, que la pantalla lo diga: no se
+        // bloquea la entrada, pero conviene alargarla en Vercel.
+        avisoClave: claveCorta(),
       });
     }
 
