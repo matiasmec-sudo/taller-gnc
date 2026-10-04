@@ -20,6 +20,7 @@ import { put, list, del } from '@vercel/blob';
 import crypto from 'crypto';
 import webpush from 'web-push';
 import { licenciaValida } from './_licencias.js';
+import { chequearIntentos, registrarFallo, registrarAciertoSiHaceFalta, esperar } from './_ratelimit.js';
 
 // Un cartel viejo no sirve de nada: a los 3 días se da por atendido solo.
 const VIDA_MS = 3 * 24 * 60 * 60 * 1000;
@@ -141,7 +142,22 @@ export default async function handler(req, res) {
   }
 
   // ---- De la app del taller ----
-  if (!(await licenciaValida(license))) return res.status(403).json({ error: 'Código de licencia no válido.' });
+  //
+  // Acá sí va el límite de intentos por IP: la app se identifica sólo con el
+  // código, así que este camino es un oráculo de códigos como /api/licencia.
+  // El camino del CRM (arriba) queda afuera a propósito: lo protege el secreto
+  // compartido, y un servidor nuestro verificando sus licencias desde una sola
+  // IP haría saltar el límite con unas pocas suspendidas (ver /api/servidor).
+  const limite = await chequearIntentos(req, { max: 6, ventanaMs: 10 * 60 * 1000, bloqueoMs: 5 * 60 * 1000 });
+  if (!limite.ok) {
+    res.setHeader('Retry-After', String(limite.segundos));
+    return res.status(429).json({ error: 'Demasiados intentos con códigos que no existen. Esperá unos minutos y probá de nuevo.' });
+  }
+  if (!(await licenciaValida(license))) {
+    await esperar(await registrarFallo(req, { reiniciar: limite.reiniciar, datos: limite.datos }));
+    return res.status(403).json({ error: 'Código de licencia no válido.' });
+  }
+  await registrarAciertoSiHaceFalta(req, limite);
   const hash = hashLicencia(license);
 
   if (accion === 'listar') {

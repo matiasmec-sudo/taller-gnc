@@ -5,11 +5,17 @@
 // no contesta.
 //
 //   GET /api/monitor   header x-monitor-secret: <secreto>
+//
+// SÓLO por header, nunca por query string. Antes también se aceptaba
+// ?secreto=...: cómodo para probar desde el navegador, pero un secreto en la
+// URL queda en el historial, en los logs de acceso de Vercel y en el Referer
+// de cualquier cosa que se abra después. Para probarlo a mano:
+//   curl -H "x-monitor-secret: <secreto>" https://estelita.net.ar/api/monitor
 import crypto from 'crypto';
-import { leerLicenciasEstricto, leerActividad, leerConsumoMes, leerCredito, calcularRitmo, productoDe, GRACIA_DIAS } from './_licencias.js';
+import { leerLicenciasEstricto, leerActividad, leerConsumoMes, leerCredito, calcularRitmo, productoDe, normCodigo, GRACIA_DIAS } from './_licencias.js';
 
 function secretoOk(req) {
-  const recibido = String(req.headers['x-monitor-secret'] || (req.query && req.query.secreto) || '');
+  const recibido = String(req.headers['x-monitor-secret'] || '');
   const esperado = String(process.env.MONITOR_SECRET || '');
   if (!esperado || esperado.length < 16 || !recibido) return false;
   const a = Buffer.from(recibido);
@@ -50,7 +56,7 @@ export default async function handler(req, res) {
     const g = porProducto[p] || (porProducto[p] = { total: 0, activas: 0 });
     g.total++;
     if (l.estado === 'activo') g.activas++;
-    const c = consumo[l.codigo] || {};
+    const c = consumo[normCodigo(l.codigo)] || {};
     costoMes += Number(c.costoUSD) || 0;
     readsMes += Number(c.reads) || 0;
     const ficha = { codigo: l.codigo, negocio: l.taller || '', producto: p, pagoHasta: l.pagoHasta || null };

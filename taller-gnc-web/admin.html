@@ -84,6 +84,7 @@
       <div>
         <button class="btn btn-primary btn-sm" id="btn-nueva">+ Nueva licencia</button>
         <button class="btn btn-ghost btn-sm" id="btn-correo" title="Manda un correo de prueba a la casilla de Estelita">Probar correo</button>
+        <button class="btn btn-ghost btn-sm" id="btn-reconciliar" title="Busca en Mercado Pago las suscripciones pagas que quedaron sin licencia y les crea el código">Revisar Mercado Pago</button>
         <button class="btn btn-ghost btn-sm" id="btn-refrescar">Refrescar</button>
         <button class="btn btn-ghost btn-sm" id="btn-salir">Salir</button>
       </div>
@@ -295,6 +296,17 @@
   function render(data) {
     DATA = data;
     pintarFiltro();
+    // La clave del panel es corta: no bloquea, pero conviene alargarla.
+    if (data.avisoClave) {
+      let av = document.getElementById('aviso-clave');
+      if (!av) {
+        av = document.createElement('p');
+        av.id = 'aviso-clave';
+        av.style.cssText = 'margin:0 0 14px;padding:10px 12px;border-radius:8px;background:#fde68a;color:#78350f;font-weight:600';
+        av.textContent = 'La contraseña de este panel tiene menos de 16 caracteres. Hay límite de intentos, así que no corre peligro inmediato, pero conviene alargarla: Vercel → Project Settings → Environment Variables → ADMIN_TOKEN.';
+        document.body.insertBefore(av, document.body.firstChild);
+      }
+    }
     const licencias = (data.licencias || []).filter(l => !FILTRO || (l.producto || 'taller') === FILTRO);
     const costoTotal = Number(data.costoTotalMes) || 0;
     const activos = licencias.filter(l => l.estado === 'activo').length;
@@ -428,6 +440,31 @@
     if (!c.configurado) { alert('El correo todavía no está configurado. Faltan las variables GMAIL_USER y GMAIL_APP_PASSWORD en Vercel.'); return; }
     try { const r = await api('probar-correo', {}); alert('Correo de prueba enviado a ' + r.para + '. Fijate que haya llegado (mirá también Spam).'); }
     catch (e) { alert('No se pudo: ' + e.message); }
+  });
+  // Reconciliación con Mercado Pago: para cuando el aviso del alta se perdió y
+  // el cliente pagó sin recibir el código. Busca las suscripciones autorizadas
+  // sin licencia y las crea (mandando el correo con el código).
+  $('#btn-reconciliar').addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget;
+    if (!confirm('Buscar en Mercado Pago las suscripciones pagas que quedaron sin licencia y crearles el código?')) return;
+    const antes = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Revisando...';
+    try {
+      const r = await api('reconciliar', {});
+      const creadas = r.creadas || [];
+      let msg = `Revisadas ${r.revisadas} suscripciones autorizadas en Mercado Pago.\n`;
+      msg += creadas.length
+        ? `Se crearon ${creadas.length} licencia(s):\n` + creadas.map(c => `  ${c.codigo}  ${c.email || 'sin email'}  ${c.plan || 'sin plan'}`).join('\n')
+        : 'No había ninguna sin licencia: todo en orden.';
+      if ((r.fallaron || []).length) msg += `\n\nFallaron ${r.fallaron.length}: ` + r.fallaron.map(f => f.preapproval + ' (' + f.error + ')').join(', ');
+      alert(msg);
+      if (creadas.length) await cargar();
+    } catch (e) {
+      if (e.message === '401') return mostrarLogin('La sesión expiró.');
+      alert('No se pudo: ' + e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = antes;
+    }
   });
   $('#btn-refrescar-sug').addEventListener('click', cargarSugerencias);
 

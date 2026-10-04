@@ -8,6 +8,7 @@
 import { put, list, del } from '@vercel/blob';
 import crypto from 'crypto';
 import { licenciaValida } from './_licencias.js';
+import { chequearIntentos, registrarFallo, registrarAciertoSiHaceFalta, esperar } from './_ratelimit.js';
 
 const NOMBRE_VALIDO = /^[a-z0-9][a-z0-9-]{0,80}\.json$/i;
 
@@ -19,14 +20,30 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Falta configurar BLOB_READ_WRITE_TOKEN en Vercel.' });
   }
 
+  // Igual que /api/licencia: contesta distinto según si el código existe, así
+  // que sirve para probar códigos. Mismo límite de intentos por IP.
+  const limite = await chequearIntentos(req, { max: 6, ventanaMs: 10 * 60 * 1000, bloqueoMs: 5 * 60 * 1000 });
+  if (!limite.ok) {
+    res.setHeader('Retry-After', String(limite.segundos));
+    return res.status(429).json({ error: 'Demasiados intentos con códigos que no existen. Esperá unos minutos y probá de nuevo.' });
+  }
+
   // Solo talleres con licencia válida pueden usar el respaldo.
   const { license, accion, nombre, contenido, vigentes } = req.body || {};
   if (!(await licenciaValida(license))) {
+    await esperar(await registrarFallo(req, { reiniciar: limite.reiniciar, datos: limite.datos }));
     return res.status(403).json({ error: 'Código de licencia no válido.' });
   }
+  await registrarAciertoSiHaceFalta(req, limite);
 
   // Cada licencia tiene su carpeta propia (hash de la licencia — el código
   // en sí no queda expuesto en las rutas del storage).
+  //
+  // OJO: el hash se hace con el código TAL COMO LO MANDA LA APP, sin pasarlo a
+  // mayúscula. Es a propósito: las carpetas que ya existen están hechas así, y
+  // normalizarlo acá las dejaría huérfanas (el taller vería su copia vacía).
+  // Como la app guarda el código una sola vez y lo manda siempre igual, en la
+  // práctica cada taller cae siempre en su carpeta.
   const carpeta = 'respaldos/' + crypto.createHash('sha256').update('estelita:' + license).digest('hex');
 
   try {
