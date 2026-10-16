@@ -371,6 +371,35 @@
   font-family: var(--mono); font-size: 11px; text-transform: none; letter-spacing: normal;
   color: var(--text-muted); margin-top: 4px;
 }
+/* Encabezado de las pantallas que trabajan sobre UN auto. La patente va de
+   titulo, con el mismo peso y espaciado que en la tarjeta del cliente
+   (.client-patente), y la accion queda de etiqueta chica al costado. */
+/* La accion va PEGADA a la patente, no al otro extremo: con space-between,
+   en un monitor ancho quedaba a 1000px de distancia y se leia como si fuera
+   de otra cosa. */
+#gnc-app .cab-linea1 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+#gnc-app .cab-patente {
+  font-family: var(--display); font-weight: 800; font-size: 24px; letter-spacing: 1.5px;
+  color: var(--text); text-transform: none; min-width: 0; overflow-wrap: anywhere;
+}
+/* Tramite nuevo: todavia no se leyo la cedula verde. */
+#gnc-app .cab-patente-vacia { font-size: 17px; font-weight: 700; letter-spacing: 0.3px; color: var(--text-muted); }
+#gnc-app .cab-accion {
+  font-size: 12px; font-weight: 700; color: var(--flame); white-space: nowrap;
+  text-transform: none; letter-spacing: normal; flex: none;
+}
+#gnc-app .cab-sub {
+  font-family: var(--sans); font-size: 12.5px; font-weight: 600; color: var(--text-muted);
+  text-transform: none; letter-spacing: normal; margin-top: 1px;
+}
+/* En el celular este encabezado queda fijo en TODAS las pantallas del tramite,
+   asi que el alto que ocupe se paga siempre: va compacto, patente y paso. El
+   nombre del cliente se cae porque igual esta en el formulario, ahi abajo. */
+@media (max-width: 720px) {
+  #gnc-app .cab-sub { display: none; }
+  #gnc-app .cab-patente { font-size: 21px; }
+  #gnc-app .panel h2.panel-h2-sticky { padding: 12px 20px 8px; }
+}
 #gnc-app .panel h3 {
   font-family: var(--display); font-size: 13px; text-transform: uppercase; font-weight: 700;
   letter-spacing: 1px; margin: 18px 0 10px; color: var(--text-muted);
@@ -1744,6 +1773,18 @@ body.gnc-dark .gnc-modal-box select, body.gnc-dark .gnc-modal-box input { backgr
       || /^[A-Z]{2}\d{3}[A-Z]{2}$/.test(s)  // auto Mercosur: AB123CD
       || /^\d{3}[A-Z]{3}$/.test(s)          // moto vieja: 123ABC
       || /^[A-Z]\d{3}[A-Z]{3}$/.test(s);    // moto Mercosur: A123BCD
+  }
+  // La patente como se LEE, no como se guarda: "AB123CD" -> "AB 123 CD".
+  // Es solo para mostrar en pantalla; el valor guardado sigue pelado, que es
+  // lo que esperan ENARGAS, los PDF y el buscador. Si no reconoce el formato
+  // la devuelve igual (en mayuscula): mostrarla rara es mejor que no mostrarla.
+  function patenteLinda(p) {
+    const s = (p || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const m = /^([A-Z]{2})(\d{3})([A-Z]{2})$/.exec(s)   // auto Mercosur: AB 123 CD
+      || /^([A-Z]{3})(\d{3})$/.exec(s)                  // auto viejo:    ABC 123
+      || /^(\d{3})([A-Z]{3})$/.exec(s)                   // moto vieja:    123 ABC
+      || /^([A-Z])(\d{3})([A-Z]{3})$/.exec(s);           // moto Mercosur: A 123 BCD
+    return m ? m.slice(1).join(' ') : s;
   }
   function cuitValido(c) { return (c || '').replace(/\D/g, '').length === 11; }
   // Si lo que se está buscando parece una patente, la devuelve normalizada
@@ -7350,7 +7391,11 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       { key: 'foto2', label: 'Dorso' },
     ];
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="fotos-panel">
-      <h2 class="panel-h2-sticky">Documentación — ${escapeHtml(nombreFicha(cliente))}</h2>
+      ${cabeceraPatente({
+        patente: cliente.patente,
+        accion: 'Documentación',
+        sub: nombreFicha(cliente),
+      })}
       <div class="scan-grid scan-grid-2">
         ${slots.map(s => `
         <div class="scan-slot">
@@ -8198,16 +8243,51 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
   // arma todo el alta/edición como un asistente de 3 pasos — así se
   // garantiza que cada sección quede completa antes de avanzar, en vez de
   // tener todos los campos sueltos en una sola pantalla larga.
+  // Encabezado fijo de las pantallas donde se trabaja sobre UN auto: el
+  // asistente de tramite y la Documentacion. La patente va de titulo y
+  // grande, y el nombre del cliente pasa abajo, chico.
+  //
+  // El motivo: adentro de un tramite lo que identifica el trabajo es el AUTO,
+  // no la persona. Y como el borrador se guarda solo, es normal arrancar un
+  // tramite, atender a otro cliente y volver media hora despues a una pantalla
+  // a medio llenar: ahi la patente arriba es lo que evita cargarle el tramite
+  // al auto equivocado. Ademas el resto de la app ya la trata asi (en la
+  // tarjeta del cliente la patente es el titulo); aca era la excepcion.
+  //
+  // `patente` puede venir vacia: en un tramite nuevo todavia no se leyo la
+  // cedula verde. Se muestra en gris y se completa sola mientras se tipea (el
+  // enganche de #cab-patente esta en attachEvents). Por eso el id lo lleva
+  // SOLO el asistente (`vivo`): en Documentacion no hay nada que actualizar, y
+  // dos elementos con el mismo id -- si alguna vez quedan los dos paneles
+  // abiertos a la vez -- harian que se actualice el que no es.
+  function cabeceraPatente({ patente, accion, sub, paso, vivo }) {
+    const p = String(patente || '').trim();
+    return `<h2 class="panel-h2-sticky">
+      <div class="cab-linea1">
+        <span class="cab-patente${p ? '' : ' cab-patente-vacia'}"${vivo ? ' id="cab-patente"' : ''}>${p ? escapeHtml(patenteLinda(p)) : 'Sin patente'}</span>
+        <span class="cab-accion">${escapeHtml(accion)}</span>
+      </div>
+      ${sub ? `<div class="cab-sub">${escapeHtml(sub)}</div>` : ''}
+      ${paso ? `<div class="wizard-pasos">${escapeHtml(paso)}</div>` : ''}
+    </h2>`;
+  }
+
   function tramiteWizardPanel(existing, entrando, entrandoPaso, enargasEntrando) {
     if (!clienteDraft) clienteDraft = existing ? { ...existing } : blankClienteBase();
     const c = clienteDraft;
     if (!tramiteDraftEquipo) tramiteDraftEquipo = blankEquipo(existing ? existing.ultimoEquipoConocido : null);
     if (!tramiteDraftCampos) tramiteDraftCampos = blankTramiteCampos(editingTramiteId && existing ? existing.tramites.find(t => t.id === editingTramiteId) : null);
-    const titulo = existing ? escapeHtml(c.nombre || existing.nombre || 'cliente') : 'Nuevo cliente';
+    const nombreTit = String(c.nombre || (existing && existing.nombre) || '').trim();
+    const vehiculo = [c.marca, c.modelo, c.anio].map(x => String(x || '').trim()).filter(Boolean).join(' ');
+    const sub = [nombreTit, vehiculo].filter(Boolean).join(' · ') || (existing ? '' : 'Cliente nuevo');
     return `<div class="panel ${entrando ? 'panel-entrando' : ''}" id="form-panel">
-      <h2 class="panel-h2-sticky">${modoSoloDatos ? 'Actualizar datos' : 'Inicio de trámite'} — ${titulo}
-        ${modoSoloDatos ? '' : `<div class="wizard-pasos">Paso ${wizardStep} de 3 — ${WIZARD_PASOS[wizardStep - 1]}</div>`}
-      </h2>
+      ${cabeceraPatente({
+        patente: c.patente,
+        accion: modoSoloDatos ? 'Actualizar datos' : 'Inicio de trámite',
+        sub,
+        paso: modoSoloDatos ? '' : `Paso ${wizardStep} de 3 — ${WIZARD_PASOS[wizardStep - 1]}`,
+        vivo: true,
+      })}
       <div class="${entrandoPaso ? 'panel-entrando' : ''}">
       ${wizardStep === 1 ? wizardPaso1(c, enargasEntrando) : ''}
       ${wizardStep === 2 ? wizardPaso2(tramiteDraftEquipo, c) : ''}
@@ -11195,6 +11275,23 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     }
     bindFormatoHint('qa-patente', 'qa-patente-hint', patenteValida, true);
     bindFormatoHint('f-patente', 'f-patente-hint', patenteValida, true);
+
+    // La patente del encabezado se actualiza letra por letra mientras se
+    // carga. Se toca SOLO ese nodo a mano en vez de llamar a render(): un
+    // redibujado por tecla reconstruye todo el formulario y, aunque el foco se
+    // restaura, en un celular se nota la trabada.
+    (function engancharPatenteCabecera() {
+      const inp = root.querySelector('#f-patente');
+      const dest = root.querySelector('#cab-patente');
+      if (!inp || !dest) return;
+      const pintar = () => {
+        const v = inp.value.trim();
+        dest.textContent = v ? patenteLinda(v) : 'Sin patente';
+        dest.classList.toggle('cab-patente-vacia', !v);
+      };
+      inp.addEventListener('input', pintar);
+      pintar();
+    })();
     bindFormatoHint('tc-cuit', 'tc-cuit-hint', cuitValido, false);
 
     // Barra de navegación inferior (mobile). Solo abre/cierra los paneles de
