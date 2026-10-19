@@ -3944,6 +3944,33 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     return datos;
   }
 
+  // --- Cobro con el QR de Mercado Pago ---
+  //
+  // Es el mismo modelo que Estelita Repuestos: UN cartel con QR pegado en la
+  // pared, siempre el mismo, al que se le manda el importe de cada cobro. El
+  // cliente escanea y ya le aparece cuanto tiene que pagar.
+  //
+  // El token de la cuenta de Mercado Pago NO vive aca: vive en el facturador,
+  // igual que el certificado de ARCA. Con ese token se mueve la plata del
+  // taller, y cualquier cosa guardada en el navegador se puede leer. Desde
+  // aca solo se pide "pone este importe en el QR" y "¿ya pago?".
+  let mpEstado = null;      // { conectado, cuenta, qr } — null = todavia no se consulto
+  let mpCargando = false;
+  let mpError = null;
+
+  async function mpCargarEstado(forzar) {
+    if (mpCargando) return mpEstado;
+    if (mpEstado && !forzar) return mpEstado;
+    mpCargando = true;
+    mpError = null;
+    try { mpEstado = await factApi('/api/mp/estado'); }
+    catch (e) { mpError = e.message; }
+    finally { mpCargando = false; }
+    return mpEstado;
+  }
+
+  const mpListoParaCobrar = () => !!(mpEstado && mpEstado.conectado && mpEstado.qr);
+
   // Trae el estado del taller y los comprobantes; redibuja al terminar.
   async function cargarFacturacion() {
     if (factCargando) return;
@@ -4573,6 +4600,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       <div class="fact-campo"><label for="cj-monto">${cuenta ? 'Cuánto paga ahora' : 'Cuánto pagó'}</label>
         <input id="cj-monto" class="caja-monto-in" inputmode="numeric" value="${cuenta ? estado.debe : (pre.total ? Math.round(pre.total) : '')}" placeholder="0"></div>
       <div class="fact-campo"><label>Con qué pagó</label>${cajaChips('medio', CAJA_MEDIOS, 'Efectivo')}</div>
+      <div id="cj-qr" hidden></div>
       <div class="fact-campo"><label for="cj-quien">Quién lo carga</label>
         <input id="cj-quien" value="${escapeHtml(cajaQuien())}" placeholder="Tu nombre"></div>
       <div class="caja-queda" id="cj-queda" hidden></div>
@@ -4582,6 +4610,114 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         <button type="button" class="btn btn-primary" id="cj-ok">Registrar el cobro</button>
       </div>`);
     cajaEnlazarChips(m);
+
+    // --- Cobro con el QR del mostrador ---
+    //
+    // Aparece solo al elegir "Mercado Pago". Le manda el importe al QR de la
+    // pared y pregunta cada 2 segundos si ya pagó. Cuando Mercado Pago dice
+    // que sí, se aprieta el botón de siempre: todo lo que hace este modal
+    // (unir a la ficha, descontar del saldo, anotar la seña) queda igual, y
+    // el cobro no depende de que el cobro por QR exista.
+    const qrCaja = { orden: null, reloj: null, pagado: false };
+    const qrZona = m.q('#cj-qr');
+
+    function qrLimpiar() {
+      if (qrCaja.reloj) { clearInterval(qrCaja.reloj); qrCaja.reloj = null; }
+    }
+    function qrPintar(html) { qrZona.innerHTML = html; }
+
+    function qrInicio() {
+      if (!mpListoParaCobrar()) {
+        qrPintar(`<div class="agent-hint" style="margin:6px 0 0;">Para cobrar con QR, primero conectá Mercado Pago en <b>Mi taller → Cobros con QR</b>. Igual podés anotar el cobro a mano acá abajo.</div>`);
+        return;
+      }
+      qrPintar(`<div class="form-actions" style="margin:6px 0 0;">
+        <button type="button" class="btn btn-outline btn-sm" id="cj-qr-ir">Mostrar el QR para que pague</button>
+      </div>`);
+      m.q('#cj-qr-ir').addEventListener('click', qrMandarImporte);
+    }
+
+    async function qrMandarImporte() {
+      const monto = cajaNumero(m.q('#cj-monto').value);
+      if (!(monto > 0)) { m.q('#cj-err').textContent = 'Poné cuánto tiene que pagar antes de mostrar el QR.'; return; }
+      m.q('#cj-err').textContent = '';
+      qrPintar('<div class="agent-hint" style="margin:6px 0 0;">Poniendo el importe en el QR…</div>');
+      try {
+        const r = await factApi('/api/mp/cobrar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            monto,
+            descripcion: (m.q('#cj-concepto') ? m.q('#cj-concepto').value.trim() : '') || (cuenta ? cuenta.trabajo : '') || 'Cobro del taller',
+            referencia: cajaId('qr'),
+          }),
+        });
+        qrCaja.orden = r.ordenId;
+        qrEsperando(monto);
+      } catch (e) {
+        qrPintar(`<div class="agent-hint" style="margin:6px 0 0; color:var(--danger);">⚠️ ${escapeHtml(e.message)}</div>`);
+        setTimeout(qrInicio, 3500);
+      }
+    }
+
+    function qrEsperando(monto) {
+      const img = mpEstado.qr.imagen;
+      qrPintar(`<div class="caja-qr-espera" style="margin:8px 0 0; text-align:center; border:1px solid var(--line); border-radius:10px; padding:10px;">
+        ${img ? `<img src="${escapeHtml(img)}" alt="QR para pagar" style="width:170px; height:170px; background:#fff; border-radius:8px;">` : ''}
+        <div style="font-weight:700; margin-top:6px;">Que escanee el cartel del mostrador</div>
+        <div class="caja-sub">Tiene que pagar ${presuMoney(monto)} · El QR se libera solo a los 10 minutos</div>
+        <div class="caja-sub" id="cj-qr-estado" style="margin-top:4px;">Esperando el pago…</div>
+        <button type="button" class="btn btn-ghost btn-sm" id="cj-qr-cortar" style="margin-top:6px;">Cortar el cobro</button>
+      </div>`);
+      m.q('#cj-qr-cortar').addEventListener('click', qrCortar);
+      qrLimpiar();
+      qrCaja.reloj = setInterval(qrPreguntar, 2000);
+    }
+
+    async function qrPreguntar() {
+      if (!qrCaja.orden || qrCaja.pagado) return;
+      let r;
+      try { r = await factApi('/api/mp/orden/' + encodeURIComponent(qrCaja.orden)); }
+      catch (e) { return; } // un error de red suelto no corta la espera
+      const linea = m.q('#cj-qr-estado');
+      if (r.estado === 'cobrada') {
+        qrCaja.pagado = true;
+        qrLimpiar();
+        if (linea) { linea.textContent = '✅ ¡Pagó! Anotando el cobro…'; linea.style.color = 'var(--ok)'; }
+        // Se aprieta el botón de siempre: no duplicamos la lógica de guardado.
+        m.q('#cj-ok').click();
+        return;
+      }
+      if (r.estado === 'vencida' || r.estado === 'cancelada') {
+        qrLimpiar();
+        qrCaja.orden = null;
+        qrPintar(`<div class="agent-hint" style="margin:6px 0 0;">El cobro por QR ${r.estado === 'vencida' ? 'venció' : 'se canceló'} y nadie pagó. Podés volver a mostrarlo o anotar el cobro a mano.</div>`);
+        setTimeout(qrInicio, 2500);
+      }
+    }
+
+    async function qrCortar() {
+      qrLimpiar();
+      const orden = qrCaja.orden;
+      qrCaja.orden = null;
+      qrInicio();
+      if (orden) { try { await factApi('/api/mp/orden/' + encodeURIComponent(orden) + '/cancelar', { method: 'POST' }); } catch (e) { /* vence solo */ } }
+    }
+
+    function qrSegunMedio() {
+      const esMp = cajaChipValor(m, 'medio') === 'Mercado Pago';
+      qrZona.hidden = !esMp;
+      if (!esMp) { qrCortar(); return; }
+      if (!qrCaja.orden) qrInicio();
+      if (!mpEstado) mpCargarEstado().then(() => { if (!qrCaja.orden) qrInicio(); });
+    }
+    const gMedio = m.q('[data-chips="medio"]');
+    if (gMedio) gMedio.addEventListener('cambio', qrSegunMedio);
+    // Si el modal se cierra con un cobro a medio hacer, se suelta el QR.
+    const cerrarAntes = m.cerrar;
+    m.cerrar = () => { qrLimpiar(); if (qrCaja.orden && !qrCaja.pagado) qrCortar(); cerrarAntes(); };
+    qrSegunMedio();
+
     const inicialCli = cuenta ? null : ((pre.clienteId && clientes.find(x => x.id === pre.clienteId)) || cajaClientePorPatente(pre.patente));
     const fichaElegida = cuenta ? () => null : cajaEnlazarBuscador(m, 'cj', inicialCli, cli => { m.q('#cj-suelto').hidden = !!cli; });
     let modo = 'todo';
@@ -4656,9 +4792,26 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       }
       caja.movimientos.push({ id: cajaId('mv'), tipo: 'cobro', fecha, concepto: concepto || 'Cobro', patente, nombre, clienteId, monto, medio, quien, cuentaId, esSena, creadoEn: ahora, actualizadoEn: ahora });
       if (quien) cajaGuardarQuien(quien);
+      const cobroPorQr = qrCaja.pagado;
       m.cerrar();
       await saveCaja();
       render();
+      // Despues de un cobro por QR se OFRECE la factura; nunca se emite sola.
+      // Una factura en ARCA no se borra: si el importe esta mal hay que
+      // anularla con una nota de credito, asi que la decision es del taller.
+      if (cobroPorQr && factEstadoTaller && factEstadoTaller.puede_facturar) {
+        const cli = clienteId ? clientes.find(x => x.id === clienteId) : null;
+        if (await customConfirm(`Cobraste ${presuMoney(monto)} por Mercado Pago. ¿Emitís la factura ahora?`, '¿Facturamos?')) {
+          facturarAbrir({
+            items: [{ descripcion: concepto || 'Trabajo de GNC', precio: monto }],
+            nombre: nombre || (cli ? nombreFicha(cli) : ''),
+            dni: cli ? (cli.dni || '') : '',
+            domicilio: cli ? [cli.domicilio, cli.numero].filter(Boolean).join(' ') : '',
+            telefono: (cli && cli.telefono) || '',
+            alTerminar: cargarFacturacion,
+          });
+        }
+      }
     });
     setTimeout(() => {
       const el = m.q(cuenta || pre.concepto ? '#cj-monto' : '#cj-concepto');
@@ -7574,6 +7727,39 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     // vinculados al código de licencia. Acá solo se muestran y se editan.
     const at = (factEstadoTaller && factEstadoTaller.taller) || {};
     const puedeFact = factEstadoTaller && factEstadoTaller.puede_facturar;
+    // Seccion Cobros: conectar Mercado Pago y armar el QR del mostrador.
+    // El estado se pide al abrir la seccion (mpCargarEstado en attachEvents).
+    const mpQr = mpEstado && mpEstado.qr;
+    const secCobros = `
+      <div class="agent-hint" style="margin-top:0;">Un <b>cartel con QR</b> para pegar en el mostrador, siempre el mismo. Desde la Caja le mandás el importe de cada cobro y el cliente escanea: ya le aparece cuánto tiene que pagar, y cuando paga queda anotado solo.</div>
+      ${mpCargando ? '<div class="agent-hint">Consultando Mercado Pago…</div>' : ''}
+      ${mpError ? `<div class="agent-hint" style="color:var(--danger);">⚠️ ${escapeHtml(mpError)}</div>` : ''}
+      ${mpEstado && mpEstado.conectado ? `
+        <div class="agent-hint">✅ Conectado${mpEstado.cuenta ? ` a la cuenta <b>${escapeHtml(mpEstado.cuenta)}</b>` : ''}.</div>
+        ${mpQr ? `
+          <div style="text-align:center; margin:10px 0;">
+            ${mpQr.imagen ? `<img src="${escapeHtml(mpQr.imagen)}" alt="QR del mostrador" style="width:190px; height:190px; border:1px solid var(--line); border-radius:10px; background:#fff; padding:6px;">` : '<div class="caja-sub">El QR está creado.</div>'}
+          </div>
+          <div class="form-actions">
+            ${mpQr.cartelPdf ? `<a class="btn btn-primary btn-sm" href="${escapeHtml(mpQr.cartelPdf)}" target="_blank" rel="noopener">Imprimir el cartel</a>` : ''}
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-mp-rearmar">Rehacer el QR</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-mp-desconectar">Desconectar</button>
+          </div>`
+        : `
+          <div class="agent-hint">Falta armar el QR del mostrador. Usa el domicilio del taller para registrar la sucursal en Mercado Pago, así que revisá que esté bien arriba.</div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-mp-qr">Armar el QR del mostrador</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-mp-desconectar">Desconectar</button>
+          </div>`}`
+      : `
+        <label>Access Token de producción de Mercado Pago
+          <input type="password" id="tc-mp-token" placeholder="APP_USR-..." autocomplete="off" spellcheck="false">
+          <span class="formato-hint" style="display:block;">Sale de tu cuenta de Mercado Pago: <b>Tu negocio → Configuración → Gestión y administración → Credenciales de producción</b>. Se guarda en el servidor de Estelita, no en este aparato, y no se vuelve a mostrar.</span>
+        </label>
+        <div class="form-actions">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-mp-conectar">Conectar Mercado Pago</button>
+        </div>`}`;
+
     const secArca = `
       <div class="agent-hint" style="margin-top:0;">Con estos datos salen tus <b>facturas electrónicas</b>. Al guardar, tu código de licencia queda vinculado al taller. Para empezar a facturar hace falta además un trámite de 15 minutos en ARCA (certificado digital + punto de venta) — lo coordinamos por WhatsApp.</div>
       <div class="agent-hint">Tu código de licencia: <b>${escapeHtml(localStorage.getItem(LICENSE_KEY) || '—')}</b></div>
@@ -7818,6 +8004,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       <p class="scan-sub">Tocá cada sección para abrirla y editarla. Al terminar, tocá "Guardar configuración".</p>
       ${configSeccionCard('datos', 'Datos del taller', secDatos)}
       ${configSeccionCard('arca', 'ARCA (facturación electrónica)', secArca)}
+      ${configSeccionCard('cobros', 'Cobros con QR (Mercado Pago)', secCobros)}
       ${configSeccionCard('pec', 'Productores de Equipos Completos (PEC)', secPec)}
       ${configSeccionCard('tecnico', 'App del técnico', secTecnico)}
       ${configSeccionCard('mensajes', 'Mensajes de WhatsApp', secMensajes)}
@@ -11354,6 +11541,66 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     // Acordeón de configuración: abrir una sección a la vez. Antes de cambiar
     // se guarda en memoria lo tipeado en la sección abierta (incluido el
     // nombre del taller) para no perderlo.
+    // --- Cobros con QR (Mi taller) ---
+    const mpBotonOcupado = (b, texto) => { b.disabled = true; b.dataset.antes = b.textContent; b.textContent = texto; };
+    const mpAvisar = (e) => customAlert(e.message || String(e), 'Mercado Pago');
+
+    const btnMpConectar = root.querySelector('#btn-mp-conectar');
+    if (btnMpConectar) btnMpConectar.addEventListener('click', async () => {
+      const campo = root.querySelector('#tc-mp-token');
+      const token = campo ? campo.value.trim() : '';
+      if (!token) { customAlert('Pegá el Access Token de producción de Mercado Pago.', 'Falta el token'); return; }
+      mpBotonOcupado(btnMpConectar, 'Probando la cuenta…');
+      try {
+        // El facturador lo prueba contra Mercado Pago ANTES de guardarlo: si
+        // está mal, el taller se entera ahora y no con el cliente esperando.
+        mpEstado = await factApi('/api/mp/conectar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+        if (campo) campo.value = '';
+        render();
+      } catch (e) {
+        btnMpConectar.disabled = false;
+        btnMpConectar.textContent = btnMpConectar.dataset.antes || 'Conectar Mercado Pago';
+        mpAvisar(e);
+      }
+    });
+
+    const btnMpQr = root.querySelector('#btn-mp-qr');
+    const btnMpRearmar = root.querySelector('#btn-mp-rearmar');
+    const armarQr = async (boton, rearmar) => {
+      mpBotonOcupado(boton, 'Armando el QR…');
+      try {
+        mpEstado = await factApi('/api/mp/qr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rearmar: !!rearmar }),
+        });
+        render();
+      } catch (e) {
+        boton.disabled = false;
+        boton.textContent = boton.dataset.antes || 'Armar el QR del mostrador';
+        mpAvisar(e);
+      }
+    };
+    if (btnMpQr) btnMpQr.addEventListener('click', () => armarQr(btnMpQr, false));
+    if (btnMpRearmar) btnMpRearmar.addEventListener('click', async () => {
+      if (!await customConfirm('Se arma un QR nuevo. El cartel que tengas impreso deja de servir y hay que imprimir el nuevo. ¿Seguimos?', 'Rehacer el QR')) return;
+      armarQr(btnMpRearmar, true);
+    });
+
+    const btnMpDesc = root.querySelector('#btn-mp-desconectar');
+    if (btnMpDesc) btnMpDesc.addEventListener('click', async () => {
+      if (!await customConfirm('Se borra la clave de tu cuenta de Mercado Pago de Estelita y dejás de poder cobrar con el QR. Tu cuenta y tu plata no se tocan. ¿Desconectamos?', 'Desconectar Mercado Pago')) return;
+      try {
+        await factApi('/api/mp/desconectar', { method: 'POST' });
+        mpEstado = await mpCargarEstado(true);
+        render();
+      } catch (e) { mpAvisar(e); }
+    });
+
     root.querySelectorAll('[data-config-sec]').forEach(btn => {
       btn.addEventListener('click', () => {
         syncTallerConfigFromDOM();
@@ -11364,6 +11611,7 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
         render();
         // Al abrir la sección ARCA se consulta el estado real en el facturador.
         if (tallerConfigSeccion === 'arca' && !factEstadoTaller && !factCargando) cargarFacturacion();
+        if (tallerConfigSeccion === 'cobros') mpCargarEstado().then(render);
         if (tallerConfigSeccion === 'tecnico') consultarTecnicosVinculados().then(() => {
           if (tallerConfigSeccion !== 'tecnico') return;
           syncTallerConfigFromDOM();
