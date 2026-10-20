@@ -4652,10 +4652,27 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     function qrLimpiar() {
       if (qrCaja.reloj) { clearInterval(qrCaja.reloj); qrCaja.reloj = null; }
     }
+
+    // Cuando se cobra por QR, "Registrar el cobro" deja de ser la accion
+    // principal: ese boton solo ANOTA el cobro, no cobra. Sigue estando para
+    // el caso real de "ya me pagó por Mercado Pago desde el celular, anotalo".
+    const textoOkOriginal = m.q('#cj-ok').textContent;
+    function qrMandarAlFondo(alFondo) {
+      const ok = m.q('#cj-ok');
+      if (!ok) return;
+      ok.classList.toggle('btn-primary', !alFondo);
+      ok.classList.toggle('btn-ghost', !!alFondo);
+      ok.textContent = alFondo ? 'Ya me pagó, anotarlo' : textoOkOriginal;
+    }
     function qrPintar(html) { qrZona.innerHTML = html; }
 
     function qrInicio() {
-      const aviso = (txt) => qrPintar(`<div class="agent-hint" style="margin:6px 0 0;">${txt}</div>`);
+      // Un aviso significa que por QR no se puede: ahi "Registrar el cobro"
+      // vuelve a ser lo principal, porque es la unica salida que le queda.
+      const aviso = (txt) => {
+        qrMandarAlFondo(false);
+        qrPintar(`<div class="agent-hint" style="margin:6px 0 0;">${txt}</div>`);
+      };
       // Todavia no sabemos: NUNCA decir que no esta conectado. Decirlo sin
       // saber es lo que hizo que el taller dejara de intentar.
       if (mpCargando || (!mpEstado && !mpError)) {
@@ -4675,10 +4692,14 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         aviso('Mercado Pago está conectado pero falta armar el QR del mostrador, en <b>Mi taller → Cobros con QR</b>.');
         return;
       }
-      qrPintar(`<div class="form-actions" style="margin:6px 0 0;">
-        <button type="button" class="btn btn-outline btn-sm" id="cj-qr-ir">Mostrar el QR para que pague</button>
-      </div>`);
+      // El cartel de la pared NO cobra solo: hasta que no se le manda el
+      // importe, el que escanea queda esperando. Por eso este es el boton
+      // grande y "Registrar el cobro" pasa a segundo plano.
+      qrPintar(`
+        <div class="agent-hint" style="margin:6px 0 4px;">El cartel del mostrador no cobra solo: mandale el importe desde acá y recién ahí el cliente ve cuánto tiene que pagar.</div>
+        <button type="button" class="btn btn-primary" id="cj-qr-ir" style="width:100%;">Mostrar el QR para que pague</button>`);
       m.q('#cj-qr-ir').addEventListener('click', qrMandarImporte);
+      qrMandarAlFondo(true);
     }
 
     async function qrMandarImporte() {
@@ -4713,6 +4734,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
         <button type="button" class="btn btn-ghost btn-sm" id="cj-qr-cortar" style="margin-top:6px;">Cortar el cobro</button>
       </div>`);
       m.q('#cj-qr-cortar').addEventListener('click', qrCortar);
+      qrMandarAlFondo(true);
       // El mismo QR que el cartel de la pared: sirve para los dos lados, el
       // cliente escanea el cartel o la pantalla, da igual.
       mpDibujarQr(m.q('#cj-qr-lienzo'), mpEstado.qr.codigo, 170);
@@ -4753,7 +4775,7 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     function qrSegunMedio() {
       const esMp = cajaChipValor(m, 'medio') === 'Mercado Pago';
       qrZona.hidden = !esMp;
-      if (!esMp) { qrCortar(); return; }
+      if (!esMp) { qrMandarAlFondo(false); qrCortar(); return; }
       if (!qrCaja.orden) qrInicio();
       // Si la consulta estaba en vuelo (o no habia arrancado), se repinta al
       // terminar: el cartel pasa de "Consultando…" al boton sin tocar nada.
