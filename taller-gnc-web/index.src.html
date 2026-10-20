@@ -4585,6 +4585,10 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
 
   function cajaCobrar(pre) {
     pre = pre || {};
+    // Se pregunta por Mercado Pago apenas se abre el modal, no al elegir el
+    // medio: asi para cuando el taller termina de tipear el importe la
+    // respuesta ya llego, y nunca ve un cartel equivocado.
+    if (!mpEstado && !mpCargando) mpCargarEstado();
     const cuenta = pre.cuentaId ? cajaVivos(caja.cuentas).find(c => c.id === pre.cuentaId) : null;
     const estado = cuenta ? cajaCuentaEstado(cuenta) : null;
     const fecha = cajaFechaParaCargar(!!pre.desdeComprobante || !!pre.desdeFicha);
@@ -4651,8 +4655,24 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     function qrPintar(html) { qrZona.innerHTML = html; }
 
     function qrInicio() {
+      const aviso = (txt) => qrPintar(`<div class="agent-hint" style="margin:6px 0 0;">${txt}</div>`);
+      // Todavia no sabemos: NUNCA decir que no esta conectado. Decirlo sin
+      // saber es lo que hizo que el taller dejara de intentar.
+      if (mpCargando || (!mpEstado && !mpError)) {
+        aviso('Consultando Mercado Pago…');
+        return;
+      }
+      if (mpError) {
+        aviso(`No se pudo consultar Mercado Pago: ${escapeHtml(mpError)}. Podés anotar el cobro a mano acá abajo.`);
+        return;
+      }
+      if (!mpEstado.conectado) {
+        aviso('Para cobrar con QR, primero conectá Mercado Pago en <b>Mi taller → Cobros con QR</b>. Igual podés anotar el cobro a mano acá abajo.');
+        return;
+      }
       if (!mpListoParaCobrar()) {
-        qrPintar(`<div class="agent-hint" style="margin:6px 0 0;">Para cobrar con QR, primero conectá Mercado Pago en <b>Mi taller → Cobros con QR</b>. Igual podés anotar el cobro a mano acá abajo.</div>`);
+        // Conectado pero sin caja: es otro problema y se arregla en otro lado.
+        aviso('Mercado Pago está conectado pero falta armar el QR del mostrador, en <b>Mi taller → Cobros con QR</b>.');
         return;
       }
       qrPintar(`<div class="form-actions" style="margin:6px 0 0;">
@@ -4735,7 +4755,17 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       qrZona.hidden = !esMp;
       if (!esMp) { qrCortar(); return; }
       if (!qrCaja.orden) qrInicio();
-      if (!mpEstado) mpCargarEstado().then(() => { if (!qrCaja.orden) qrInicio(); });
+      // Si la consulta estaba en vuelo (o no habia arrancado), se repinta al
+      // terminar: el cartel pasa de "Consultando…" al boton sin tocar nada.
+      if (!mpEstado && !mpError) {
+        mpCargarEstado().then(() => { if (!qrCaja.orden) qrInicio(); });
+      } else if (mpCargando) {
+        const esperar = setInterval(() => {
+          if (mpCargando) return;
+          clearInterval(esperar);
+          if (!qrCaja.orden) qrInicio();
+        }, 300);
+      }
     }
     const gMedio = m.q('[data-chips="medio"]');
     if (gMedio) gMedio.addEventListener('cambio', qrSegunMedio);
