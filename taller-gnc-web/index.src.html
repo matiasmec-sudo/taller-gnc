@@ -4646,11 +4646,12 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     // que sí, se aprieta el botón de siempre: todo lo que hace este modal
     // (unir a la ficha, descontar del saldo, anotar la seña) queda igual, y
     // el cobro no depende de que el cobro por QR exista.
-    const qrCaja = { orden: null, reloj: null, pagado: false };
+    const qrCaja = { orden: null, reloj: null, espera: null, pagado: false };
     const qrZona = m.q('#cj-qr');
 
     function qrLimpiar() {
       if (qrCaja.reloj) { clearInterval(qrCaja.reloj); qrCaja.reloj = null; }
+      if (qrCaja.espera) { clearInterval(qrCaja.espera); qrCaja.espera = null; }
     }
 
     // Cuando se cobra por QR, "Registrar el cobro" deja de ser la accion
@@ -4777,16 +4778,22 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       qrZona.hidden = !esMp;
       if (!esMp) { qrMandarAlFondo(false); qrCortar(); return; }
       if (!qrCaja.orden) qrInicio();
-      // Si la consulta estaba en vuelo (o no habia arrancado), se repinta al
-      // terminar: el cartel pasa de "Consultando…" al boton sin tocar nada.
-      if (!mpEstado && !mpError) {
-        mpCargarEstado().then(() => { if (!qrCaja.orden) qrInicio(); });
-      } else if (mpCargando) {
-        const esperar = setInterval(() => {
+      // El cartel pasa de "Consultando…" al boton sin que haya que tocar nada.
+      //
+      // OJO con el orden: cuando se abre el modal ya se dispara la consulta,
+      // asi que al elegir el medio lo normal es que siga EN VUELO. Preguntar
+      // primero por `mpCargando` es lo que importa — llamar a mpCargarEstado()
+      // mientras hay una en curso devuelve vacio al instante y dejaba la
+      // pantalla clavada en "Consultando…" para siempre.
+      if (mpCargando) {
+        qrCaja.espera = setInterval(() => {
           if (mpCargando) return;
-          clearInterval(esperar);
+          clearInterval(qrCaja.espera);
+          qrCaja.espera = null;
           if (!qrCaja.orden) qrInicio();
-        }, 300);
+        }, 250);
+      } else if (!mpEstado && !mpError) {
+        mpCargarEstado().then(() => { if (!qrCaja.orden) qrInicio(); });
       }
     }
     const gMedio = m.q('[data-chips="medio"]');
