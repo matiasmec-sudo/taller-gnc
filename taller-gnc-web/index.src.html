@@ -3969,7 +3969,31 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     return mpEstado;
   }
 
-  const mpListoParaCobrar = () => !!(mpEstado && mpEstado.conectado && mpEstado.qr);
+  const mpListoParaCobrar = () => !!(mpEstado && mpEstado.conectado && mpEstado.qr && mpEstado.qr.codigo);
+
+  // Dibuja el QR del mostrador dentro de `caja`. El contenido no es secreto:
+  // es exactamente lo que cualquiera lee al escanear el cartel de la pared.
+  // La libreria se baja del mismo CDN que jsPDF y queda cacheada por el
+  // service worker, asi que la segunda vez sale al toque.
+  let mpQrLibPromesa = null;
+  async function mpDibujarQr(caja, texto, px) {
+    if (!caja || !texto) return;
+    try {
+      if (!mpQrLibPromesa) mpQrLibPromesa = cargarScriptCdn('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
+      await mpQrLibPromesa;
+      if (typeof QRCode === 'undefined') throw new Error('sin libreria');
+      caja.innerHTML = '';
+      new QRCode(caja, {
+        text: texto,
+        width: px || 180,
+        height: px || 180,
+        correctLevel: QRCode.CorrectLevel.M,
+      });
+    } catch (e) {
+      // Sin internet no se puede dibujar: se avisa en vez de dejar un hueco.
+      caja.innerHTML = '<div class="caja-sub">No se pudo dibujar el QR acá. Usá el cartel impreso del mostrador.</div>';
+    }
+  }
 
   // Trae el estado del taller y los comprobantes; redibuja al terminar.
   async function cargarFacturacion() {
@@ -4661,15 +4685,17 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
     }
 
     function qrEsperando(monto) {
-      const img = mpEstado.qr.imagen;
       qrPintar(`<div class="caja-qr-espera" style="margin:8px 0 0; text-align:center; border:1px solid var(--line); border-radius:10px; padding:10px;">
-        ${img ? `<img src="${escapeHtml(img)}" alt="QR para pagar" style="width:170px; height:170px; background:#fff; border-radius:8px;">` : ''}
+        <div id="cj-qr-lienzo" style="display:inline-block; background:#fff; border-radius:8px; padding:6px; line-height:0;"></div>
         <div style="font-weight:700; margin-top:6px;">Que escanee el cartel del mostrador</div>
         <div class="caja-sub">Tiene que pagar ${presuMoney(monto)} · El QR se libera solo a los 10 minutos</div>
         <div class="caja-sub" id="cj-qr-estado" style="margin-top:4px;">Esperando el pago…</div>
         <button type="button" class="btn btn-ghost btn-sm" id="cj-qr-cortar" style="margin-top:6px;">Cortar el cobro</button>
       </div>`);
       m.q('#cj-qr-cortar').addEventListener('click', qrCortar);
+      // El mismo QR que el cartel de la pared: sirve para los dos lados, el
+      // cliente escanea el cartel o la pantalla, da igual.
+      mpDibujarQr(m.q('#cj-qr-lienzo'), mpEstado.qr.codigo, 170);
       qrLimpiar();
       qrCaja.reloj = setInterval(qrPreguntar, 2000);
     }
@@ -7736,15 +7762,16 @@ Te escribimos de {taller}. Este mes te vuelve a tocar la renovación de la oblea
       ${mpError ? `<div class="agent-hint" style="color:var(--danger);">⚠️ ${escapeHtml(mpError)}</div>` : ''}
       ${mpEstado && mpEstado.conectado ? `
         <div class="agent-hint">✅ Conectado${mpEstado.cuenta ? ` a la cuenta <b>${escapeHtml(mpEstado.cuenta)}</b>` : ''}.</div>
-        ${mpQr ? `
+        ${mpQr && mpQr.codigo ? `
           <div style="text-align:center; margin:10px 0;">
-            ${mpQr.imagen ? `<img src="${escapeHtml(mpQr.imagen)}" alt="QR del mostrador" style="width:190px; height:190px; border:1px solid var(--line); border-radius:10px; background:#fff; padding:6px;">` : '<div class="caja-sub">El QR está creado.</div>'}
+            <div id="mp-qr-lienzo" style="display:inline-block; border:1px solid var(--line); border-radius:10px; background:#fff; padding:8px; line-height:0;"></div>
           </div>
           <div class="form-actions">
-            ${mpQr.cartelPdf ? `<a class="btn btn-primary btn-sm" href="${escapeHtml(mpQr.cartelPdf)}" target="_blank" rel="noopener">Imprimir el cartel</a>` : ''}
+            ${mpQr.cartelPdf ? `<a class="btn btn-primary btn-sm" href="${escapeHtml(mpQr.cartelPdf)}" target="_blank" rel="noopener">Imprimir el cartel oficial</a>` : ''}
             <button type="button" class="btn btn-ghost btn-sm" id="btn-mp-rearmar">Rehacer el QR</button>
             <button type="button" class="btn btn-ghost btn-sm" id="btn-mp-desconectar">Desconectar</button>
-          </div>`
+          </div>
+          <div class="formato-hint" style="display:block; margin-top:6px;">El cartel oficial lo imprimís desde la web de Mercado Pago: si te pide iniciar sesión, entrá con tu cuenta. El QR de acá arriba es el mismo y también sirve: podés imprimirlo o mostrarlo en la pantalla.</div>`
         : `
           <div class="agent-hint">Falta armar el QR del mostrador. Usa el domicilio del taller para registrar la sucursal en Mercado Pago, así que revisá que esté bien arriba.</div>
           <div class="form-actions">
@@ -11542,6 +11569,11 @@ El domicilio del titular puede venir junto con la localidad y la provincia; sepa
     // se guarda en memoria lo tipeado en la sección abierta (incluido el
     // nombre del taller) para no perderlo.
     // --- Cobros con QR (Mi taller) ---
+    const mpLienzo = root.querySelector('#mp-qr-lienzo');
+    if (mpLienzo && mpEstado && mpEstado.qr && mpEstado.qr.codigo) {
+      mpDibujarQr(mpLienzo, mpEstado.qr.codigo, 190);
+    }
+
     const mpBotonOcupado = (b, texto) => { b.disabled = true; b.dataset.antes = b.textContent; b.textContent = texto; };
     const mpAvisar = (e) => customAlert(e.message || String(e), 'Mercado Pago');
 
